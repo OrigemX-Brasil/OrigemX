@@ -142,6 +142,7 @@ create table public.kennels (
   state        text,
   logo_url     text,
   website_url  text,
+  published_at timestamptz,
   created_by   uuid references public.profiles (id) on delete set null,
   created_at   timestamptz not null default now(),
   updated_at   timestamptz not null default now(),
@@ -155,6 +156,8 @@ create table public.kennels (
 comment on table public.kennels is 'Canil. Um criador pode ter mais de um.';
 comment on column public.kennels.owner_id is
   'ON DELETE RESTRICT: perfil com canil não some. Some o canil primeiro, e mesmo assim logicamente (deleted_at).';
+comment on column public.kennels.published_at is
+  'NULL = rascunho, visível só para o dono. Não-NULL = público. Timestamp em vez de boolean para guardar QUANDO foi publicado.';
 
 -- UNIQUE GLOBAL, e de propósito NÃO parcial por deleted_at.
 --
@@ -167,9 +170,17 @@ create unique index kennels_slug_key on public.kennels (slug);
 create index kennels_owner_id_idx on public.kennels (owner_id) where deleted_at is null;
 create index kennels_created_by_idx on public.kennels (created_by);
 create index kennels_name_trgm_idx on public.kennels using gin (name extensions.gin_trgm_ops);
--- Paginação por keyset (created_at, id). Ver src/lib/pagination.ts.
+-- Paginação por keyset (created_at, id) do painel do dono, que enxerga rascunho.
+-- Ver src/lib/pagination.ts.
 create index kennels_created_at_idx
   on public.kennels (created_at desc, id desc) where deleted_at is null;
+
+-- Índice da leitura ANÔNIMA: o diretório público só enxerga canil publicado e
+-- não excluído. O predicado parcial é exatamente o da policy kennels_select,
+-- então o índice cobre a consulta em vez de filtrar depois.
+create index kennels_published_idx
+  on public.kennels (published_at desc, id desc)
+  where deleted_at is null and published_at is not null;
 
 create trigger kennels_set_updated_at
   before update on public.kennels
@@ -180,33 +191,49 @@ create trigger kennels_set_updated_at
 -- -----------------------------------------------------------------------------
 
 create table public.dogs (
-  id          uuid primary key default gen_random_uuid(),
-  public_id   text not null default public.gen_public_id(),
-  slug        text not null,
+  id           uuid primary key default gen_random_uuid(),
+  public_id    text not null default public.gen_public_id(),
+  slug         text,
 
-  name        text not null,
-  sex         text not null,
-  born_on     date,
-  breed       text not null,
-  color       text,
-  coat        text,
+  name         text not null,
+  sex          text not null,
+  born_on      date,
+  breed        text,
+  color        text,
+  coat         text,
 
-  kennel_id   uuid references public.kennels (id) on delete set null,
-  owner_id    uuid references public.profiles (id) on delete set null,
+  -- RESTRICT, não SET NULL: com SET NULL, apagar fisicamente um canil dispararia
+  -- `update dogs set kennel_id = null`, que violaria o CHECK
+  -- dogs_slug_requires_kennel em todo cão com slug — o DELETE falharia com um
+  -- erro de constraint que não explica nada. E canil usa exclusão lógica de
+  -- qualquer forma, então bloquear o hard delete é o comportamento correto:
+  -- explícito, em vez de orfanar registro em silêncio.
+  kennel_id    uuid references public.kennels (id) on delete restrict,
+  owner_id     uuid references public.profiles (id) on delete set null,
 
-  sire_id     uuid references public.dogs (id) on delete restrict,
-  dam_id      uuid references public.dogs (id) on delete restrict,
+  sire_id      uuid references public.dogs (id) on delete restrict,
+  dam_id       uuid references public.dogs (id) on delete restrict,
 
-  created_by  uuid references public.profiles (id) on delete set null,
-  created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null default now(),
-  deleted_at  timestamptz,
+  published_at timestamptz,
+  created_by   uuid references public.profiles (id) on delete set null,
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now(),
+  deleted_at   timestamptz,
 
   constraint dogs_sex_valid check (sex in ('male', 'female')),
   constraint dogs_name_not_blank check (length(btrim(name)) > 0),
-  constraint dogs_breed_not_blank check (length(btrim(breed)) > 0),
+  -- breed é NULLABLE: ancestral antigo muitas vezes não tem raça registrada, e
+  -- exigi-la impediria cadastrar o fantasma que existe só para fechar o
+  -- pedigree. Quando vier, não pode vir em branco.
+  constraint dogs_breed_not_blank check (breed is null or length(btrim(breed)) > 0),
+  -- CHECK com coluna NULL avalia para NULL, que o Postgres aceita. Então estes
+  -- dois valem só quando há slug.
   constraint dogs_slug_format check (slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$'),
   constraint dogs_slug_length check (length(slug) between 2 and 80),
+  -- Slug só existe dentro de um canil, porque é lá que ele é único e é essa a
+  -- forma da URL legível (/c/<canil>/<cão>). Cão sem canil — o ancestral
+  -- fantasma — é alcançado por /d/<public_id>.
+  constraint dogs_slug_requires_kennel check (slug is null or kennel_id is not null),
   constraint dogs_public_id_format check (public_id ~ '^[2-9a-hjkmnp-z]{12}$'),
 
   -- Pedidos explicitamente. Pegam só o caso de 1 nível; ciclo de 2+ níveis
@@ -223,26 +250,47 @@ comment on table public.dogs is
 comment on column public.dogs.public_id is
   'Identificador estável e imutável. É o que o QR Code impresso carrega. Protegido contra UPDATE pelo trigger dogs_freeze_public_id.';
 comment on column public.dogs.slug is
-  'URL legível, EDITÁVEL. Corrigir um nome digitado errado mexe aqui, nunca no public_id.';
+  'URL legível, EDITÁVEL e OPCIONAL. Único dentro do canil, não globalmente. Corrigir um nome digitado errado mexe aqui, nunca no public_id.';
+comment on column public.dogs.breed is
+  'NULLABLE: ancestral antigo frequentemente não tem raça registrada.';
 comment on column public.dogs.kennel_id is
-  'NULLABLE: ancestral cadastrado só para compor pedigree não tem canil.';
+  'NULLABLE: ancestral cadastrado só para compor pedigree não tem canil. ON DELETE RESTRICT: hard delete de canil com cães é bloqueado de propósito.';
 comment on column public.dogs.owner_id is
-  'NULLABLE: ancestral pode não ter dono cadastrado na plataforma.';
+  'NULLABLE: ancestral pode não ter dono cadastrado na plataforma. owner_id E kennel_id nulos = ancestral fantasma, legível publicamente (ver policy dogs_select).';
 comment on column public.dogs.sire_id is
   'Pai. ON DELETE RESTRICT protege o pedigree do descendente.';
+comment on column public.dogs.published_at is
+  'NULL = rascunho, visível só para quem gerencia o cão. Não-NULL = público.';
 
 create unique index dogs_public_id_key on public.dogs (public_id);
-create unique index dogs_slug_key on public.dogs (slug);
+
+-- Slug é único POR CANIL, não globalmente.
+--
+-- Globalmente único quebrava no caso mais comum do produto: dois criadores
+-- diferentes com um "Rex". Escopado ao canil, cada um tem o seu, e a URL
+-- /c/<canil>/<cão> já carrega o canil, então não há ambiguidade.
+--
+-- Não é parcial por deleted_at de propósito: o slug de um cão excluído
+-- logicamente continua reservado dentro do canil, para que uma URL legível
+-- compartilhada não passe a resolver para outro animal.
+create unique index dogs_kennel_slug_key
+  on public.dogs (kennel_id, slug) where slug is not null;
 
 create index dogs_owner_id_idx on public.dogs (owner_id) where deleted_at is null;
 create index dogs_created_by_idx on public.dogs (created_by);
 create index dogs_breed_idx on public.dogs (breed) where deleted_at is null;
 create index dogs_name_trgm_idx on public.dogs using gin (name extensions.gin_trgm_ops);
 
--- Índice da FK kennel_id E da listagem paginada do canil, em um só: kennel_id
--- é a coluna líder, então serve aos dois usos.
+-- Índice da FK kennel_id E da listagem paginada do painel do dono, que enxerga
+-- rascunho: kennel_id é a coluna líder, então serve aos dois usos.
 create index dogs_kennel_created_idx
   on public.dogs (kennel_id, created_at desc, id desc) where deleted_at is null;
+
+-- Índice da leitura ANÔNIMA: a vitrine de cães de um canil só mostra publicado.
+-- Predicado igual ao da policy dogs_select.
+create index dogs_kennel_published_idx
+  on public.dogs (kennel_id, published_at desc, id desc)
+  where deleted_at is null and published_at is not null;
 
 -- Estes DOIS não são parciais, ao contrário dos de cima.
 -- O trigger de ciclo e a travessia de pedigree precisam enxergar ancestrais

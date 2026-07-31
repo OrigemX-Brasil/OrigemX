@@ -130,14 +130,15 @@ create policy profiles_update_own
 
 alter table public.kennels enable row level security;
 
--- O dono continua enxergando o canil que excluiu logicamente. Sem isso ele
--- ficaria sem SELECT na linha, e no Postgres UPDATE precisa de SELECT antes —
--- ou seja, soft delete viraria irreversível, silenciosamente.
+-- Anônimo vê só canil PUBLICADO e não excluído. O dono vê os dele sempre,
+-- inclusive rascunho e excluído logicamente — sem isso ele ficaria sem SELECT
+-- na linha, e no Postgres UPDATE precisa de SELECT antes: soft delete viraria
+-- irreversível, silenciosamente, e rascunho seria impossível de editar.
 create policy kennels_select
   on public.kennels for select
   to anon, authenticated
   using (
-    deleted_at is null
+    (deleted_at is null and published_at is not null)
     or (select auth.uid()) = owner_id
     or private.is_admin()
   );
@@ -164,10 +165,36 @@ create policy kennels_update_own
 
 alter table public.dogs enable row level security;
 
+-- Leitura anônima em dois casos, mais quem gerencia, que vê sempre:
+--
+--   1. cão PUBLICADO e não excluído;
+--   2. ANCESTRAL FANTASMA — sem dono E sem canil. Ele existe só para ser nó de
+--      árvore: não tem dado privado a proteger, e escondê-lo produziria buraco
+--      no pedigree de um cão que está publicado.
+--
+-- O caso 2 exige `kennel_id is null` além de `owner_id is null`, e essa
+-- diferença é o que separa a regra de um vazamento. Cão COM canil e sem dono é
+-- comum e legítimo — é o animal que o criador cadastrou e ainda não vendeu, ou
+-- vendeu sem saber para quem. Esse não é fantasma: é rascunho de alguém, e
+-- publicá-lo por causa de `owner_id is null` exporia dado que o dono do canil
+-- não mandou publicar.
+--
+-- Cão com dono e não publicado continua invisível. O buraco correspondente no
+-- pedigree é tratado na UI, que renderiza a posição como "não publicado" e sem
+-- link — aqui só garantimos que nada dele vaza.
 create policy dogs_select
   on public.dogs for select
   to anon, authenticated
-  using (deleted_at is null or private.can_manage_dog(id));
+  using (
+    (
+      deleted_at is null
+      and (
+        published_at is not null
+        or (owner_id is null and kennel_id is null)
+      )
+    )
+    or private.can_manage_dog(id)
+  );
 
 create policy dogs_insert
   on public.dogs for insert
