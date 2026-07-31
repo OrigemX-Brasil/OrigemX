@@ -1,34 +1,55 @@
 # Banco
 
-## Estado atual: migrations NÃO APLICADAS E NÃO VERIFICADAS
+## Estado atual: VERIFICADO em projeto de desenvolvimento
 
-Não há Supabase local (sem Docker) e não há projeto linkado neste repositório.
-As migrations em `migrations/` foram escritas e revisadas, mas **nunca foram
-executadas contra um Postgres**. Nenhuma linha de SQL aqui tem prova de que
-sequer compila.
+Aplicado e verificado em 2026-07-31 contra o projeto de desenvolvimento
+`lcqhnfdsrioufwvnrqnt` (Postgres 17.6).
 
-Antes de considerar o schema pronto, é preciso linkar um projeto de
-desenvolvimento e rodar a bateria abaixo.
+| Verificação                                                       | Resultado                    |
+| ----------------------------------------------------------------- | ---------------------------- |
+| `db reset --linked` — aplicação do zero, em banco vazio, na ordem | sem erro                     |
+| `db advisors --linked --type security`                            | `results: []` — zero alertas |
+| Bateria de 21 casos (`tests/battery.sql`)                         | **21 PASS, 0 FAIL**          |
+| `db push` incremental em banco vazio                              | sem erro                     |
+
+Não há Supabase local neste ambiente (sem Docker) — ver a seção AMBIENTE do
+`CLAUDE.md`. Toda verificação roda contra o projeto de desenvolvimento.
 
 ```bash
-supabase login
-supabase link --project-ref <ref-do-projeto-de-DESENVOLVIMENTO>
-npm run db:push
-npm run db:types
+npm run db:push     # aplica migrations pendentes no projeto linkado
+npm run db:types    # regenera src/lib/types/database.ts
+npx supabase db query --linked --file supabase/tests/battery.sql
+npx supabase db advisors --linked --type security
 ```
 
 > Nunca apontar `db push` ou `db reset` para o projeto do cliente sem
-> confirmação explícita. Ver a seção AMBIENTE do `CLAUDE.md`.
+> confirmação explícita. `db reset` APAGA o banco inteiro.
 
 ## Bateria de verificação
 
-Depois do primeiro `db push`, rodar cada caso abaixo. Os seis primeiros **devem
-falhar** — se algum passar, a invariante correspondente não está protegida.
+`tests/battery.sql` roda os 21 casos numa transação, imprime PASS/FAIL e limpa
+as próprias fixtures. Casos que **devem falhar** rodam dentro de bloco com
+`EXCEPTION`: um caso que não levante erro é marcado FAIL em vez de derrubar a
+execução.
+
+### Armadilha do simulador de identidade
+
+`request.jwt.claims` tem escopo de **transação**. Ela sobrevive ao fim do bloco
+e ao `reset role` — então `set local role anon` **não** torna a sessão anônima:
+ela continua carregando a identidade do último usuário autenticado, e
+`can_manage_dog()` a autoriza.
+
+Isso já produziu um falso positivo aqui (o caso 18 "passou" sendo u1 disfarçado
+de anônimo). Por isso todo bloco define papel **e** claims, e registra qual
+identidade estava valendo — um contexto errado aparece no relatório em vez de
+virar PASS silencioso.
+
+### Os casos
 
 | #   | Caso                                                          | Esperado                                     |
 | --- | ------------------------------------------------------------- | -------------------------------------------- |
-| 1   | cão como pai de si mesmo (`sire_id = id`)                     | erro — CHECK `dogs_not_own_sire`             |
-| 2   | `sire_id = dam_id`                                            | erro — CHECK `dogs_sire_dam_distinct`        |
+| 1   | cão como pai de si mesmo (`sire_id = id`)                     | erro — trigger de ciclo (ver nota)           |
+| 2   | `sire_id = dam_id`                                            | erro — validação de sexo (ver nota)          |
 | 3   | ciclo indireto: A pai de B, B pai de C, então C como pai de A | erro — trigger `dogs_check_ancestry`         |
 | 4   | fêmea em `sire_id`                                            | erro — trigger `dogs_check_ancestry`         |
 | 5   | `update dogs set public_id = '...'`                           | erro — trigger `dogs_freeze_public_id`       |
@@ -54,6 +75,20 @@ E os testes de autorização, com um usuário comum autenticado:
 | 20  | `delete` físico de canil que tem cães                                  | erro — FK RESTRICT em `dogs.kennel_id` |
 
 Por fim, `supabase db advisors --linked` deve sair sem alertas de segurança.
+
+### Nota sobre os casos 1 e 2 — dois CHECKs são inalcançáveis
+
+Os CHECKs `dogs_not_own_sire`, `dogs_not_own_dam` e `dogs_sire_dam_distinct`
+existem no banco, mas **não são eles que barram** os casos 1 e 2. Trigger BEFORE
+roda antes da validação de CHECK, e:
+
+- caso 1: a CTE de ciclo já encontra o próprio cão entre os ancestrais;
+- caso 2: para `sire_id = dam_id` chegar ao CHECK, o mesmo cão teria de ser
+  macho **e** fêmea — a validação de sexo barra antes, sempre.
+
+Ou seja, os três CHECKs são **defesa em profundidade**: inalcançáveis enquanto
+os triggers existirem, e a rede que sobra se um trigger for removido um dia. Os
+casos 1 e 2 provam que a operação é bloqueada, não qual mecanismo bloqueou.
 
 ## Precisa de confirmação do cliente
 

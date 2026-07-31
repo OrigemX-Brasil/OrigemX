@@ -43,6 +43,14 @@ $$;
 comment on function public.set_updated_at() is
   'Trigger BEFORE UPDATE: mantém updated_at fora do alcance do client.';
 
+-- Toda função em `public` nasce com EXECUTE para PUBLIC, e anon/authenticated
+-- herdam — ou seja, vira endpoint em /rest/v1/rpc/. Função de trigger não tem
+-- por que ser chamável de fora.
+--
+-- Revogar não afeta os triggers: o Postgres não checa EXECUTE ao disparar um
+-- trigger, só ao chamar a função diretamente.
+revoke execute on function public.set_updated_at() from public, anon, authenticated;
+
 -- Identificador público e opaco do cão — é o alvo do QR Code impresso.
 --
 -- Alfabeto de 31 caracteres sem os ambíguos (0/O, 1/l/I): o número vai ser lido
@@ -72,6 +80,12 @@ $$;
 
 comment on function public.gen_public_id() is
   'Gera o public_id opaco do cão (12 chars, alfabeto sem caracteres ambíguos).';
+
+-- Esta NÃO é revogada, ao contrário das funções de trigger acima. Ela é DEFAULT
+-- da coluna dogs.public_id, e expressão de default é avaliada com o privilégio
+-- de quem insere — revogar EXECUTE quebraria todo INSERT de cão feito por
+-- authenticated. Ficar chamável via RPC é inofensivo: ela só devolve uma string
+-- aleatória, sem ler nem escrever nada.
 
 -- -----------------------------------------------------------------------------
 -- profiles — espelha auth.users
@@ -123,6 +137,8 @@ begin
   return new;
 end;
 $$;
+
+revoke execute on function public.handle_new_user() from public, anon, authenticated;
 
 create trigger on_auth_user_created
   after insert on auth.users
@@ -319,6 +335,8 @@ begin
 end;
 $$;
 
+revoke execute on function public.dogs_freeze_public_id() from public, anon, authenticated;
+
 -- O WHEN já filtra, então a função só roda quando alguém realmente tentou.
 create trigger dogs_freeze_public_id
   before update on public.dogs
@@ -397,6 +415,8 @@ begin
 end;
 $$;
 
+revoke execute on function public.dogs_check_ancestry() from public, anon, authenticated;
+
 create trigger dogs_check_ancestry
   before insert or update of sire_id, dam_id on public.dogs
   for each row execute function public.dogs_check_ancestry();
@@ -422,6 +442,8 @@ begin
   return new;
 end;
 $$;
+
+revoke execute on function public.dogs_guard_sex_change() from public, anon, authenticated;
 
 create trigger dogs_guard_sex_change
   before update on public.dogs
