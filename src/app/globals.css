@@ -1,0 +1,36 @@
+@import "tailwindcss";
+@import "../styles/tokens.css";
+
+/* ---------------------------------------------------------------------------
+   Base. Mobile-first: nada aqui assume viewport largo.
+   --------------------------------------------------------------------------- */
+@layer base {
+  html {
+    /* Tema escuro é invariante de produto — informa os controles nativos
+       (scrollbar, campos de formulário) para não renderizarem claros. */
+    color-scheme: dark;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Foco visível e consistente. Some para clique, aparece para teclado. */
+  :focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+
+  /* O pedigree de 5 gerações é largo por natureza e rola na horizontal.
+     Sem isto, o toque no mobile fica travado. */
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      scroll-behavior: smooth;
+    }
+  }
+}
