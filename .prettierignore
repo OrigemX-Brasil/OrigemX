@@ -1,0 +1,10 @@
+node_modules
+.next
+out
+build
+coverage
+package-lock.json
+
+# Gerado pela CLI do Supabase
+src/lib/types/database.ts
+supabase/.temp
