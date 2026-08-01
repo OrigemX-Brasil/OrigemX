@@ -24,6 +24,23 @@ Deploy Vercel.
   de desenvolvimento (link ativo). NUNCA rodar db reset ou db push
   apontando para o projeto do cliente sem eu confirmar explicitamente.
 - Confirmar o diretório de trabalho antes de qualquer comando de terminal.
+- `supabase config push` **SOBRESCREVE a configuração de auth inteira**, não é
+  incremental. E não há como inspecionar antes: `config pull` NÃO EXISTE na CLI
+  2.111, e o push confirma sozinho em terminal não-interativo (detecta agente),
+  então nem responder "n" segura — já foi verificado, aplica assim mesmo.
+  Portanto:
+  - **`config push` é comando MEU, não do agente.** O agente prepara o
+    `config.toml`, me avisa, e eu rodo num terminal interativo onde o diff
+    aparece e o Y/n funciona de verdade.
+  - Antes de me pedir para rodar, o agente confirma que **toda env var
+    referenciada está preenchida**. Var vazia não falha: a CLI empurra o texto
+    literal `env(NOME)` como se fosse o valor, e a configuração quebra em
+    silêncio. Foi assim que o Google OAuth do projeto de dev caiu.
+  - E confirma comigo qual projeto está linkado, na hora.
+- NUNCA rodar `config push`, `db push`, `db reset` ou qualquer DDL contra o
+  projeto do CLIENTE sem minha confirmação explícita na hora.
+- Configuração feita pelo painel do Supabase não está no `config.toml` local.
+  Sempre assumir que o remoto tem estado que o repositório não conhece.
 
 ## INVARIANTES DE DADOS
 

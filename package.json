@@ -13,6 +13,7 @@
     "db:list": "supabase migration list --linked",
     "db:push": "supabase db push --linked",
     "db:types": "supabase gen types typescript --linked > src/lib/types/database.ts",
+    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"src/**/*.test.mts\"",
     "test:rls": "node --env-file-if-exists=.env.local scripts/test-rls.mts"
   },
   "dependencies": {

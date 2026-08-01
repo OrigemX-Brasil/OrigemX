@@ -156,11 +156,16 @@ max_indexes = 5
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
 # in emails.
-site_url = "http://127.0.0.1:3000"
+site_url = "env(SUPABASE_AUTH_SITE_URL)"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = ["https://127.0.0.1:3000"]
+# É allow-list EXATA: destino que não estiver aqui é recusado depois do login.
+# Na virada para o domínio do cliente, esta lista muda junto com SUPABASE_AUTH_SITE_URL.
+additional_redirect_urls = [
+  "http://localhost:3000/auth/callback",
+  "http://localhost:3000/auth/confirm",
+]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
 # JWT issuer URL. If not set, defaults to auth.external_url.
@@ -179,7 +184,14 @@ enable_anonymous_sign_ins = false
 # Allow/disallow testing manual linking of accounts
 enable_manual_linking = false
 # Passwords shorter than this value will be rejected as weak. Minimum 6, recommended 8 or more.
-minimum_password_length = 6
+#
+# 8, não o mínimo de 6 do Supabase. A validação da Server Action usa o mesmo
+# número — mas quem recusa de verdade é o servidor de Auth, porque a checagem no
+# formulário é conveniência e pode ser contornada chamando a API direto.
+#
+# Sem password_requirements de composição: comprimento protege mais do que
+# exigir símbolo, que só empurra o usuário para "Senha1!".
+minimum_password_length = 8
 # Passwords that do not meet the following requirements will be rejected as weak. Supported values
 # are: `letters_digits`, `lower_upper_letters_digits`, `lower_upper_letters_digits_symbols`
 password_requirements = ""
@@ -223,13 +235,27 @@ enable_signup = true
 # addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true
 # If enabled, users need to confirm their email address before signing in.
-enable_confirmations = false
+#
+# LIGADA. Sem isto, qualquer pessoa cadastra usando o e-mail de outra.
+#
+# Consequência em dev, enquanto não houver SMTP do cliente: o envio cai no
+# remetente padrão do Supabase, que em projeto novo só entrega para membros do
+# projeto. Cadastro manual em dev é testável com o e-mail do dono do projeto.
+# O teste automatizado não depende disso — cria usuário pela admin API.
+enable_confirmations = true
 # If enabled, users will need to reauthenticate or have logged in recently to change their password.
 secure_password_change = false
 # Controls the minimum amount of time that must pass before sending another signup confirmation or password reset email.
-max_frequency = "1s"
+#
+# 1 minuto, não o "1s" que vem no template da CLI. Com 1 segundo, qualquer um
+# usa o formulário de recuperação como canhão de e-mail contra um endereço
+# alheio. Este valor já estava assim no projeto remoto.
+max_frequency = "1m0s"
 # Number of characters used in the email OTP.
-otp_length = 6
+#
+# 8, não 6: o código vai por e-mail e vale uma hora, então vale encarecer o
+# chute. Também já estava assim no remoto.
+otp_length = 8
 # Number of seconds before the email OTP expires (defaults to 1 hour).
 otp_expiry = 3600
 
@@ -319,6 +345,22 @@ max_frequency = "5s"
 # Use an external OAuth provider. The full list of providers are: `apple`, `azure`, `bitbucket`,
 # `discord`, `facebook`, `github`, `gitlab`, `google`, `keycloak`, `linkedin_oidc`, `notion`, `twitch`,
 # `twitter`, `x`, `slack`, `spotify`, `workos`, `zoom`.
+# -----------------------------------------------------------------------------
+# Google — o único provider externo em escopo (Anexo I.2).
+#
+# Credencial NUNCA entra neste arquivo: as duas linhas abaixo leem do ambiente.
+# Trocar as credenciais de dev pelas do cliente é preencher as env vars e rodar
+# `supabase config push`. Zero mudança de código — a aplicação só chama
+# signInWithOAuth({ provider: "google" }) e nunca vê client_id nem secret.
+#
+# Redirect URI a cadastrar no Google Cloud Console:
+#   https://<project-ref>.supabase.co/auth/v1/callback
+# -----------------------------------------------------------------------------
+[auth.external.google]
+enabled = true
+client_id = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)"
+secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"
+
 [auth.external.apple]
 enabled = false
 client_id = ""

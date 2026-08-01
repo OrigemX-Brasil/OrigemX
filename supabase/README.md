@@ -114,6 +114,24 @@ Por isso as policies de `dogs` decidem posse pelas **colunas da própria linha**
 (`private.owns_kennel`). `private.can_manage_dog` continua válida para
 `dog_identifiers`, que consulta `dogs` — uma tabela diferente da sua.
 
+## Advisors de segurança — dois WARN aceitos, com motivo
+
+`db advisors --type security` sai com dois alertas depois que a autenticação
+entrou. Nenhum é regressão de schema; os dois são configuração de auth.
+
+**`auth_leaked_password_protection`** — a checagem contra o HaveIBeenPwned está
+desligada. Não é esquecimento: o recurso é **gated no plano Pro**
+(`entitlementKey: auth.password_hibp`) e não existe chave para ele no
+`config.toml` — é ajuste de painel/API. Enquanto o projeto for Free, não há como
+ligar. Vai para a checklist do cliente.
+
+O que dá para fazer sem plano pago já está feito: `minimum_password_length = 8`
+(acima do mínimo 6 do Supabase), imposto pelo servidor de Auth e não só pelo
+formulário.
+
+**`auth_insufficient_mfa_options`** — MFA está **fora do escopo** do Anexo I.2.
+Aceito conscientemente; entra quando for contratado.
+
 ## Precisa de confirmação do cliente
 
 ### Visibilidade do ancestral fantasma

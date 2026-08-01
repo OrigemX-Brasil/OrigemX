@@ -512,6 +512,77 @@ async function main() {
   );
 
   // ---------------------------------------------------------------------------
+  // Cenário 7 — criação de conta e blindagem da role
+  //
+  // O trigger de profile roda no INSERT em auth.users, então cobre igualmente
+  // o cadastro por e-mail e o retorno do OAuth: os dois criam a mesma linha.
+  // Aqui simulamos os dois formatos de metadata que chegam na prática.
+  // ---------------------------------------------------------------------------
+
+  // Metadata hostil: o usuário pede para nascer admin.
+  const hostileEmail = `rls-${RUN}-hostil@origemx.test`;
+  const { data: hostile } = await admin.auth.admin.createUser({
+    email: hostileEmail,
+    password: PASSWORD,
+    email_confirm: true,
+    user_metadata: { role: "admin", full_name: "Tentativa Admin", is_admin: true },
+  });
+
+  if (hostile?.user) {
+    const { data: hostileProfile } = await admin
+      .from("profiles")
+      .select("role, full_name")
+      .eq("id", hostile.user.id)
+      .single();
+    record(
+      "7. Criação de conta",
+      "conta criada com user_metadata.role = 'admin'",
+      "profile nasce com role = 'user'",
+      `role = ${String(hostileProfile?.role)}`,
+      hostileProfile?.role === "user",
+    );
+  } else {
+    record("7. Criação de conta", "conta com metadata hostil", "criada", "não criou", false);
+  }
+
+  // Formato do Google: `name` e `picture`, sem `full_name` nem `avatar_url`.
+  const oauthEmail = `rls-${RUN}-oauth@origemx.test`;
+  const { data: oauthUser } = await admin.auth.admin.createUser({
+    email: oauthEmail,
+    password: PASSWORD,
+    email_confirm: true,
+    user_metadata: {
+      name: "Fulano do Google",
+      picture: "https://example.test/foto.jpg",
+      email_verified: true,
+    },
+  });
+
+  if (oauthUser?.user) {
+    const { data: oauthProfile } = await admin
+      .from("profiles")
+      .select("role, full_name, avatar_url")
+      .eq("id", oauthUser.user.id)
+      .single();
+    record(
+      "7. Criação de conta",
+      "conta em formato OAuth (name/picture) gera profile preenchido",
+      "full_name e avatar_url preenchidos",
+      `full_name = ${String(oauthProfile?.full_name)}, avatar_url = ${
+        oauthProfile?.avatar_url ? "preenchido" : "vazio"
+      }`,
+      oauthProfile?.full_name === "Fulano do Google" && Boolean(oauthProfile?.avatar_url),
+    );
+    record(
+      "7. Criação de conta",
+      "conta em formato OAuth nasce como usuário comum",
+      "role = 'user'",
+      `role = ${String(oauthProfile?.role)}`,
+      oauthProfile?.role === "user",
+    );
+  }
+
+  // ---------------------------------------------------------------------------
   // Limpeza
   // ---------------------------------------------------------------------------
 
@@ -523,6 +594,8 @@ async function main() {
   await admin.from("kennels").delete().like("slug", `rls-${RUN}-%`);
   await admin.auth.admin.deleteUser(A.id);
   await admin.auth.admin.deleteUser(B.id);
+  if (hostile?.user) await admin.auth.admin.deleteUser(hostile.user.id);
+  if (oauthUser?.user) await admin.auth.admin.deleteUser(oauthUser.user.id);
 }
 
 // -----------------------------------------------------------------------------

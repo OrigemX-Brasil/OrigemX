@@ -1,7 +1,7 @@
 {
-  "when": "2026-08-01T13:10:06.442Z",
+  "when": "2026-08-01T20:59:56.547Z",
   "project": "https://lcqhnfdsrioufwvnrqnt.supabase.co",
-  "run": "msae28j3",
+  "run": "msauud53",
   "fatal": null,
   "checks": [
     {
@@ -205,6 +205,27 @@
       "verificacao": "papel de B no banco após as tentativas",
       "esperado": "user",
       "obtido": "user",
+      "status": "PASS"
+    },
+    {
+      "cenario": "7. Criação de conta",
+      "verificacao": "conta criada com user_metadata.role = 'admin'",
+      "esperado": "profile nasce com role = 'user'",
+      "obtido": "role = user",
+      "status": "PASS"
+    },
+    {
+      "cenario": "7. Criação de conta",
+      "verificacao": "conta em formato OAuth (name/picture) gera profile preenchido",
+      "esperado": "full_name e avatar_url preenchidos",
+      "obtido": "full_name = Fulano do Google, avatar_url = preenchido",
+      "status": "PASS"
+    },
+    {
+      "cenario": "7. Criação de conta",
+      "verificacao": "conta em formato OAuth nasce como usuário comum",
+      "esperado": "role = 'user'",
+      "obtido": "role = user",
       "status": "PASS"
     }
   ]

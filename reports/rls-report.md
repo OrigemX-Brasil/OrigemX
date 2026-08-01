@@ -2,10 +2,10 @@
 
 |           |                                            |
 | --------- | ------------------------------------------ |
-| Data      | 2026-08-01T13:10:06.442Z                   |
+| Data      | 2026-08-01T20:59:56.547Z                   |
 | Projeto   | `https://lcqhnfdsrioufwvnrqnt.supabase.co` |
-| Execução  | `msae28j3`                                 |
-| Resultado | **APROVADO** — 29/29 PASS                  |
+| Execução  | `msauud53`                                 |
+| Resultado | **APROVADO** — 32/32 PASS                  |
 
 ## Método
 
@@ -58,3 +58,6 @@ falha. O que a RLS isola é:
 | 6. Admin                | usuário comum chama private.is_admin() via RPC                          | erro — schema private não é exposto   | erro: Could not find the function public.is_admin without parameters in the schema cache            | **PASS** |
 | 6. Admin                | usuário comum chama função de trigger via RPC                           | erro — EXECUTE revogado               | erro: Could not find the function public.dogs_check_ancestry without parameters in the schema cache | **PASS** |
 | 6. Admin                | papel de B no banco após as tentativas                                  | user                                  | user                                                                                                | **PASS** |
+| 7. Criação de conta     | conta criada com user_metadata.role = 'admin'                           | profile nasce com role = 'user'       | role = user                                                                                         | **PASS** |
+| 7. Criação de conta     | conta em formato OAuth (name/picture) gera profile preenchido           | full_name e avatar_url preenchidos    | full_name = Fulano do Google, avatar_url = preenchido                                               | **PASS** |
+| 7. Criação de conta     | conta em formato OAuth nasce como usuário comum                         | role = 'user'                         | role = user                                                                                         | **PASS** |

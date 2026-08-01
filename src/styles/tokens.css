@@ -1,100 +1,195 @@
 /* ===========================================================================
    OrigemX — design tokens
+   Fonte de verdade: manual "Identidade Visual v1.0" do cliente.
    ===========================================================================
 
    INVARIANTE: cor e tipografia vêm daqui. Nenhum componente escreve uma cor
-   literal (`#fff`, `rgb()`, `bg-zinc-800`). Sempre o token semântico:
-   `bg-surface`, `text-fg-muted`, `border-border`.
+   literal (`#fff`, `rgb()`, `bg-blue-600`). Sempre o token semântico:
+   `bg-surface`, `text-fg-muted`, `border-border-strong`.
 
-   Esta paleta é PROVISÓRIA e deliberadamente NEUTRA — todos os cinzas têm
-   chroma 0 em oklch, ou seja, cinza de verdade, sem viés de matiz. A
-   identidade visual do cliente ainda não chegou.
+   Os papéis semânticos mantiveram os MESMOS NOMES da paleta neutra anterior.
+   Trocar a identidade inteira não exigiu tocar em nenhum componente — era
+   exatamente para isso que a camada de token existia.
 
-   COMO TROCAR QUANDO A MARCA CHEGAR
-   1. Cores de marca: mexer só no bloco "Marca / acento" abaixo. Dar chroma e
-      hue ao acento resolve a maior parte da identidade.
-   2. Neutros com temperatura: se a marca pedir cinza quente ou frio, dar um
-      chroma pequeno (0.005–0.015) e um hue único à escala neutra.
-   3. Tipografia: trocar --font-sans / --font-display no bloco final.
-   Nenhum componente precisa ser tocado.
+   TODOS os valores foram convertidos por cálculo (sRGB → OKLab → OKLCH), com
+   round-trip conferido, e todo contraste abaixo é WCAG 2.1 medido, não
+   estimado.
 
-   Cada token aqui vira, no Tailwind v4, tanto uma CSS variable em runtime
-   quanto uma utility (`--color-surface` -> `bg-surface`, `text-surface`, ...).
    =========================================================================== */
 
 @theme {
   /* -------------------------------------------------------------------------
-     Escala neutra — a base de tudo. chroma 0 = neutro puro.
+     PALETA DO MANUAL — valores exatos do cliente, convertidos para oklch.
+     Não alterar sem novo manual.
      ---------------------------------------------------------------------- */
-  --color-neutral-950: oklch(0.145 0 0);
-  --color-neutral-900: oklch(0.185 0 0);
-  --color-neutral-850: oklch(0.225 0 0);
-  --color-neutral-800: oklch(0.269 0 0);
-  --color-neutral-700: oklch(0.34 0 0);
-  --color-neutral-600: oklch(0.44 0 0);
-  --color-neutral-500: oklch(0.556 0 0);
-  --color-neutral-400: oklch(0.65 0 0);
-  --color-neutral-300: oklch(0.72 0 0);
-  --color-neutral-200: oklch(0.83 0 0);
-  --color-neutral-100: oklch(0.92 0 0);
-  --color-neutral-50: oklch(0.97 0 0);
+
+  /* #0B0F1A — noite, fundo base */
+  --color-noite: oklch(0.17 0.024 268.5);
+  /* #0066FF — azul, primária / ação principal */
+  --color-azul: oklch(0.563 0.241 260.8);
+  /* #00E5FF — ciano, acento / destaque de dado */
+  --color-ciano: oklch(0.844 0.146 209.3);
+  /* #7B3DFF — violeta, secundária */
+  --color-violeta: oklch(0.559 0.263 289.6);
+  /* #FFB84D — dourado, RESERVADO A SELO (ver abaixo) */
+  --color-dourado: oklch(0.831 0.145 74.2);
 
   /* -------------------------------------------------------------------------
-     Papéis semânticos — é isto que os componentes usam.
-     Tema escuro é o único tema por ora (invariante de produto).
+     VARIANTES DE TEXTO — derivadas, e derivadas por necessidade.
+
+     Sobre o noite, medido:
+       azul    #0066FF  3.96:1  reprova AA para texto normal (exige 4.5)
+       violeta #7B3DFF  3.60:1  reprova
+       ciano   #00E5FF 12.44:1  passa
+       dourado #FFB84D 11.13:1  passa
+
+     Os dois que reprovam continuam válidos para SUPERFÍCIE, BORDA e ÍCONE —
+     esses exigem 3.0 e ambos passam. Para TEXTO, sobem em L com o matiz
+     preservado até cruzar 4.5.
      ---------------------------------------------------------------------- */
 
-  /* Superfícies, da mais funda para a mais elevada */
-  --color-bg: var(--color-neutral-950);
-  --color-surface: var(--color-neutral-900);
-  --color-surface-raised: var(--color-neutral-850);
-  --color-surface-hover: var(--color-neutral-800);
+  /* #2374FF — 4.57:1 */
+  --color-azul-text: oklch(0.595 0.221 260.8);
+  /* #865EFF — 4.61:1 */
+  --color-violeta-text: oklch(0.61 0.227 289.6);
 
-  /* Traços */
-  --color-border: var(--color-neutral-800);
-  --color-border-strong: var(--color-neutral-700);
-
-  /* Texto, do mais forte ao mais apagado */
-  --color-fg: var(--color-neutral-50);
-  --color-fg-muted: var(--color-neutral-300);
-  --color-fg-faint: var(--color-neutral-500);
-  --color-fg-on-accent: var(--color-neutral-950);
+  /* Hover: +0.06 de L, matiz e croma preservados. */
+  --color-azul-hover: oklch(0.623 0.203 260.8);
+  --color-violeta-hover: oklch(0.619 0.221 289.6);
+  --color-ciano-hover: oklch(0.904 0.088 209.3);
 
   /* -------------------------------------------------------------------------
-     Marca / acento — NEUTRO por enquanto.
-     É este bloco que ganha chroma e hue quando a identidade chegar.
+     RAMPA DE SUPERFÍCIE — derivada do noite subindo L, matiz 268.5 preservado.
+     Não é cinza neutro: carrega o azul do fundo do manual.
      ---------------------------------------------------------------------- */
-  --color-accent: var(--color-neutral-200);
-  --color-accent-hover: var(--color-neutral-100);
-  --color-accent-subtle: var(--color-neutral-800);
-  --color-ring: var(--color-neutral-400);
+  --color-noite-100: oklch(0.21 0.024 268.5);
+  --color-noite-200: oklch(0.24 0.024 268.5);
+  --color-noite-300: oklch(0.28 0.026 268.5);
+  --color-noite-400: oklch(0.35 0.028 268.5);
+  --color-noite-500: oklch(0.5 0.03 268.5);
+  --color-noite-600: oklch(0.578 0.038 263.4);
+  --color-noite-700: oklch(0.723 0.035 262.6);
+  --color-noite-800: oklch(0.859 0.023 263.2);
+  --color-noite-900: oklch(0.981 0.005 258.3);
 
   /* -------------------------------------------------------------------------
-     Status — estes PRECISAM de matiz: um erro tem de parecer erro.
-     Dessaturados de propósito, para não brigar com a base neutra.
+     PAPÉIS SEMÂNTICOS — é isto que os componentes usam.
      ---------------------------------------------------------------------- */
-  --color-success: oklch(0.72 0.14 155);
-  --color-success-subtle: oklch(0.28 0.05 155);
-  --color-warning: oklch(0.79 0.13 80);
-  --color-warning-subtle: oklch(0.3 0.05 80);
-  --color-danger: oklch(0.65 0.18 25);
-  --color-danger-subtle: oklch(0.28 0.07 25);
+
+  --color-bg: var(--color-noite);
+  --color-surface: var(--color-noite-100);
+  --color-surface-raised: var(--color-noite-200);
+  --color-surface-hover: var(--color-noite-300);
+
+  /* Separador decorativo. Contraste baixo é aceitável: não delimita controle. */
+  --color-border: var(--color-noite-300);
+  /* Limite de CONTROLE (campo, botão). 3.19:1 — cumpre WCAG 1.4.11, que exige
+     3.0 para fronteira de componente de UI. Abaixo de L 0.50 não cumpre. */
+  --color-border-strong: var(--color-noite-500);
+
+  --color-fg: var(--color-noite-900); /* 18.14:1 */
+  --color-fg-muted: var(--color-noite-800); /* 12.47:1 */
+  --color-fg-faint: var(--color-noite-700); /*  7.79:1 */
+
+  /* Ação principal. Texto sobre ela: 4.58:1, passa AA. */
+  --color-accent: var(--color-azul);
+  --color-accent-hover: var(--color-azul-hover);
+  --color-accent-text: var(--color-azul-text);
+  --color-accent-subtle: oklch(0.26 0.075 260.8);
+  --color-fg-on-accent: var(--color-noite-900);
+
+  --color-secondary: var(--color-violeta);
+  --color-secondary-hover: var(--color-violeta-hover);
+  --color-secondary-text: var(--color-violeta-text);
+  --color-secondary-subtle: oklch(0.26 0.085 289.6);
+
+  /* Destaque de dado: número de registro, microchip, métrica. */
+  --color-data: var(--color-ciano);
+  --color-data-subtle: oklch(0.28 0.048 209.3);
+
+  /* Link em texto corrido. Azul-text para passar AA (4.57:1); no hover sobe
+     para ciano (12.44:1), que é o maior contraste da paleta. */
+  --color-link: var(--color-azul-text);
+  --color-link-hover: var(--color-ciano);
+
+  /* Anel de foco. Ciano em vez de azul: 12.44:1 contra o fundo, e não se
+     confunde com a borda do botão primário, que é azul. */
+  --color-ring: var(--color-ciano);
 
   /* -------------------------------------------------------------------------
-     Tipografia — stack de sistema, provisória. Sem webfont até a marca chegar:
-     fonte é decisão de identidade, e baixar uma agora só custaria performance.
-     --font-display existe separada para que trocar só os títulos seja possível.
+     DOURADO — RESERVADO A SELO. NÃO USAR EM UI COMUM.
+
+     É a cor de conquista: "Criador Fundador" e o que vier depois. Se aparecer
+     em botão, link, aviso ou borda de card, o selo deixa de significar algo —
+     a raridade é o que o faz valer.
+
+     Só `--color-selo` e `--color-selo-subtle` devem ser referenciados, e só por
+     componente de selo. Não existe `--color-warning` apontando para cá de
+     propósito.
      ---------------------------------------------------------------------- */
-  --font-sans:
-    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-display: var(--font-sans);
+  --color-selo: var(--color-dourado);
+  --color-selo-subtle: oklch(0.28 0.058 74.2);
+
+  /* -------------------------------------------------------------------------
+     ESTADOS — DERIVADOS, não estão no manual. Pendente de validação do cliente.
+
+     O manual não traz cor de erro nem de sucesso. Sem elas não dá para
+     construir formulário: uma falha de login precisa se distinguir de uma
+     confirmação, e não pode depender só de texto.
+
+     sucesso  oklch(0.800 0.140 165)  #51DAA7  10.88:1
+     erro     oklch(0.700 0.190  25)  #FF645F   6.60:1
+
+     Ambos mantêm o croma alto da paleta, então convivem com azul/ciano/violeta.
+     O erro é o único MATIZ fora do manual: vermelho não existe na lista, e um
+     estado destrutivo que não é vermelho contraria a expectativa de qualquer
+     usuário. Levar ao cliente.
+     ---------------------------------------------------------------------- */
+  --color-success: oklch(0.8 0.14 165);
+  --color-success-subtle: oklch(0.28 0.058 165);
+  --color-danger: oklch(0.7 0.19 25);
+  --color-danger-subtle: oklch(0.27 0.085 25);
+
+  /* -------------------------------------------------------------------------
+     TIPOGRAFIA
+
+     Display: Sora. O manual indica EXA, que não está no Google Fonts; enquanto
+     o cliente não fornecer o arquivo, Sora é o substituto — geométrica, com o
+     mesmo aperto do lettering do logo. Trocar depois é mexer só em layout.tsx.
+
+     Corpo: Inter.
+     Mono: mantida a stack de sistema, para rótulo de dado — número de registro
+     e microchip se leem melhor com largura fixa.
+     ---------------------------------------------------------------------- */
+  --font-display: var(--font-sora), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-mono:
     ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 
-  /* -------------------------------------------------------------------------
-     Raio — pedigree e cards dependem de consistência aqui.
-     ---------------------------------------------------------------------- */
   --radius-control: 0.5rem;
   --radius-card: 0.75rem;
   --radius-panel: 1rem;
+}
+
+/* ---------------------------------------------------------------------------
+   GRADIENTE DE MARCA — azul → violeta, o mesmo do X do logo.
+
+   Fica fora do @theme porque gradiente não é uma cor: o Tailwind geraria
+   `bg-*`/`text-*` inválidos a partir dele. Como variável CSS + utilitários, é
+   reutilizável e continua sendo um token único.
+   --------------------------------------------------------------------------- */
+:root {
+  --gradient-brand: linear-gradient(135deg, var(--color-azul) 0%, var(--color-violeta) 100%);
+}
+
+@utility bg-brand-gradient {
+  background-image: var(--gradient-brand);
+}
+
+/* Para o wordmark. `background-clip: text` precisa de cor transparente. */
+@utility text-brand-gradient {
+  background-image: var(--gradient-brand);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
 }
