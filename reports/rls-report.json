@@ -1,0 +1,211 @@
+{
+  "when": "2026-08-01T13:10:06.442Z",
+  "project": "https://lcqhnfdsrioufwvnrqnt.supabase.co",
+  "run": "msae28j3",
+  "fatal": null,
+  "checks": [
+    {
+      "cenario": "1. Criação",
+      "verificacao": "A cria o próprio canil",
+      "esperado": "1 linha",
+      "obtido": "1 linha",
+      "status": "PASS"
+    },
+    {
+      "cenario": "1. Criação",
+      "verificacao": "B cria o próprio canil",
+      "esperado": "1 linha",
+      "obtido": "1 linha",
+      "status": "PASS"
+    },
+    {
+      "cenario": "1. Criação",
+      "verificacao": "A cria cão PUBLICADO no próprio canil",
+      "esperado": "1 linha",
+      "obtido": "1 linha",
+      "status": "PASS"
+    },
+    {
+      "cenario": "1. Criação",
+      "verificacao": "A cria cão RASCUNHO no próprio canil",
+      "esperado": "1 linha",
+      "obtido": "1 linha",
+      "status": "PASS"
+    },
+    {
+      "cenario": "1. Criação",
+      "verificacao": "B cria o próprio cão",
+      "esperado": "1 linha",
+      "obtido": "1 linha",
+      "status": "PASS"
+    },
+    {
+      "cenario": "1. Criação",
+      "verificacao": "A registra microchip do próprio cão",
+      "esperado": "sucesso",
+      "obtido": "sucesso",
+      "status": "PASS"
+    },
+    {
+      "cenario": "2. Leitura de B sobre A",
+      "verificacao": "B lê o cão RASCUNHO de A",
+      "esperado": "0 linhas",
+      "obtido": "0 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "2. Leitura de B sobre A",
+      "verificacao": "B lê o microchip do cão de A (dado sensível)",
+      "esperado": "0 linhas",
+      "obtido": "0 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "2. Leitura de B sobre A",
+      "verificacao": "B varre TODOS os rascunhos da base procurando os de A",
+      "esperado": "nenhum rascunho de A",
+      "obtido": "0 rascunho(s) de A em 0 visíveis",
+      "status": "PASS"
+    },
+    {
+      "cenario": "2. Leitura de B sobre A",
+      "verificacao": "B lê o cão PUBLICADO de A (comportamento esperado: diretório é público)",
+      "esperado": "1 linha",
+      "obtido": "1 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "3. Escrita de B sobre A",
+      "verificacao": "B faz UPDATE no canil de A",
+      "esperado": "0 linhas afetadas",
+      "obtido": "0 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "3. Escrita de B sobre A",
+      "verificacao": "B faz UPDATE no cão publicado de A",
+      "esperado": "0 linhas afetadas",
+      "obtido": "0 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "3. Escrita de B sobre A",
+      "verificacao": "B move o cão de A para o próprio canil",
+      "esperado": "0 linhas afetadas",
+      "obtido": "0 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "3. Escrita de B sobre A",
+      "verificacao": "B faz DELETE no cão de A",
+      "esperado": "erro de permissão (exclusão é lógica)",
+      "obtido": "erro 42501: permission denied for table dogs",
+      "status": "PASS"
+    },
+    {
+      "cenario": "3. Escrita de B sobre A",
+      "verificacao": "B faz DELETE no PRÓPRIO cão (DELETE físico é negado a todos)",
+      "esperado": "erro de permissão",
+      "obtido": "erro 42501: permission denied for table dogs",
+      "status": "PASS"
+    },
+    {
+      "cenario": "4. Anônimo",
+      "verificacao": "anônimo lê cão publicado",
+      "esperado": "1 linha",
+      "obtido": "1 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "4. Anônimo",
+      "verificacao": "anônimo lê cão em rascunho",
+      "esperado": "0 linhas",
+      "obtido": "0 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "4. Anônimo",
+      "verificacao": "anônimo lê dog_identifiers (microchip)",
+      "esperado": "0 linhas ou erro de permissão",
+      "obtido": "erro 42501: permission denied for table dog_identifiers",
+      "status": "PASS"
+    },
+    {
+      "cenario": "4. Anônimo",
+      "verificacao": "anônimo tenta INSERT em dogs",
+      "esperado": "erro de permissão",
+      "obtido": "erro 42501: permission denied for table dogs",
+      "status": "PASS"
+    },
+    {
+      "cenario": "5. Storage",
+      "verificacao": "B grava no PRÓPRIO prefixo (controle: precisa funcionar)",
+      "esperado": "sucesso",
+      "obtido": "sucesso",
+      "status": "PASS"
+    },
+    {
+      "cenario": "5. Storage",
+      "verificacao": "B grava no prefixo de A",
+      "esperado": "erro de permissão",
+      "obtido": "erro: new row violates row-level security policy",
+      "status": "PASS"
+    },
+    {
+      "cenario": "5. Storage",
+      "verificacao": "B lista o prefixo de A",
+      "esperado": "vazio ou erro",
+      "obtido": "0 objeto(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "5. Storage",
+      "verificacao": "B baixa arquivo de A",
+      "esperado": "erro de permissão",
+      "obtido": "erro: Object not found",
+      "status": "PASS"
+    },
+    {
+      "cenario": "5. Storage",
+      "verificacao": "anônimo baixa arquivo de A",
+      "esperado": "erro de permissão",
+      "obtido": "erro: Object not found",
+      "status": "PASS"
+    },
+    {
+      "cenario": "6. Admin",
+      "verificacao": "usuário comum se promove a admin",
+      "esperado": "erro de permissão de coluna",
+      "obtido": "erro 42501: permission denied for table profiles",
+      "status": "PASS"
+    },
+    {
+      "cenario": "6. Admin",
+      "verificacao": "usuário comum edita o perfil de outro",
+      "esperado": "0 linhas afetadas",
+      "obtido": "0 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "6. Admin",
+      "verificacao": "usuário comum chama private.is_admin() via RPC",
+      "esperado": "erro — schema private não é exposto",
+      "obtido": "erro: Could not find the function public.is_admin without parameters in the schema cache",
+      "status": "PASS"
+    },
+    {
+      "cenario": "6. Admin",
+      "verificacao": "usuário comum chama função de trigger via RPC",
+      "esperado": "erro — EXECUTE revogado",
+      "obtido": "erro: Could not find the function public.dogs_check_ancestry without parameters in the schema cache",
+      "status": "PASS"
+    },
+    {
+      "cenario": "6. Admin",
+      "verificacao": "papel de B no banco após as tentativas",
+      "esperado": "user",
+      "obtido": "user",
+      "status": "PASS"
+    }
+  ]
+}

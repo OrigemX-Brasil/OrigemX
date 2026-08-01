@@ -69,11 +69,41 @@ as $$
 $$;
 
 comment on function private.can_manage_dog(uuid) is
-  'Posse do cão: dono, autor do cadastro, dono do canil, ou admin.';
+  'Posse do cão: dono, autor do cadastro, dono do canil, ou admin. NÃO usar nas policies da própria tabela dogs — ver private.owns_kennel().';
+
+-- Posse do CANIL, avaliada a partir de um id passado como parâmetro.
+--
+-- Existe porque can_manage_dog() não pode ser usada nas policies da própria
+-- tabela `dogs`: ela reconsulta `public.dogs` pelo id, e num
+-- `INSERT ... RETURNING` — que é o que a API REST sempre emite — a linha nova
+-- ainda não está no snapshot da função. O resultado era `false`, a policy de
+-- SELECT negava, e criar um cão em RASCUNHO ficava impossível pela API.
+--
+-- As policies de dogs agora decidem pelas COLUNAS DA PRÓPRIA LINHA
+-- (owner_id, created_by) e usam esta função só para o pulo em outra tabela.
+create or replace function private.owns_kennel(p_kennel_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select p_kennel_id is not null and exists (
+    select 1
+      from public.kennels k
+     where k.id = p_kennel_id
+       and k.owner_id = (select auth.uid())
+       and k.deleted_at is null
+  );
+$$;
+
+comment on function private.owns_kennel(uuid) is
+  'True se o usuário da sessão é dono do canil informado.';
 
 grant usage on schema private to anon, authenticated;
 grant execute on function private.is_admin() to anon, authenticated;
 grant execute on function private.can_manage_dog(uuid) to anon, authenticated;
+grant execute on function private.owns_kennel(uuid) to anon, authenticated;
 
 -- -----------------------------------------------------------------------------
 -- Privilégios de tabela
@@ -182,6 +212,9 @@ alter table public.dogs enable row level security;
 -- Cão com dono e não publicado continua invisível. O buraco correspondente no
 -- pedigree é tratado na UI, que renderiza a posição como "não publicado" e sem
 -- link — aqui só garantimos que nada dele vaza.
+-- A posse é decidida pelas COLUNAS DA PRÓPRIA LINHA, nunca por uma função que
+-- reconsulte `dogs` pelo id: em `INSERT ... RETURNING` a linha ainda não existe
+-- para essa consulta, e o cadastro de rascunho quebraria.
 create policy dogs_select
   on public.dogs for select
   to anon, authenticated
@@ -193,7 +226,10 @@ create policy dogs_select
         or (owner_id is null and kennel_id is null)
       )
     )
-    or private.can_manage_dog(id)
+    or owner_id = (select auth.uid())
+    or created_by = (select auth.uid())
+    or private.owns_kennel(kennel_id)
+    or private.is_admin()
   );
 
 create policy dogs_insert
@@ -205,34 +241,34 @@ create policy dogs_insert
       -- Sem canil: cão avulso, ou ancestral cadastrado só para o pedigree.
       kennel_id is null
       -- Com canil: só no próprio canil.
-      or exists (
-        select 1 from public.kennels k
-         where k.id = kennel_id
-           and k.owner_id = (select auth.uid())
-           and k.deleted_at is null
-      )
+      or private.owns_kennel(kennel_id)
       or private.is_admin()
     )
   );
 
--- O WITH CHECK repete a checagem do canil de destino, e não só
--- can_manage_dog(id). Motivo: can_manage_dog consulta o estado ANTERIOR da
--- linha, então sozinho ele deixaria alguém mover o próprio cão para dentro do
--- canil de outra pessoa.
+-- O WITH CHECK checa o canil de DESTINO explicitamente. Sem isso, alguém
+-- moveria o próprio cão para dentro do canil de outra pessoa: a checagem de
+-- posse olha a linha que está sendo gravada, e o dono do cão continuaria sendo
+-- quem move.
 create policy dogs_update
   on public.dogs for update
   to authenticated
-  using (private.can_manage_dog(id))
+  using (
+    owner_id = (select auth.uid())
+    or created_by = (select auth.uid())
+    or private.owns_kennel(kennel_id)
+    or private.is_admin()
+  )
   with check (
-    private.can_manage_dog(id)
+    (
+      owner_id = (select auth.uid())
+      or created_by = (select auth.uid())
+      or private.owns_kennel(kennel_id)
+      or private.is_admin()
+    )
     and (
       kennel_id is null
-      or exists (
-        select 1 from public.kennels k
-         where k.id = kennel_id
-           and k.owner_id = (select auth.uid())
-           and k.deleted_at is null
-      )
+      or private.owns_kennel(kennel_id)
       or private.is_admin()
     )
   );

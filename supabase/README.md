@@ -90,6 +90,30 @@ Ou seja, os três CHECKs são **defesa em profundidade**: inalcançáveis enquan
 os triggers existirem, e a rede que sobra se um trigger for removido um dia. Os
 casos 1 e 2 provam que a operação é bloqueada, não qual mecanismo bloqueou.
 
+## Evidência de RLS pela API — `npm run test:rls`
+
+A bateria SQL acima roda dentro do banco, como `postgres`. Isso deixa um ponto
+cego: `postgres` ignora RLS, então ela verifica as políticas mas não o caminho
+real de um cliente.
+
+`scripts/test-rls.mts` fecha esse buraco. Usa `supabase-js` com dois usuários
+reais e um cliente anônimo, falando com a API REST pela chave publishable — a
+mesma porta que um atacante usaria. A chave secreta só cria e destrói fixtures,
+nunca prova acesso. Sai com código != 0 se qualquer cenário falhar e escreve
+`reports/rls-report.md`, que é o documento de homologação.
+
+**Rode nas duas camadas.** A diferença entre elas já encontrou um bug que a
+bateria SQL não podia encontrar: `dogs_select` chamava
+`private.can_manage_dog(id)`, que reconsulta `dogs` pelo id — num
+`INSERT ... RETURNING`, que é o que a API sempre emite, a linha nova ainda não
+está no snapshot da função, então a policy negava e **criar cão em rascunho era
+impossível pela API**. Inserindo como `postgres`, a bateria SQL passava.
+
+Por isso as policies de `dogs` decidem posse pelas **colunas da própria linha**
+(`owner_id`, `created_by`) e só usam função para o pulo em outra tabela
+(`private.owns_kennel`). `private.can_manage_dog` continua válida para
+`dog_identifiers`, que consulta `dogs` — uma tabela diferente da sua.
+
 ## Precisa de confirmação do cliente
 
 ### Visibilidade do ancestral fantasma
