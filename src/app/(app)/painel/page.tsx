@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { getAuthUser, getCurrentProfile } from "@/modules/auth/queries";
 
@@ -33,7 +34,20 @@ export default async function PainelPage() {
         </div>
       </dl>
 
-      <p className="text-fg-faint text-sm">Canis e cães entram nas próximas etapas.</p>
+      <Link
+        href="/painel/canis"
+        className="border-border bg-surface hover:bg-surface-hover rounded-card flex items-center justify-between gap-4 border p-5 transition-colors"
+      >
+        <span className="flex flex-col gap-1">
+          <span className="text-fg font-medium">Canis</span>
+          <span className="text-fg-muted text-sm">Cadastre e edite seus canis.</span>
+        </span>
+        <span className="text-fg-faint" aria-hidden="true">
+          →
+        </span>
+      </Link>
+
+      <p className="text-fg-faint text-sm">Cães entram na próxima etapa.</p>
     </div>
   );
 }

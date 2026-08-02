@@ -1,7 +1,7 @@
 {
-  "when": "2026-08-01T20:59:56.547Z",
+  "when": "2026-08-02T02:57:18.149Z",
   "project": "https://lcqhnfdsrioufwvnrqnt.supabase.co",
-  "run": "msauud53",
+  "run": "msb7lx8w",
   "fatal": null,
   "checks": [
     {
@@ -226,6 +226,34 @@
       "verificacao": "conta em formato OAuth nasce como usuário comum",
       "esperado": "role = 'user'",
       "obtido": "role = user",
+      "status": "PASS"
+    },
+    {
+      "cenario": "8. CRUD de canil",
+      "verificacao": "A exclui o próprio canil (lógico)",
+      "esperado": "1 linha marcada",
+      "obtido": "1 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "8. CRUD de canil",
+      "verificacao": "linha continua na tabela — exclusão é lógica, nunca física",
+      "esperado": "linha existe com deleted_at preenchido",
+      "obtido": "existe, deleted_at preenchido",
+      "status": "PASS"
+    },
+    {
+      "cenario": "8. CRUD de canil",
+      "verificacao": "anônimo lê canil excluído logicamente",
+      "esperado": "0 linhas",
+      "obtido": "0 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "8. CRUD de canil",
+      "verificacao": "B tenta reusar o endereço de um canil excluído de A",
+      "esperado": "erro — slug fica reservado para sempre",
+      "obtido": "erro 23505: duplicate key value violates unique constraint \"kennels_slug_key\"",
       "status": "PASS"
     }
   ]

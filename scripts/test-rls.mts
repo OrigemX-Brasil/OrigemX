@@ -583,6 +583,64 @@ async function main() {
   }
 
   // ---------------------------------------------------------------------------
+  // Cenário 8 — CRUD de canil: exclusão lógica e reserva de endereço
+  // ---------------------------------------------------------------------------
+
+  const softDeleted = await A.client
+    .from("kennels")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", kennelA.id)
+    .select("id");
+  record(
+    "8. CRUD de canil",
+    "A exclui o próprio canil (lógico)",
+    "1 linha marcada",
+    describe(softDeleted.error, softDeleted.data ?? []),
+    !softDeleted.error && (softDeleted.data?.length ?? 0) === 1,
+  );
+
+  const { data: stillThere } = await admin
+    .from("kennels")
+    .select("id, deleted_at")
+    .eq("id", kennelA.id)
+    .maybeSingle();
+  record(
+    "8. CRUD de canil",
+    "linha continua na tabela — exclusão é lógica, nunca física",
+    "linha existe com deleted_at preenchido",
+    stillThere ? `existe, deleted_at ${stillThere.deleted_at ? "preenchido" : "nulo"}` : "SUMIU",
+    Boolean(stillThere?.deleted_at),
+  );
+
+  const anonDeleted = await anon.from("kennels").select("id").eq("id", kennelA.id);
+  record(
+    "8. CRUD de canil",
+    "anônimo lê canil excluído logicamente",
+    "0 linhas",
+    describe(anonDeleted.error, anonDeleted.data ?? []),
+    !anonDeleted.error && (anonDeleted.data?.length ?? -1) === 0,
+  );
+
+  // O endereço não volta ao mercado: um link já divulgado não pode passar a
+  // resolver para outro canil.
+  const reuse = await B.client
+    .from("kennels")
+    .insert({
+      owner_id: B.id,
+      created_by: B.id,
+      name: "Tentando reusar slug",
+      slug: `rls-${RUN}-canil-a`,
+    })
+    .select();
+  record(
+    "8. CRUD de canil",
+    "B tenta reusar o endereço de um canil excluído de A",
+    "erro — slug fica reservado para sempre",
+    describe(reuse.error, reuse.data ?? []),
+    !!reuse.error,
+  );
+
+  // ---------------------------------------------------------------------------
   // Limpeza
   // ---------------------------------------------------------------------------
 
