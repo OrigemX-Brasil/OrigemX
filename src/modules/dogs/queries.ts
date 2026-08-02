@@ -1,0 +1,205 @@
+import {
+  decodeCursor,
+  encodeCursor,
+  resolveLimit,
+  type Page,
+  type PageParams,
+} from "@/lib/pagination";
+import { createClient } from "@/lib/supabase/server";
+
+import {
+  isSearchable,
+  normalizeSearchTerm,
+  rankCandidates,
+  SLOT_SEX,
+  type AncestorCandidate,
+  type ParentSlot,
+} from "./ancestors";
+
+/**
+ * Acesso a dados de cão. Todo `.from("dogs")` do app passa por aqui.
+ * Filtro é para a consulta estar certa; quem protege é a RLS.
+ */
+
+const LIST_COLUMNS =
+  "id, public_id, slug, name, sex, born_on, breed, color, coat, kennel_id, owner_id, sire_id, dam_id, published_at, created_at, updated_at";
+
+export type DogListItem = {
+  id: string;
+  public_id: string;
+  slug: string | null;
+  name: string;
+  sex: string;
+  born_on: string | null;
+  breed: string | null;
+  color: string | null;
+  coat: string | null;
+  kennel_id: string | null;
+  owner_id: string | null;
+  sire_id: string | null;
+  dam_id: string | null;
+  published_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type DogListFilters = {
+  kennelId?: string | null;
+  search?: string | null;
+};
+
+/**
+ * Cães do usuário, paginados, com busca por nome e filtro por canil.
+ *
+ * `created_by` além de `owner_id`: o criador precisa reencontrar o ancestral
+ * fantasma que cadastrou, e fantasma não tem dono por definição. Sem isso ele
+ * cria o mesmo ancestral de novo — o duplicado que este módulo existe para
+ * evitar.
+ */
+export async function listMyDogs(
+  userId: string,
+  filters: DogListFilters = {},
+  params: PageParams = {},
+): Promise<Page<DogListItem>> {
+  const limit = resolveLimit(params.limit);
+  const cursor = decodeCursor(params.cursor);
+
+  const supabase = await createClient();
+  let query = supabase
+    .from("dogs")
+    .select(LIST_COLUMNS)
+    .is("deleted_at", null)
+    .or(`owner_id.eq.${userId},created_by.eq.${userId}`)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(limit + 1);
+
+  if (filters.kennelId) query = query.eq("kennel_id", filters.kennelId);
+
+  // Busca por nome usa o índice GIN trigram criado na migration do núcleo.
+  if (filters.search && isSearchable(filters.search)) {
+    query = query.ilike("name", `%${escapeLike(filters.search.trim())}%`);
+  }
+
+  if (cursor) {
+    query = query.or(
+      `created_at.lt.${cursor.createdAt},and(created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`,
+    );
+  }
+
+  const { data, error } = await query;
+  if (error) return { items: [], nextCursor: null };
+
+  const rows = (data ?? []) as DogListItem[];
+  const hasMore = rows.length > limit;
+  const items = hasMore ? rows.slice(0, limit) : rows;
+  const last = items.at(-1);
+
+  return {
+    items,
+    nextCursor: hasMore && last ? encodeCursor({ createdAt: last.created_at, id: last.id }) : null,
+  };
+}
+
+/** `%` e `_` são curingas no LIKE; sem escapar, "100%" viraria busca aberta. */
+function escapeLike(value: string): string {
+  return value.replace(/[%_\\]/g, (m) => `\\${m}`);
+}
+
+export async function getDogById(id: string) {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("dogs")
+    .select(`${LIST_COLUMNS}, created_by, deleted_at`)
+    .eq("id", id)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  return data;
+}
+
+/** Vários cães de uma vez — usado para mostrar pai e mãe já selecionados. */
+export async function getDogsByIds(ids: readonly string[]): Promise<DogListItem[]> {
+  const unique = [...new Set(ids.filter(Boolean))];
+  if (unique.length === 0) return [];
+
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("dogs")
+    .select(LIST_COLUMNS)
+    .in("id", unique)
+    .is("deleted_at", null);
+
+  return (data ?? []) as DogListItem[];
+}
+
+/**
+ * Descendentes do cão, em qualquer profundidade.
+ *
+ * Vem da função `dog_descendant_ids` porque percorrer a árvore com PostgREST
+ * custaria uma consulta por geração.
+ */
+export async function getDescendantIds(dogId: string): Promise<Set<string>> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("dog_descendant_ids", { p_dog_id: dogId });
+  if (error || !data) return new Set();
+  return new Set(data as string[]);
+}
+
+export type AncestorSearchResult = {
+  candidates: AncestorCandidate[];
+  truncated: boolean;
+};
+
+const CANDIDATE_LIMIT = 20;
+
+/**
+ * Candidatos a progenitor.
+ *
+ * Filtra por sexo no BANCO — metade dos cães nunca serve para a posição, e
+ * trazê-los para descartar no cliente desperdiça a consulta. O ranking fino
+ * fica em `rankCandidates`, que é puro e testado.
+ *
+ * Busca em toda a base, não só nos cães do usuário: reaproveitar o ancestral
+ * que outro criador já cadastrou é exatamente o ponto. A RLS decide o que fica
+ * visível — publicado, ou fantasma, ou do próprio usuário.
+ */
+export async function searchAncestorCandidates(
+  rawTerm: string,
+  slot: ParentSlot,
+): Promise<AncestorSearchResult> {
+  if (!isSearchable(rawTerm)) return { candidates: [], truncated: false };
+
+  const term = rawTerm.trim();
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("dogs")
+    .select("id, name, sex, born_on, breed, kennel_id, owner_id, kennels(name)")
+    .eq("sex", SLOT_SEX[slot])
+    .is("deleted_at", null)
+    .ilike("name", `%${escapeLike(term)}%`)
+    .limit(CANDIDATE_LIMIT + 1);
+
+  if (error || !data) return { candidates: [], truncated: false };
+
+  const mapped: AncestorCandidate[] = data.map((row) => {
+    const kennel = row.kennels as { name: string } | { name: string }[] | null;
+    const kennelName = Array.isArray(kennel) ? (kennel[0]?.name ?? null) : (kennel?.name ?? null);
+    return {
+      id: row.id,
+      name: row.name,
+      sex: row.sex as "male" | "female",
+      born_on: row.born_on,
+      breed: row.breed,
+      kennel_id: row.kennel_id,
+      owner_id: row.owner_id,
+      kennel_name: kennelName,
+    };
+  });
+
+  const truncated = mapped.length > CANDIDATE_LIMIT;
+  const ranked = rankCandidates(mapped, normalizeSearchTerm(term)).slice(0, CANDIDATE_LIMIT);
+
+  return { candidates: ranked, truncated };
+}

@@ -1,7 +1,7 @@
 {
-  "when": "2026-08-02T02:57:18.149Z",
+  "when": "2026-08-02T22:52:57.618Z",
   "project": "https://lcqhnfdsrioufwvnrqnt.supabase.co",
-  "run": "msb7lx8w",
+  "run": "mscebjkd",
   "fatal": null,
   "checks": [
     {
@@ -254,6 +254,41 @@
       "verificacao": "B tenta reusar o endereço de um canil excluído de A",
       "esperado": "erro — slug fica reservado para sempre",
       "obtido": "erro 23505: duplicate key value violates unique constraint \"kennels_slug_key\"",
+      "status": "PASS"
+    },
+    {
+      "cenario": "9. Genealogia",
+      "verificacao": "A cadastra ancestral fantasma (sem dono e sem canil)",
+      "esperado": "criado",
+      "obtido": "criado",
+      "status": "PASS"
+    },
+    {
+      "cenario": "9. Genealogia",
+      "verificacao": "anônimo lê o fantasma — é nó de árvore, não precisa estar publicado",
+      "esperado": "1 linha",
+      "obtido": "1 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "9. Genealogia",
+      "verificacao": "dog_descendant_ids devolve o descendente",
+      "esperado": "inclui o filho",
+      "obtido": "inclui",
+      "status": "PASS"
+    },
+    {
+      "cenario": "9. Genealogia",
+      "verificacao": "ciclo pela API vira mensagem legível, não 500",
+      "esperado": "erro traduzido, sem jargão de banco",
+      "obtido": "[23514] -> \"Esse cão já aparece como descendente na árvore. Defini-lo como pai ou mãe faria com que ele fosse ancestral de si mesmo, o que o registro não permite.\"",
+      "status": "PASS"
+    },
+    {
+      "cenario": "9. Genealogia",
+      "verificacao": "macho na posição de mãe vira mensagem no campo certo",
+      "esperado": "campo dam_id, texto sobre fêmea",
+      "obtido": "dam_id: \"A mãe precisa ser uma fêmea.\"",
       "status": "PASS"
     }
   ]

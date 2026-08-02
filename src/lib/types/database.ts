@@ -305,6 +305,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      dog_descendant_ids: { Args: { p_dog_id: string }; Returns: string[] }
       gen_public_id: { Args: never; Returns: string }
     }
     Enums: {

@@ -47,7 +47,18 @@ export default async function PainelPage() {
         </span>
       </Link>
 
-      <p className="text-fg-faint text-sm">Cães entram na próxima etapa.</p>
+      <Link
+        href="/painel/caes"
+        className="border-border bg-surface hover:bg-surface-hover rounded-card flex items-center justify-between gap-4 border p-5 transition-colors"
+      >
+        <span className="flex flex-col gap-1">
+          <span className="text-fg font-medium">Cães</span>
+          <span className="text-fg-muted text-sm">Cadastre cães e defina pai e mãe.</span>
+        </span>
+        <span className="text-fg-faint" aria-hidden="true">
+          →
+        </span>
+      </Link>
     </div>
   );
 }

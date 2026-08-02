@@ -20,6 +20,10 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
+// A tradução de erro é o que separa "ciclo genealógico" de um 500. Importada da
+// aplicação de propósito: testar uma cópia provaria a cópia.
+import { translateDogError } from "../src/modules/dogs/errors.ts";
+
 // -----------------------------------------------------------------------------
 // Ambiente
 // -----------------------------------------------------------------------------
@@ -639,6 +643,106 @@ async function main() {
     describe(reuse.error, reuse.data ?? []),
     !!reuse.error,
   );
+
+  // ---------------------------------------------------------------------------
+  // Cenário 9 — genealogia pela API: fantasma, ciclo e descendentes
+  // ---------------------------------------------------------------------------
+
+  // Ancestral fantasma criado pelo usuário comum: sem dono, sem canil.
+  const { data: ghost, error: ghostError } = await A.client
+    .from("dogs")
+    .insert({
+      name: `Fantasma ${RUN}`,
+      sex: "male",
+      created_by: A.id,
+      kennel_id: null,
+      owner_id: null,
+    })
+    .select("id")
+    .single();
+  record(
+    "9. Genealogia",
+    "A cadastra ancestral fantasma (sem dono e sem canil)",
+    "criado",
+    ghostError ? `erro ${ghostError.code}: ${ghostError.message}` : "criado",
+    !ghostError && !!ghost,
+  );
+
+  if (ghost) {
+    const anonGhost = await anon.from("dogs").select("id").eq("id", ghost.id);
+    record(
+      "9. Genealogia",
+      "anônimo lê o fantasma — é nó de árvore, não precisa estar publicado",
+      "1 linha",
+      describe(anonGhost.error, anonGhost.data ?? []),
+      !anonGhost.error && (anonGhost.data?.length ?? 0) === 1,
+    );
+
+    // Filho do fantasma, para ter uma árvore de verdade.
+    const { data: child } = await A.client
+      .from("dogs")
+      .insert({
+        name: `Filho ${RUN}`,
+        sex: "male",
+        kennel_id: kennelB ? null : null,
+        owner_id: A.id,
+        created_by: A.id,
+        sire_id: ghost.id,
+      })
+      .select("id")
+      .single();
+
+    if (child) {
+      // A função de descendentes precisa enxergar o filho.
+      const { data: descendants } = await A.client.rpc("dog_descendant_ids", {
+        p_dog_id: ghost.id,
+      });
+      const ids = (descendants as string[] | null) ?? [];
+      record(
+        "9. Genealogia",
+        "dog_descendant_ids devolve o descendente",
+        "inclui o filho",
+        ids.includes(child.id) ? "inclui" : `não inclui (${ids.length} ids)`,
+        ids.includes(child.id),
+      );
+
+      // CICLO: tornar o fantasma filho do próprio filho.
+      const cycle = await A.client
+        .from("dogs")
+        .update({ sire_id: child.id })
+        .eq("id", ghost.id)
+        .select();
+      const translated = translateDogError(cycle.error);
+      record(
+        "9. Genealogia",
+        "ciclo pela API vira mensagem legível, não 500",
+        "erro traduzido, sem jargão de banco",
+        cycle.error ? `[${cycle.error.code}] -> "${translated.message}"` : "ACEITOU O CICLO",
+        Boolean(cycle.error) &&
+          /descendente/i.test(translated.message) &&
+          !/23514|constraint|uuid/i.test(translated.message),
+      );
+
+      // Sexo errado na posição de mãe.
+      const wrongSex = await A.client
+        .from("dogs")
+        .update({ dam_id: ghost.id })
+        .eq("id", child.id)
+        .select();
+      const translatedSex = translateDogError(wrongSex.error);
+      record(
+        "9. Genealogia",
+        "macho na posição de mãe vira mensagem no campo certo",
+        "campo dam_id, texto sobre fêmea",
+        wrongSex.error ? `${translatedSex.field}: "${translatedSex.message}"` : "ACEITOU",
+        Boolean(wrongSex.error) && translatedSex.field === "dam_id",
+      );
+
+      await admin.from("dogs").delete().eq("id", child.id);
+    }
+
+    await admin.from("dogs").delete().eq("id", ghost.id);
+  }
 
   // ---------------------------------------------------------------------------
   // Limpeza

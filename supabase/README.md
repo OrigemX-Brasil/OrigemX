@@ -132,6 +132,19 @@ formulário.
 **`auth_insufficient_mfa_options`** — MFA está **fora do escopo** do Anexo I.2.
 Aceito conscientemente; entra quando for contratado.
 
+**`authenticated_security_definer_function_executable` → `dog_descendant_ids`** —
+aceito e necessário. A função é `SECURITY DEFINER` para percorrer a árvore
+inteira, inclusive por cães que a RLS do usuário esconderia: um descendente
+invisível seria oferecido como pai ou mãe e o ciclo só apareceria no erro do
+banco. Devolve **apenas ids**, nunca colunas, e qualquer `SELECT` feito com
+esses ids continua passando pela RLS.
+
+O acesso de `anon` **foi fechado** na migration
+`20260802225046_revoke_dog_descendants_from_anon.sql`. O grant explícito a
+`authenticated` não bastava: função em `public` nasce com `EXECUTE` para
+`PUBLIC`, e `anon` herda daí. Enquanto esteve aberto, um visitante anônimo podia
+enumerar os ids de descendentes de qualquer cão, inclusive de rascunhos.
+
 ## Precisa de confirmação do cliente
 
 ### Visibilidade do ancestral fantasma
