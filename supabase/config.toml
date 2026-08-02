@@ -348,9 +348,21 @@ max_frequency = "5s"
 # -----------------------------------------------------------------------------
 # Google — o único provider externo em escopo (Anexo I.2).
 #
-# Credencial NUNCA entra neste arquivo: as duas linhas abaixo leem do ambiente.
-# Trocar as credenciais de dev pelas do cliente é preencher as env vars e rodar
-# `supabase config push`. Zero mudança de código — a aplicação só chama
+# >>> ATENÇÃO: ESTE BLOCO NÃO É A FONTE DE VERDADE DO PROJETO DE DEV. <<<
+#
+# A auth do projeto de desenvolvimento é configurada pelo PAINEL do Supabase, e
+# já está funcionando: login com Google testado, usuário nascendo com
+# role = 'user'.
+#
+# Um `supabase config push` SOBRESCREVE o painel com o conteúdo deste arquivo.
+# E enquanto SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET estiver vazia no ambiente, a
+# CLI empurra o texto literal `env(...)` como se fosse o valor — foi assim que o
+# Google do projeto de dev caiu uma vez. `config push` é comando do dono do
+# projeto, num terminal interativo. Ver a seção AMBIENTE do CLAUDE.md.
+#
+# Então para que este bloco existe: para o HANDOVER ao projeto do CLIENTE, onde
+# ninguém configurou nada pelo painel. Lá ele é o mecanismo que torna a troca de
+# credencial uma questão de env var, sem tocar em código — a aplicação só chama
 # signInWithOAuth({ provider: "google" }) e nunca vê client_id nem secret.
 #
 # Redirect URI a cadastrar no Google Cloud Console:

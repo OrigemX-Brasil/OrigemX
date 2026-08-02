@@ -37,6 +37,15 @@ Deploy Vercel.
     literal `env(NOME)` como se fosse o valor, e a configuração quebra em
     silêncio. Foi assim que o Google OAuth do projeto de dev caiu.
   - E confirma comigo qual projeto está linkado, na hora.
+- **A auth do projeto de dev é configurada pelo PAINEL do Supabase.** O
+  `config.toml` NÃO é fonte de verdade para `[auth.external.google]`. O login
+  com Google já está configurado e testado no painel: funciona, e o usuário
+  nasce com `role = 'user'`. Não tratar isso como pendência.
+  - Consequência prática: um `config push` sobrescreveria o que está no painel
+    com o conteúdo do arquivo. Enquanto `SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET`
+    estiver vazia no `.env.local`, o push derruba o Google de novo.
+  - O bloco no `config.toml` existe para o handover ao projeto do CLIENTE, onde
+    não há painel configurado por mim. Lá ele é o mecanismo; aqui é risco.
 - NUNCA rodar `config push`, `db push`, `db reset` ou qualquer DDL contra o
   projeto do CLIENTE sem minha confirmação explícita na hora.
 - Configuração feita pelo painel do Supabase não está no `config.toml` local.
