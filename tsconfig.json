@@ -10,6 +10,12 @@
     "module": "esnext",
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
+    // Os scripts em `scripts/` rodam pelo Node direto, sem bundler, e o ESM do
+    // Node exige a extensão no caminho. Sem esta flag, importar código de
+    // `src/` num script seria erro de compilação — e a alternativa (duplicar a
+    // função no script) faria o teste provar a cópia, não o original.
+    // Seguro com `noEmit`: nada é emitido, então a extensão nunca vaza no build.
+    "allowImportingTsExtensions": true,
     "isolatedModules": true,
     "jsx": "react-jsx",
     "incremental": true,

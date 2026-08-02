@@ -145,6 +145,29 @@ O acesso de `anon` **foi fechado** na migration
 `PUBLIC`, e `anon` herda daí. Enquanto esteve aberto, um visitante anônimo podia
 enumerar os ids de descendentes de qualquer cão, inclusive de rascunhos.
 
+## Decisão em aberto: como servir mídia de perfil publicado
+
+Hoje o bucket `kennel-media` é privado e a entrega usa **URL assinada com 1h**.
+Serve para tela autenticada e não serve para perfil público: URL assinada expira,
+o que quebra cache/ISR e quebra QR impresso, que vive meses.
+
+Os dois caminhos possíveis, e o que já está preparado para os dois:
+
+**(a) Bucket público separado só para mídia de registro publicado.** Publicar
+**move** o objeto do bucket privado para o público; despublicar move de volta.
+Mover e não copiar, senão o mesmo arquivo ocupa plano duas vezes — e
+armazenamento é justamente o limite que estoura primeiro.
+
+**(b) Rota de proxy no servidor** que valida publicação e serve com cache.
+
+Preparação já feita, que mantém os dois viáveis sem retrabalho:
+
+- `media.bucket_id` é **coluna**, não constante no código;
+- **nenhum componente monta URL**: tudo passa por `resolveMediaUrls`, em
+  `src/modules/media/queries.ts`. Trocar a estratégia é mexer nessa função;
+- `constraints.ts` já tem `isPubliclyServable()` e a lista `PUBLIC_BUCKETS`,
+  hoje vazia — o ponto onde (a) se liga.
+
 ## Precisa de confirmação do cliente
 
 ### Visibilidade do ancestral fantasma

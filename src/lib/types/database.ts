@@ -258,6 +258,101 @@ export type Database = {
           },
         ]
       }
+      media: {
+        Row: {
+          alt: string | null
+          bucket_id: string
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          dog_id: string | null
+          height: number | null
+          id: string
+          kennel_id: string | null
+          mime: string
+          owner_id: string
+          position: number
+          role: string
+          size_bytes: number
+          storage_path: string
+          thumb_bytes: number | null
+          thumb_path: string | null
+          updated_at: string
+          width: number | null
+        }
+        Insert: {
+          alt?: string | null
+          bucket_id?: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          dog_id?: string | null
+          height?: number | null
+          id?: string
+          kennel_id?: string | null
+          mime: string
+          owner_id: string
+          position?: number
+          role: string
+          size_bytes: number
+          storage_path: string
+          thumb_bytes?: number | null
+          thumb_path?: string | null
+          updated_at?: string
+          width?: number | null
+        }
+        Update: {
+          alt?: string | null
+          bucket_id?: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          dog_id?: string | null
+          height?: number | null
+          id?: string
+          kennel_id?: string | null
+          mime?: string
+          owner_id?: string
+          position?: number
+          role?: string
+          size_bytes?: number
+          storage_path?: string
+          thumb_bytes?: number | null
+          thumb_path?: string | null
+          updated_at?: string
+          width?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_dog_id_fkey"
+            columns: ["dog_id"]
+            isOneToOne: false
+            referencedRelation: "dogs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_kennel_id_fkey"
+            columns: ["kennel_id"]
+            isOneToOne: false
+            referencedRelation: "kennels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -307,6 +402,7 @@ export type Database = {
     Functions: {
       dog_descendant_ids: { Args: { p_dog_id: string }; Returns: string[] }
       gen_public_id: { Args: never; Returns: string }
+      media_used_bytes: { Args: { p_owner_id: string }; Returns: number }
     }
     Enums: {
       [_ in never]: never

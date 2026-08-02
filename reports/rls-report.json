@@ -1,7 +1,7 @@
 {
-  "when": "2026-08-02T22:52:57.618Z",
+  "when": "2026-08-02T23:13:35.037Z",
   "project": "https://lcqhnfdsrioufwvnrqnt.supabase.co",
-  "run": "mscebjkd",
+  "run": "mscf21yy",
   "fatal": null,
   "checks": [
     {
@@ -64,7 +64,7 @@
       "cenario": "2. Leitura de B sobre A",
       "verificacao": "B varre TODOS os rascunhos da base procurando os de A",
       "esperado": "nenhum rascunho de A",
-      "obtido": "0 rascunho(s) de A em 0 visíveis",
+      "obtido": "0 rascunho(s) de A em 1 visíveis",
       "status": "PASS"
     },
     {
@@ -289,6 +289,41 @@
       "verificacao": "macho na posição de mãe vira mensagem no campo certo",
       "esperado": "campo dam_id, texto sobre fêmea",
       "obtido": "dam_id: \"A mãe precisa ser uma fêmea.\"",
+      "status": "PASS"
+    },
+    {
+      "cenario": "10. Mídia",
+      "verificacao": "A registra metadata do próprio logo",
+      "esperado": "criado",
+      "obtido": "criado",
+      "status": "PASS"
+    },
+    {
+      "cenario": "10. Mídia",
+      "verificacao": "B grava metadata no canil de A",
+      "esperado": "erro de permissão",
+      "obtido": "erro 42501: new row violates row-level security policy for table \"media\"",
+      "status": "PASS"
+    },
+    {
+      "cenario": "10. Mídia",
+      "verificacao": "mime fora da lista de imagem",
+      "esperado": "erro CHECK media_mime_valid",
+      "obtido": "erro 23514: new row for relation \"media\" violates check constraint \"media_mime_valid\"",
+      "status": "PASS"
+    },
+    {
+      "cenario": "10. Mídia",
+      "verificacao": "arquivo acima do teto do banco",
+      "esperado": "erro CHECK media_size_positive",
+      "obtido": "erro 23514: new row for relation \"media\" violates check constraint \"media_size_positive\"",
+      "status": "PASS"
+    },
+    {
+      "cenario": "10. Mídia",
+      "verificacao": "quota do usuário soma o que ele gravou",
+      "esperado": "pelo menos 12345 bytes",
+      "obtido": "12345",
       "status": "PASS"
     }
   ]

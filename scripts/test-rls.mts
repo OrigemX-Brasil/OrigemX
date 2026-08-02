@@ -745,6 +745,131 @@ async function main() {
   }
 
   // ---------------------------------------------------------------------------
+  // Cenário 10 — mídia: metadata isolada por dono, limites impostos pelo banco
+  // ---------------------------------------------------------------------------
+
+  // Canil próprio para este cenário. O de A foi excluído logicamente no
+  // cenário 8, e `owns_kennel` exige deleted_at nulo — reaproveitá-lo mediria
+  // a exclusão, não a política de mídia.
+  const { data: kennelMedia } = await A.client
+    .from("kennels")
+    .insert({
+      owner_id: A.id,
+      created_by: A.id,
+      name: "Canil Mídia",
+      slug: `rls-${RUN}-canil-midia`,
+    })
+    .select("id")
+    .single();
+
+  if (!kennelMedia) throw new Error("fixture obrigatória falhou: canil de mídia");
+
+  const { data: mediaRow, error: mediaError } = await A.client
+    .from("media")
+    .insert({
+      bucket_id: BUCKET,
+      storage_path: `${A.id}/canis/${kennelMedia.id}/evidencia-${RUN}.webp`,
+      kennel_id: kennelMedia.id,
+      role: "kennel_logo",
+      mime: "image/webp",
+      size_bytes: 12345,
+      width: 800,
+      height: 800,
+      owner_id: A.id,
+      created_by: A.id,
+    })
+    .select("id")
+    .single();
+  record(
+    "10. Mídia",
+    "A registra metadata do próprio logo",
+    "criado",
+    mediaError ? `erro ${mediaError.code}: ${mediaError.message}` : "criado",
+    !mediaError && !!mediaRow,
+  );
+
+  // B tentando gravar metadata no canil de A, forjando owner_id.
+  const forged = await B.client
+    .from("media")
+    .insert({
+      bucket_id: BUCKET,
+      storage_path: `${A.id}/canis/${kennelMedia.id}/forjado-${RUN}.webp`,
+      kennel_id: kennelMedia.id,
+      role: "kennel_logo",
+      mime: "image/webp",
+      size_bytes: 100,
+      owner_id: A.id,
+      created_by: A.id,
+    })
+    .select();
+  record(
+    "10. Mídia",
+    "B grava metadata no canil de A",
+    "erro de permissão",
+    describe(forged.error, forged.data ?? []),
+    !!forged.error,
+  );
+
+  // Mime fora da lista de imagem — o CHECK do banco recusa.
+  const badMime = await A.client
+    .from("media")
+    .insert({
+      bucket_id: BUCKET,
+      storage_path: `${A.id}/canis/${kennelMedia.id}/ruim-${RUN}.txt`,
+      kennel_id: kennelMedia.id,
+      role: "kennel_logo",
+      mime: "text/plain",
+      size_bytes: 100,
+      owner_id: A.id,
+      created_by: A.id,
+    })
+    .select();
+  record(
+    "10. Mídia",
+    "mime fora da lista de imagem",
+    "erro CHECK media_mime_valid",
+    describe(badMime.error, badMime.data ?? []),
+    !!badMime.error,
+  );
+
+  // Teto por arquivo é do BANCO, não só do client.
+  const tooBig = await A.client
+    .from("media")
+    .insert({
+      bucket_id: BUCKET,
+      storage_path: `${A.id}/canis/${kennelMedia.id}/grande-${RUN}.webp`,
+      kennel_id: kennelMedia.id,
+      role: "kennel_logo",
+      mime: "image/webp",
+      size_bytes: 99_000_000,
+      owner_id: A.id,
+      created_by: A.id,
+    })
+    .select();
+  record(
+    "10. Mídia",
+    "arquivo acima do teto do banco",
+    "erro CHECK media_size_positive",
+    describe(tooBig.error, tooBig.data ?? []),
+    !!tooBig.error,
+  );
+
+  if (mediaRow) {
+    const { data: used } = await A.client.rpc("media_used_bytes", { p_owner_id: A.id });
+    record(
+      "10. Mídia",
+      "quota do usuário soma o que ele gravou",
+      "pelo menos 12345 bytes",
+      String(used),
+      typeof used === "number" && used >= 12345,
+    );
+
+    await admin.from("media").delete().eq("id", mediaRow.id);
+  }
+
+  await admin.from("kennels").delete().eq("id", kennelMedia.id);
+
+  // ---------------------------------------------------------------------------
   // Limpeza
   // ---------------------------------------------------------------------------
 
