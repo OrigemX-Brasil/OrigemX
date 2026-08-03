@@ -16,6 +16,7 @@ import { FounderBadge, FounderChecklist } from "@/modules/kennels/components/fou
 import { KennelForm } from "@/modules/kennels/components/kennel-form";
 import { founderEligibility } from "@/modules/kennels/founder";
 import { countKennelDogs, getKennelById } from "@/modules/kennels/queries";
+import { QrCard } from "@/modules/qr/components/qr-card";
 
 export const metadata: Metadata = { title: "Editar canil" };
 
@@ -123,6 +124,13 @@ export default async function EditarCanilPage({ params }: { params: Promise<{ id
       </section>
 
       <KennelForm kennel={kennel} />
+
+      <QrCard
+        kind="kennel"
+        entityId={kennel.id}
+        stableId={kennel.slug}
+        label="Aponta para o perfil público do canil. Codifica o endereço, que é reservado para sempre — trocar o nome do canil não quebra o que já foi impresso."
+      />
 
       {/*
         Exclusão LÓGICA. O botão diz o que realmente acontece: o endereço

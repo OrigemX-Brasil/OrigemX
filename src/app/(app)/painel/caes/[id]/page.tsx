@@ -13,6 +13,7 @@ import { MediaGallery } from "@/modules/media/components/media-gallery";
 import { PublishToggle } from "@/modules/media/components/publish-toggle";
 import { MAX_GALLERY_ITEMS } from "@/modules/media/constraints";
 import { getDogGallery, getUsedBytes } from "@/modules/media/queries";
+import { QrCard } from "@/modules/qr/components/qr-card";
 
 export const metadata: Metadata = { title: "Editar cão" };
 
@@ -106,6 +107,13 @@ export default async function EditarCaoPage({ params }: { params: Promise<{ id: 
           </p>
         )}
       </section>
+
+      <QrCard
+        kind="dog"
+        entityId={dog.id}
+        stableId={dog.public_id}
+        label="Aponta para o perfil público do cão. Codifica o identificador permanente, não o nome — o QR impresso continua valendo depois de qualquer edição do cadastro."
+      />
 
       <section className="border-border flex flex-col gap-3 border-t pt-6">
         <h2 className="text-fg text-sm font-medium">Excluir cão</h2>

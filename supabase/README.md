@@ -272,6 +272,37 @@ Classifica três estados: em ordem, **divergente** (arquivo num bucket, linha
 dizendo outro — corrige) e **órfã** (arquivo em bucket nenhum — só relata, porque
 apagar metadata é decisão humana).
 
+## QR Code — o único artefato que não dá para corrigir depois
+
+O QR vai para crachá, folder e placa de estande. Quando o criador troca o nome do
+cão, o papel já está na mão de alguém. Por isso duas decisões são de banco, não
+de interface:
+
+- **cão → `/d/{public_id}`** — `public_id` é imutável, e não por convenção: o
+  trigger `dogs_freeze_public_id` recusa qualquer UPDATE. É impossível quebrar
+  pela aplicação.
+- **canil → `/c/{slug}`** — único global, e **não é liberado nem por exclusão
+  lógica**, justamente para o QR impresso não passar a resolver outro canil.
+
+A rota de download recebe o **uuid interno** e busca o identificador estável no
+banco. A inversão é de propósito: nada que vem da requisição entra no conteúdo
+codificado, então a rota não vira gerador de QR de conteúdo arbitrário hospedado
+no nosso domínio. O chamador escolhe QUAL registro, nunca PARA ONDE aponta.
+
+**Correção de erro H (30%)**, medido: com a URL do cão, H dá versão 5 (37×37
+módulos); M daria versão 3 (29×29). Com a zona de silêncio, 45 módulos de
+largura — daí sai o **mínimo de 3 cm impressos**, que está escrito na tela do
+painel. Abaixo disso o módulo fica sob 0,5 mm e câmera ruim erra.
+
+**O aviso que evita prejuízo:** enquanto `NEXT_PUBLIC_SITE_URL` for localhost ou
+rede privada, o cartão mostra em vermelho que aquele QR não serve para
+impressão. Sem isso é perfeitamente possível mandar 500 crachás para a gráfica
+apontando para `http://localhost:3000`.
+
+Verificado ponta a ponta com sessão real: PNG e SVG para cão e canil, tamanho
+absurdo preso no teto, `kind` inválido e id não-uuid em 400, registro inexistente
+em 404 — e **cão de outra pessoa em 404 pela RLS**, não por checagem de tela.
+
 ## Pedigree de 5 gerações — uma query, numerada por posição
 
 `public.dog_pedigree(dog_id, generations)` devolve a árvore inteira numa CTE
