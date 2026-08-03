@@ -183,7 +183,57 @@ constraint.
 se houver selo em canil que não seja fixture, como salvaguarda contra apontar
 para o projeto errado.
 
-## Decisão em aberto: como servir mídia de perfil publicado
+## Mídia pública: dois buckets, move e a janela do CDN
+
+**Decidido e implementado:** bucket separado `kennel-media-public`, e o objeto é
+**MOVIDO** na publicação — nunca copiado, senão todo conteúdo publicado ocuparia
+plano duas vezes.
+
+O move é feito com a **sessão do usuário**, não com a chave secreta: mover entre
+buckets é DELETE na origem + INSERT no destino, e as policies dão os dois ao dono
+no próprio prefixo. A RLS continua no circuito.
+
+### Ordem das operações — é a regra de segurança
+
+**Publicar:** move primeiro, publica depois. Se o move falhar, **não publica**.
+Entidade publicada com mídia privada é o pior estado: a página cacheada não pode
+usar URL assinada, então a imagem quebraria de forma permanente.
+
+**Despublicar:** despublica primeiro, move depois. O passo que importa para
+privacidade é a página sumir, e ele não pode ficar refém do Storage. Na ordem
+inversa, um move com erro deixaria a entidade inteiramente pública.
+
+### A janela do CDN, que nenhum código elimina
+
+Despublicar remove o objeto do bucket público **na hora**, mas o CDN continua
+servindo a cópia em cache até o `Cache-Control` vencer.
+
+Por isso o upload grava **`cacheControl: 3600`**, e não "imutável": o _conteúdo_
+é imutável — o caminho tem uuid e o arquivo nunca muda — mas a _autorização_
+para vê-lo não é. Uma hora limita a janela e ainda dá taxa de acerto altíssima
+no cenário que importa, milhares de leituras de QR ao longo de uma feira.
+
+Isto foi descoberto pelo `test:rls`, que media o CDN e via HTTP 200 depois do
+move. O teste passou a medir o **Storage**, que é a fonte da verdade, e a janela
+virou comportamento documentado e comunicado ao usuário na tela de publicação.
+
+### Reconciliação
+
+`media.bucket_id` e a localização real do arquivo podem divergir: o par "mover"
+
+- "gravar a linha" não é atômico. `reconcileMediaBucket` é idempotente e roda em
+  todo publish/unpublish.
+
+`npm run media:reconcile` varre **tudo** e relata; com `--apply`, corrige.
+Existe porque a reconciliação sob demanda não basta: uma linha que caísse no
+meio de um move só seria consertada no próximo publish daquele canil. É o
+comando para rodar antes de um evento.
+
+Classifica três estados: em ordem, **divergente** (arquivo num bucket, linha
+dizendo outro — corrige) e **órfã** (arquivo em bucket nenhum — só relata, porque
+apagar metadata é decisão humana).
+
+## Decisão anterior, agora resolvida
 
 Hoje o bucket `kennel-media` é privado e a entrega usa **URL assinada com 1h**.
 Serve para tela autenticada e não serve para perfil público: URL assinada expira,

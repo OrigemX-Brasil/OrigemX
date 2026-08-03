@@ -16,7 +16,8 @@
     "db:founder-reset": "supabase db query --linked --file supabase/tests/reset-founder-seq.sql",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:rls": "node --env-file-if-exists=.env.local scripts/test-rls.mts"
+    "test:rls": "node --env-file-if-exists=.env.local scripts/test-rls.mts",
+    "media:reconcile": "node --env-file-if-exists=.env.local scripts/reconcile-media.mts"
   },
   "dependencies": {
     "@supabase/ssr": "0.12.4",

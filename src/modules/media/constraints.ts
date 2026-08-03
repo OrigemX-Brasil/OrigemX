@@ -9,7 +9,16 @@
  * mudar os outros dois quebra o upload em algum ponto do caminho.
  */
 
+/** Rascunho: só o dono lê, por URL assinada. */
 export const BUCKET_PRIVATE = "kennel-media";
+
+/**
+ * Publicado: servido pelo CDN, URL estável, sem expiração.
+ *
+ * O objeto é MOVIDO entre os dois — nunca copiado. Armazenamento é o primeiro
+ * limite de plano a estourar.
+ */
+export const BUCKET_PUBLIC = "kennel-media-public";
 
 /**
  * Formatos aceitos na SELEÇÃO do arquivo.
@@ -194,10 +203,20 @@ export function mediaObjectKey(media: MediaLocation): string {
 }
 
 /** Buckets cujo conteúdo é servido direto pelo CDN, sem assinar. */
-const PUBLIC_BUCKETS = new Set<string>([]);
+const PUBLIC_BUCKETS = new Set<string>([BUCKET_PUBLIC]);
 
 export function isPubliclyServable(media: MediaLocation): boolean {
   return PUBLIC_BUCKETS.has(media.bucket_id);
+}
+
+/**
+ * Onde o arquivo DEVE estar, dado o estado de publicação da entidade dona.
+ *
+ * É a única definição desse mapeamento. A reconciliação compara o resultado
+ * disto com `media.bucket_id` e move o que estiver fora do lugar.
+ */
+export function targetBucketFor(isPublished: boolean): string {
+  return isPublished ? BUCKET_PUBLIC : BUCKET_PRIVATE;
 }
 
 // -----------------------------------------------------------------------------

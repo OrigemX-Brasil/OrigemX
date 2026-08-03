@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  BUCKET_PRIVATE,
+  BUCKET_PUBLIC,
   buildStoragePath,
   buildThumbPath,
   computeTargetSize,
   extensionForMime,
   formatBytes,
+  isPubliclyServable,
+  targetBucketFor,
   MAX_IMAGE_DIMENSION,
   MAX_INPUT_BYTES,
   MAX_STORED_BYTES,
@@ -176,6 +180,37 @@ describe("extensionForMime", () => {
   it("mapeia o que a compressão produz", () => {
     expect(extensionForMime("image/webp")).toBe("webp");
     expect(extensionForMime("image/jpeg")).toBe("jpg");
+  });
+});
+
+describe("targetBucketFor / isPubliclyServable", () => {
+  it("publicado vai para o bucket público, rascunho para o privado", () => {
+    expect(targetBucketFor(true)).toBe(BUCKET_PUBLIC);
+    expect(targetBucketFor(false)).toBe(BUCKET_PRIVATE);
+  });
+
+  it("os dois buckets são distintos", () => {
+    // Se algum dia apontarem para o mesmo, o move vira no-op e a mídia de
+    // rascunho fica publicamente legível sem ninguém perceber.
+    expect(BUCKET_PUBLIC).not.toBe(BUCKET_PRIVATE);
+  });
+
+  it("só o bucket público é servível sem assinatura", () => {
+    expect(isPubliclyServable({ bucket_id: BUCKET_PUBLIC, storage_path: "a/b.webp" })).toBe(true);
+    expect(isPubliclyServable({ bucket_id: BUCKET_PRIVATE, storage_path: "a/b.webp" })).toBe(false);
+  });
+
+  it("bucket desconhecido nunca é tratado como público", () => {
+    // Falha fechada: na dúvida, assina. Pior um link que expira do que um
+    // arquivo privado servido aberto.
+    expect(isPubliclyServable({ bucket_id: "qualquer-outro", storage_path: "a.webp" })).toBe(false);
+    expect(isPubliclyServable({ bucket_id: "", storage_path: "a.webp" })).toBe(false);
+  });
+
+  it("o alvo do bucket é sempre um dos dois conhecidos", () => {
+    for (const published of [true, false]) {
+      expect([BUCKET_PRIVATE, BUCKET_PUBLIC]).toContain(targetBucketFor(published));
+    }
   });
 });
 

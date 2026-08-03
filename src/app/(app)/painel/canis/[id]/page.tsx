@@ -7,6 +7,7 @@ import { getAuthUser } from "@/modules/auth/queries";
 import { softDeleteKennel } from "@/modules/kennels/actions";
 import { deleteMedia } from "@/modules/media/actions";
 import { ImageUploader } from "@/modules/media/components/image-uploader";
+import { PublishToggle } from "@/modules/media/components/publish-toggle";
 import { formatBytes } from "@/modules/media/constraints";
 import { getKennelLogo } from "@/modules/media/queries";
 import { calculateCompleteness } from "@/modules/kennels/completeness";
@@ -72,6 +73,13 @@ export default async function EditarCanilPage({ params }: { params: Promise<{ id
           <FounderChecklist eligibility={founder} />
         )}
       </section>
+
+      <PublishToggle
+        kind="kennel"
+        id={kennel.id}
+        publicPath={`/c/${kennel.slug}`}
+        isPublished={Boolean(kennel.published_at)}
+      />
 
       <CompletenessMeter completeness={completeness} />
 

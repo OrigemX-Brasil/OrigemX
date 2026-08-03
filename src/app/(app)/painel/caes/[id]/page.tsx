@@ -10,6 +10,7 @@ import { getDogById, getDogsByIds } from "@/modules/dogs/queries";
 import { listMyKennels } from "@/modules/kennels/queries";
 import { ImageUploader } from "@/modules/media/components/image-uploader";
 import { MediaGallery } from "@/modules/media/components/media-gallery";
+import { PublishToggle } from "@/modules/media/components/publish-toggle";
 import { MAX_GALLERY_ITEMS } from "@/modules/media/constraints";
 import { getDogGallery, getUsedBytes } from "@/modules/media/queries";
 
@@ -67,6 +68,13 @@ export default async function EditarCaoPage({ params }: { params: Promise<{ id: 
           </p>
         </div>
       ) : null}
+
+      <PublishToggle
+        kind="dog"
+        id={dog.id}
+        publicPath={`/d/${dog.public_id}`}
+        isPublished={Boolean(dog.published_at)}
+      />
 
       <DogForm
         dog={dog}

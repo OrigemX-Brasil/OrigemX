@@ -2,10 +2,10 @@
 
 |           |                                            |
 | --------- | ------------------------------------------ |
-| Data      | 2026-08-03T04:10:27.592Z                   |
+| Data      | 2026-08-03T04:55:36.561Z                   |
 | Projeto   | `https://lcqhnfdsrioufwvnrqnt.supabase.co` |
-| Execução  | `mscpnqfw`                                 |
-| Resultado | **APROVADO** — 52/52 PASS                  |
+| Execução  | `mscr9sw3`                                 |
+| Resultado | **APROVADO** — 59/59 PASS                  |
 
 ## Método
 
@@ -77,7 +77,14 @@ falha. O que a RLS isola é:
 | 10. Mídia               | quota do usuário soma o que ele gravou                                  | pelo menos 12345 bytes                 | 12345                                                                                                                                                               | **PASS** |
 | 11. Selo Fundador       | canil sem cão não recebe selo                                           | todos sem número                       | 0 com número                                                                                                                                                        | **PASS** |
 | 11. Selo Fundador       | 5 atribuições CONCORRENTES não geram número duplicado                   | 5 números distintos                    | 5 atribuídos, 5 distintos                                                                                                                                           | **PASS** |
-| 11. Selo Fundador       | nenhum número fora do intervalo 1..100                                  | todos entre 1 e 100                    | min 1, max 5                                                                                                                                                        | **PASS** |
+| 11. Selo Fundador       | nenhum número fora do intervalo 1..100                                  | todos entre 1 e 100                    | min 6, max 10                                                                                                                                                       | **PASS** |
 | 11. Selo Fundador       | usuário grava founder_number pela API                                   | erro de permissão de coluna            | erro 42501: permission denied for table kennels                                                                                                                     | **PASS** |
 | 11. Selo Fundador       | usuário grava founder_number no canil de outro                          | erro de permissão                      | erro 42501: permission denied for table kennels                                                                                                                     | **PASS** |
-| 11. Selo Fundador       | exclusão lógica não devolve o número ao pool                            | número permanece                       | nº 1                                                                                                                                                                | **PASS** |
+| 11. Selo Fundador       | exclusão lógica não devolve o número ao pool                            | número permanece                       | nº 6                                                                                                                                                                | **PASS** |
+| 12. Bucket público      | A grava no próprio prefixo do bucket público                            | sucesso                                | sucesso                                                                                                                                                             | **PASS** |
+| 12. Bucket público      | B grava no prefixo de A no bucket público                               | erro de permissão                      | erro: new row violates row-level security policy                                                                                                                    | **PASS** |
+| 12. Bucket público      | anônimo grava no bucket público                                         | erro de permissão                      | erro: new row violates row-level security policy                                                                                                                    | **PASS** |
+| 12. Bucket público      | URL pública não carrega token nem expiração                             | sem ?token= e sem expires              | /storage/v1/object/public/kennel-media-public/5b6be94c-b288-4821-bbcf-5bd6797ea63a/canis/publico-mscr9sw3.png                                                       | **PASS** |
+| 12. Bucket público      | anônimo BAIXA o objeto pela URL pública, sem sessão                     | HTTP 200                               | HTTP 200                                                                                                                                                            | **PASS** |
+| 12. Bucket público      | A move o objeto de volta ao bucket privado (despublicar)                | sucesso                                | sucesso                                                                                                                                                             | **PASS** |
+| 12. Bucket público      | objeto sai do bucket público ao despublicar (fonte: Storage)            | não está mais lá                       | removido                                                                                                                                                            | **PASS** |

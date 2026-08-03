@@ -1,7 +1,7 @@
 {
-  "when": "2026-08-03T04:10:27.592Z",
+  "when": "2026-08-03T04:55:36.561Z",
   "project": "https://lcqhnfdsrioufwvnrqnt.supabase.co",
-  "run": "mscpnqfw",
+  "run": "mscr9sw3",
   "fatal": null,
   "checks": [
     {
@@ -344,7 +344,7 @@
       "cenario": "11. Selo Fundador",
       "verificacao": "nenhum número fora do intervalo 1..100",
       "esperado": "todos entre 1 e 100",
-      "obtido": "min 1, max 5",
+      "obtido": "min 6, max 10",
       "status": "PASS"
     },
     {
@@ -365,7 +365,56 @@
       "cenario": "11. Selo Fundador",
       "verificacao": "exclusão lógica não devolve o número ao pool",
       "esperado": "número permanece",
-      "obtido": "nº 1",
+      "obtido": "nº 6",
+      "status": "PASS"
+    },
+    {
+      "cenario": "12. Bucket público",
+      "verificacao": "A grava no próprio prefixo do bucket público",
+      "esperado": "sucesso",
+      "obtido": "sucesso",
+      "status": "PASS"
+    },
+    {
+      "cenario": "12. Bucket público",
+      "verificacao": "B grava no prefixo de A no bucket público",
+      "esperado": "erro de permissão",
+      "obtido": "erro: new row violates row-level security policy",
+      "status": "PASS"
+    },
+    {
+      "cenario": "12. Bucket público",
+      "verificacao": "anônimo grava no bucket público",
+      "esperado": "erro de permissão",
+      "obtido": "erro: new row violates row-level security policy",
+      "status": "PASS"
+    },
+    {
+      "cenario": "12. Bucket público",
+      "verificacao": "URL pública não carrega token nem expiração",
+      "esperado": "sem ?token= e sem expires",
+      "obtido": "/storage/v1/object/public/kennel-media-public/5b6be94c-b288-4821-bbcf-5bd6797ea63a/canis/publico-mscr9sw3.png",
+      "status": "PASS"
+    },
+    {
+      "cenario": "12. Bucket público",
+      "verificacao": "anônimo BAIXA o objeto pela URL pública, sem sessão",
+      "esperado": "HTTP 200",
+      "obtido": "HTTP 200",
+      "status": "PASS"
+    },
+    {
+      "cenario": "12. Bucket público",
+      "verificacao": "A move o objeto de volta ao bucket privado (despublicar)",
+      "esperado": "sucesso",
+      "obtido": "sucesso",
+      "status": "PASS"
+    },
+    {
+      "cenario": "12. Bucket público",
+      "verificacao": "objeto sai do bucket público ao despublicar (fonte: Storage)",
+      "esperado": "não está mais lá",
+      "obtido": "removido",
       "status": "PASS"
     }
   ]

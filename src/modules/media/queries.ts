@@ -1,6 +1,15 @@
-import { createClient } from "@/lib/supabase/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { BUCKET_PRIVATE, type MediaRole } from "./constraints";
+import { createClient } from "@/lib/supabase/server";
+import type { Database } from "@/lib/types/database";
+
+import { BUCKET_PRIVATE, isPubliclyServable, type MediaRole } from "./constraints";
+
+/**
+ * As consultas aceitam um client externo para que a página pública possa passar
+ * o client ANÔNIMO — sem cookies, sem sessão. Ver src/lib/supabase/public.ts.
+ */
+export type SupabaseClientLike = SupabaseClient<Database>;
 
 /** Acesso a dados de mídia. Todo `.from("media")` do app passa por aqui. */
 
@@ -35,42 +44,69 @@ export type ResolvedMedia = MediaItem & {
 };
 
 /**
- * Resolve URLs de exibição.
+ * Resolve URLs de exibição. ÚNICO lugar que sabe como cada bucket é servido.
  *
- * Hoje o bucket é privado, então a entrega usa URL assinada. Este é o ÚNICO
- * lugar que sabe disso: quando a mídia publicada migrar para bucket público ou
- * para uma rota de proxy com cache, muda aqui e nenhuma tela é tocada.
+ * Duas ramificações:
  *
- * Assina em lote, não uma por vez — uma galeria de 12 fotos faria 24 chamadas.
+ *   público  → `getPublicUrl`: URL estável, sem token e sem expiração, servida
+ *              pelo CDN. É o que torna cache e QR impresso viáveis.
+ *   privado  → URL assinada de 1h, para as telas autenticadas.
+ *
+ * NUNCA LEVANTA. Se a resolução falhar por qualquer motivo, devolve os itens
+ * com `url` e `thumbUrl` nulos e a tela renderiza placeholder. A página pública
+ * não pode cair porque o Storage teve um soluço — nome, raça, registro e
+ * pedigree valem mais que a foto.
+ *
+ * Assina em lote, não uma por vez: uma galeria de 12 fotos faria 24 chamadas.
  */
-export async function resolveMediaUrls(items: MediaItem[]): Promise<ResolvedMedia[]> {
+export async function resolveMediaUrls(
+  items: MediaItem[],
+  client?: SupabaseClientLike,
+): Promise<ResolvedMedia[]> {
   if (items.length === 0) return [];
 
-  const supabase = await createClient();
-  const byBucket = new Map<string, string[]>();
+  const semUrl = (): ResolvedMedia[] => items.map((i) => ({ ...i, url: null, thumbUrl: null }));
 
-  for (const item of items) {
-    const paths = byBucket.get(item.bucket_id) ?? [];
-    paths.push(item.storage_path);
-    if (item.thumb_path) paths.push(item.thumb_path);
-    byBucket.set(item.bucket_id, paths);
-  }
+  try {
+    const supabase = client ?? (await createClient());
+    const resolved = new Map<string, string>();
 
-  const signed = new Map<string, string>();
-  for (const [bucket, paths] of byBucket) {
-    const { data } = await supabase.storage
-      .from(bucket)
-      .createSignedUrls(paths, SIGNED_URL_TTL_SECONDS);
-    for (const entry of data ?? []) {
-      if (entry.path && entry.signedUrl) signed.set(`${bucket}/${entry.path}`, entry.signedUrl);
+    const byBucket = new Map<string, string[]>();
+    for (const item of items) {
+      const paths = byBucket.get(item.bucket_id) ?? [];
+      paths.push(item.storage_path);
+      if (item.thumb_path) paths.push(item.thumb_path);
+      byBucket.set(item.bucket_id, paths);
     }
-  }
 
-  return items.map((item) => ({
-    ...item,
-    url: signed.get(`${item.bucket_id}/${item.storage_path}`) ?? null,
-    thumbUrl: item.thumb_path ? (signed.get(`${item.bucket_id}/${item.thumb_path}`) ?? null) : null,
-  }));
+    for (const [bucket, paths] of byBucket) {
+      if (isPubliclyServable({ bucket_id: bucket, storage_path: "" })) {
+        // Síncrono e sem rede: o CDN resolve.
+        for (const path of paths) {
+          const { data } = supabase.storage.from(bucket).getPublicUrl(path);
+          if (data?.publicUrl) resolved.set(`${bucket}/${path}`, data.publicUrl);
+        }
+        continue;
+      }
+
+      const { data } = await supabase.storage
+        .from(bucket)
+        .createSignedUrls(paths, SIGNED_URL_TTL_SECONDS);
+      for (const entry of data ?? []) {
+        if (entry.path && entry.signedUrl) resolved.set(`${bucket}/${entry.path}`, entry.signedUrl);
+      }
+    }
+
+    return items.map((item) => ({
+      ...item,
+      url: resolved.get(`${item.bucket_id}/${item.storage_path}`) ?? null,
+      thumbUrl: item.thumb_path
+        ? (resolved.get(`${item.bucket_id}/${item.thumb_path}`) ?? null)
+        : null,
+    }));
+  } catch {
+    return semUrl();
+  }
 }
 
 export async function getKennelLogo(kennelId: string): Promise<ResolvedMedia | null> {

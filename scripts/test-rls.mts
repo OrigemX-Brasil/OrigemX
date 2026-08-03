@@ -1022,12 +1022,128 @@ async function main() {
   );
 
   // ---------------------------------------------------------------------------
+  // Cenário 12 — bucket público: URL sem expiração e isolamento de escrita
+  // ---------------------------------------------------------------------------
+
+  const PUBLIC_BUCKET = "kennel-media-public";
+  const publicPath = `${A.id}/canis/publico-${RUN}.png`;
+
+  const pubUpload = await A.client.storage
+    .from(PUBLIC_BUCKET)
+    .upload(publicPath, PNG, { contentType: "image/png" });
+  record(
+    "12. Bucket público",
+    "A grava no próprio prefixo do bucket público",
+    "sucesso",
+    pubUpload.error ? `erro: ${pubUpload.error.message}` : "sucesso",
+    !pubUpload.error,
+  );
+
+  const crossPublic = await B.client.storage
+    .from(PUBLIC_BUCKET)
+    .upload(`${A.id}/canis/invasao-${RUN}.png`, PNG, { contentType: "image/png" });
+  record(
+    "12. Bucket público",
+    "B grava no prefixo de A no bucket público",
+    "erro de permissão",
+    crossPublic.error ? `erro: ${crossPublic.error.message}` : "SUCESSO — PREFIXO INVADIDO",
+    !!crossPublic.error,
+  );
+
+  const anonWritePublic = await anon.storage
+    .from(PUBLIC_BUCKET)
+    .upload(`${A.id}/canis/anon-${RUN}.png`, PNG, { contentType: "image/png" });
+  record(
+    "12. Bucket público",
+    "anônimo grava no bucket público",
+    "erro de permissão",
+    anonWritePublic.error ? `erro: ${anonWritePublic.error.message}` : "SUCESSO — ESCRITA ABERTA",
+    !!anonWritePublic.error,
+  );
+
+  // A URL pública tem de ser estável: sem token, sem expiração. É o que torna
+  // cache e QR impresso viáveis.
+  const { data: publicUrlData } = anon.storage.from(PUBLIC_BUCKET).getPublicUrl(publicPath);
+  const publicUrl = publicUrlData?.publicUrl ?? "";
+  record(
+    "12. Bucket público",
+    "URL pública não carrega token nem expiração",
+    "sem ?token= e sem expires",
+    publicUrl ? publicUrl.replace(/^https?:\/\/[^/]+/, "") : "sem URL",
+    Boolean(publicUrl) && !/token=|expires|X-Amz/i.test(publicUrl),
+  );
+
+  // E precisa abrir sem sessão nenhuma, direto pelo CDN.
+  if (publicUrl) {
+    try {
+      const resp = await fetch(publicUrl);
+      record(
+        "12. Bucket público",
+        "anônimo BAIXA o objeto pela URL pública, sem sessão",
+        "HTTP 200",
+        `HTTP ${resp.status}`,
+        resp.ok,
+      );
+    } catch (err) {
+      record(
+        "12. Bucket público",
+        "anônimo BAIXA o objeto pela URL pública, sem sessão",
+        "HTTP 200",
+        `falhou: ${err instanceof Error ? err.message : String(err)}`,
+        false,
+      );
+    }
+  }
+
+  // Move de volta ao privado: é o passo de despublicar. Depois dele a URL
+  // pública tem de morrer.
+  const moveBack = await A.client.storage
+    .from(PUBLIC_BUCKET)
+    .move(publicPath, publicPath, { destinationBucket: BUCKET });
+  record(
+    "12. Bucket público",
+    "A move o objeto de volta ao bucket privado (despublicar)",
+    "sucesso",
+    moveBack.error ? `erro: ${moveBack.error.message}` : "sucesso",
+    !moveBack.error,
+  );
+
+  if (!moveBack.error) {
+    // A fonte da verdade é o STORAGE, não o CDN.
+    //
+    // Medir o CDN aqui daria falso negativo: ele serve a cópia em cache até o
+    // TTL vencer, e é por isso que o upload usa Cache-Control de 1 hora em vez
+    // de "imutável". Despublicar remove o objeto na hora; a cópia no edge
+    // expira dentro da janela. É propriedade de CDN, não bug — e está
+    // documentado em supabase/README.md.
+    const folder = publicPath.slice(0, publicPath.lastIndexOf("/"));
+    const name = publicPath.slice(publicPath.lastIndexOf("/") + 1);
+    const { data: listed } = await A.client.storage
+      .from(PUBLIC_BUCKET)
+      .list(folder, { search: name, limit: 100 });
+    const aindaLa = (listed ?? []).some((f) => f.name === name);
+
+    record(
+      "12. Bucket público",
+      "objeto sai do bucket público ao despublicar (fonte: Storage)",
+      "não está mais lá",
+      aindaLa ? "AINDA ESTÁ NO BUCKET PÚBLICO" : "removido",
+      !aindaLa,
+    );
+    await admin.storage.from(BUCKET).remove([publicPath]);
+  }
+
+  // ---------------------------------------------------------------------------
   // Limpeza
   // ---------------------------------------------------------------------------
 
   await admin.storage
     .from(BUCKET)
     .remove([`${A.id}/de-a-${RUN}.png`, `${B.id}/proprio-${RUN}.png`]);
+  // Metadata de mídia criada pelos cenários. Sem isto, cada execução deixa
+  // linhas órfãs — a linha existe e o arquivo nunca foi enviado — e o
+  // `media:reconcile` passa a relatar resíduo de teste como problema.
+  await admin.from("media").delete().like("storage_path", `%${RUN}%`);
   await admin.from("dog_identifiers").delete().like("value", `RLS-${RUN}-%`);
   await admin.from("dogs").delete().like("slug", `rls-${RUN}-%`);
   await admin.from("kennels").delete().like("slug", `rls-${RUN}-%`);

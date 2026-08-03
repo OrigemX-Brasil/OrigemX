@@ -85,7 +85,17 @@ export function ImageUploader({
         // Caminho carrega uuid, então nunca colide — e sobrescrever silencioso
         // esconderia um bug de geração de id.
         upsert: false,
-        cacheControl: "31536000",
+        // 1 hora, e NÃO "imutável".
+        //
+        // O CONTEÚDO é imutável — o caminho tem uuid e o arquivo nunca muda. Mas
+        // a AUTORIZAÇÃO para vê-lo não é: despublicar move o objeto para o
+        // bucket privado, e o CDN continua servindo a cópia em cache até o TTL
+        // vencer. Com um ano, uma imagem despublicada ficaria acessível por um
+        // ano para quem tivesse o link direto.
+        //
+        // Uma hora limita a janela e ainda dá taxa de acerto altíssima no
+        // cenário que importa: milhares de leituras de QR ao longo de uma feira.
+        cacheControl: "3600",
       });
 
     const [fullUp, thumbUp] = await Promise.all([
