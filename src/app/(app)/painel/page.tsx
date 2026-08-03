@@ -1,12 +1,18 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { AlertPanel } from "@/modules/alerts/components/alert-panel";
+import { getAlertsForUser } from "@/modules/alerts/queries";
 import { getAuthUser, getCurrentProfile } from "@/modules/auth/queries";
 
 export const metadata: Metadata = { title: "Painel" };
 
 export default async function PainelPage() {
   const [user, profile] = await Promise.all([getAuthUser(), getCurrentProfile()]);
+
+  // Alertas do Anexo I.8: derivados do dado de agora, nunca armazenados. Não
+  // levantam exceção — se o levantamento falhar, o painel abre sem a seção.
+  const alerts = user ? await getAlertsForUser(user.id) : null;
 
   return (
     <div className="flex flex-col gap-8">
@@ -16,6 +22,8 @@ export default async function PainelPage() {
           {profile?.full_name ?? "Bem-vindo"}
         </h1>
       </div>
+
+      {alerts ? <AlertPanel result={alerts} /> : null}
 
       {/* Identificação do usuário logado, lida no servidor. Mono nos valores
           porque são dado de registro, não texto corrido. */}
