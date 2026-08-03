@@ -145,6 +145,44 @@ O acesso de `anon` **foi fechado** na migration
 `PUBLIC`, e `anon` herda daí. Enquanto esteve aberto, um visitante anônimo podia
 enumerar os ids de descendentes de qualquer cão, inclusive de rascunhos.
 
+## Selo Criador Fundador — atomicidade e limite no mesmo mecanismo
+
+100 canis, numerados de 1 a 100, atribuídos na ordem em que se tornam elegíveis.
+
+A abordagem ingênua tem corrida clássica: `if count < 100 then assign count+1`.
+Duas transações leem 99 juntas e saem 100 e 101, ou o mesmo número duas vezes.
+O defeito é **ler e depois escrever**.
+
+A `sequence kennel_founder_seq` elimina a janela porque não há leitura prévia:
+
+- `nextval` é atômico e nunca repete valor, mesmo com N transações simultâneas;
+- `maxvalue 100 no cycle` faz a 101ª chamada levantar `2200H`
+  (`sequence_generator_limit_exceeded`) — **verificado neste Postgres**, não
+  suposto.
+
+O objeto que distribui os números é o mesmo que se recusa a distribuir o 101º.
+
+**Custo declarado:** `nextval` não é transacional. Um rollback não devolve o
+número, então o pool poderia render 99 selos. Por isso `nextval` é a última
+operação da função, depois da trava de linha, da checagem de "já tem" e da
+elegibilidade — sobra só um `UPDATE` por chave primária, que não viola
+constraint.
+
+**Duas camadas contra o usuário escolher o próprio número:**
+
+1. `GRANT UPDATE` **por coluna** em `kennels` — `founder_number` fica fora da
+   lista, e o Postgres recusa antes da policy. É a que impede `NULL → 1`.
+2. Trigger de imutabilidade — bloqueia `valor → qualquer coisa`. Não cobre
+   `NULL → valor`, porque esse é o caminho legítimo da atribuição.
+
+### Reset em desenvolvimento
+
+`npm run test:rls` prova a concorrência, e provar isso **consome números reais**
+— `nextval` não volta atrás nem no rollback nem no DELETE das fixtures.
+`npm run db:founder-reset` devolve a sequence ao início. O script recusa rodar
+se houver selo em canil que não seja fixture, como salvaguarda contra apontar
+para o projeto errado.
+
 ## Decisão em aberto: como servir mídia de perfil publicado
 
 Hoje o bucket `kennel-media` é privado e a entrega usa **URL assinada com 1h**.

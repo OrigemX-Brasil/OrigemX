@@ -15,7 +15,7 @@ import {
  */
 
 const LIST_COLUMNS =
-  "id, name, slug, city, state, description, logo_url, website_url, published_at, created_at, updated_at";
+  "id, name, slug, city, state, description, logo_url, website_url, published_at, founder_number, created_at, updated_at";
 
 export type KennelListItem = {
   id: string;
@@ -27,6 +27,8 @@ export type KennelListItem = {
   logo_url: string | null;
   website_url: string | null;
   published_at: string | null;
+  /** Selo Criador Fundador, 1 a 100. NULL quando não há selo. */
+  founder_number: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -101,6 +103,33 @@ export async function getKennelBySlug(slug: string) {
     .maybeSingle();
 
   return data;
+}
+
+/** Quantos cães o canil tem. Alimenta o critério do selo na tela. */
+export async function countKennelDogs(kennelId: string): Promise<number> {
+  const supabase = await createClient();
+  const { count } = await supabase
+    .from("dogs")
+    .select("id", { count: "exact", head: true })
+    .eq("kennel_id", kennelId)
+    .is("deleted_at", null);
+
+  return count ?? 0;
+}
+
+/** Cães publicados do canil, para o perfil público. */
+export async function listPublishedDogs(kennelId: string, limit = 24) {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("dogs")
+    .select("id, public_id, slug, name, sex, born_on, breed")
+    .eq("kennel_id", kennelId)
+    .is("deleted_at", null)
+    .not("published_at", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  return data ?? [];
 }
 
 /**

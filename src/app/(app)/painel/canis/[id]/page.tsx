@@ -11,8 +11,10 @@ import { formatBytes } from "@/modules/media/constraints";
 import { getKennelLogo } from "@/modules/media/queries";
 import { calculateCompleteness } from "@/modules/kennels/completeness";
 import { CompletenessMeter } from "@/modules/kennels/components/completeness-meter";
+import { FounderBadge, FounderChecklist } from "@/modules/kennels/components/founder-badge";
 import { KennelForm } from "@/modules/kennels/components/kennel-form";
-import { getKennelById } from "@/modules/kennels/queries";
+import { founderEligibility } from "@/modules/kennels/founder";
+import { countKennelDogs, getKennelById } from "@/modules/kennels/queries";
 
 export const metadata: Metadata = { title: "Editar canil" };
 
@@ -24,7 +26,18 @@ export default async function EditarCanilPage({ params }: { params: Promise<{ id
   // logicamente. Aqui só traduzimos ausência em 404.
   if (!kennel || !user) notFound();
 
-  const logo = await getKennelLogo(kennel.id);
+  const [logo, dogCount] = await Promise.all([
+    getKennelLogo(kennel.id),
+    countKennelDogs(kennel.id),
+  ]);
+
+  const founder = founderEligibility({
+    name: kennel.name,
+    city: kennel.city,
+    state: kennel.state,
+    hasLogo: Boolean(logo),
+    dogCount,
+  });
 
   // A completude pergunta pela mídia, não pela coluna: o logo mora em `media`,
   // e `logo_url` seria uma segunda fonte de verdade para o mesmo fato.
@@ -42,6 +55,23 @@ export default async function EditarCanilPage({ params }: { params: Promise<{ id
         <h1 className="font-display text-2xl font-semibold tracking-tight">{kennel.name}</h1>
         <p className="text-fg-faint font-mono text-xs">/c/{kennel.slug}</p>
       </div>
+
+      {/*
+        Selo quando houver. Quando não houver, a lista do que falta — senão o
+        criador com cadastro quase completo não descobre por que não recebeu.
+      */}
+      <section className="border-border bg-surface rounded-card flex flex-col gap-4 border p-5">
+        {kennel.founder_number ? (
+          <>
+            <FounderBadge number={kennel.founder_number} />
+            <p className="text-fg-muted text-sm">
+              Este selo é permanente e intransferível. Ele não muda e não volta ao pool.
+            </p>
+          </>
+        ) : (
+          <FounderChecklist eligibility={founder} />
+        )}
+      </section>
 
       <CompletenessMeter completeness={completeness} />
 

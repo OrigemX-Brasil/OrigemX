@@ -475,6 +475,174 @@ exception when others then
                       sqlstate || ' ' || sqlerrm, true);
 end $$;
 
+-- =============================================================================
+-- Grupo 5 — selo Criador Fundador (casos 21 a 26)
+--
+-- A sequence `kennel_founder_seq` NÃO é transacional: nextval não volta atrás
+-- num rollback. Estes casos manipulam a sequence de propósito, então o valor
+-- é salvo aqui e RESTAURADO no fim — sem isso, cada execução da bateria
+-- queimaria números reais do pool de 100.
+-- =============================================================================
+
+create temp table founder_seq_backup as
+  select last_value, is_called from public.kennel_founder_seq;
+
+-- Canil incompleto: nome e cidade, sem estado, sem logo, sem cão.
+insert into public.kennels (id, owner_id, name, slug, city, created_by)
+values ('c1000000-0000-4000-8000-00000000000f', 'b1000000-0000-4000-8000-000000000001',
+        'Battery Incompleto', 'battery-incompleto', 'Campinas',
+        'b1000000-0000-4000-8000-000000000001');
+
+-- 21. Cadastro incompleto não recebe número E NÃO CONSOME da sequence.
+do $$
+declare
+  v_before bigint;
+  v_after  bigint;
+  v_number integer;
+begin
+  select last_value into v_before from public.kennel_founder_seq;
+
+  perform public.try_assign_founder_number('c1000000-0000-4000-8000-00000000000f');
+
+  select founder_number into v_number from public.kennels
+   where id = 'c1000000-0000-4000-8000-00000000000f';
+  select last_value into v_after from public.kennel_founder_seq;
+
+  perform pg_temp.rec(21, 'canil incompleto não recebe selo nem consome número',
+                      'sem número e sequence parada',
+                      coalesce(v_number::text, 'sem número') || ', sequence ' ||
+                      case when v_before = v_after then 'parada' else 'AVANÇOU' end,
+                      v_number is null and v_before = v_after);
+end $$;
+
+-- Completa o canil: estado, logo e um cão. Cada passo dispara um trigger.
+do $$
+begin
+  update public.kennels set state = 'SP'
+   where id = 'c1000000-0000-4000-8000-00000000000f';
+
+  insert into public.media (bucket_id, storage_path, kennel_id, role, mime, size_bytes, owner_id, created_by)
+  values ('kennel-media', 'battery/logo-' || gen_random_uuid() || '.webp',
+          'c1000000-0000-4000-8000-00000000000f', 'kennel_logo', 'image/webp', 1000,
+          'b1000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000001');
+
+  insert into public.dogs (id, name, sex, kennel_id, owner_id, created_by)
+  values ('d1000000-0000-4000-8000-000000000021', 'Battery Selo', 'male',
+          'c1000000-0000-4000-8000-00000000000f',
+          'b1000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000001');
+end $$;
+
+-- 22. Ao completar, o trigger atribui.
+do $$
+declare v_number integer;
+begin
+  select founder_number into v_number from public.kennels
+   where id = 'c1000000-0000-4000-8000-00000000000f';
+  perform pg_temp.rec(22, 'canil completo recebe selo pelo trigger',
+                      'número entre 1 e 100',
+                      coalesce(v_number::text, 'NENHUM'),
+                      v_number between 1 and 100);
+end $$;
+
+-- 23. Imutável: update do número é bloqueado.
+do $$
+begin
+  update public.kennels set founder_number = 99
+   where id = 'c1000000-0000-4000-8000-00000000000f';
+  perform pg_temp.rec(23, 'update de founder_number já atribuído',
+                      'erro do trigger de imutabilidade',
+                      'ACEITOU — SELO MUTÁVEL', false);
+exception when others then
+  perform pg_temp.rec(23, 'update de founder_number já atribuído',
+                      'erro do trigger de imutabilidade',
+                      sqlstate || ' ' || sqlerrm, true);
+end $$;
+
+-- 24. Re-disparo não dá segundo número nem queima da sequence.
+do $$
+declare
+  v_before bigint; v_after bigint; v_first integer; v_second integer;
+begin
+  select founder_number into v_first from public.kennels
+   where id = 'c1000000-0000-4000-8000-00000000000f';
+  select last_value into v_before from public.kennel_founder_seq;
+
+  perform public.try_assign_founder_number('c1000000-0000-4000-8000-00000000000f');
+
+  select founder_number into v_second from public.kennels
+   where id = 'c1000000-0000-4000-8000-00000000000f';
+  select last_value into v_after from public.kennel_founder_seq;
+
+  perform pg_temp.rec(24, 're-disparo em canil que já tem selo',
+                      'mesmo número e sequence parada',
+                      v_first || ' -> ' || v_second || ', sequence ' ||
+                      case when v_before = v_after then 'parada' else 'AVANÇOU' end,
+                      v_first = v_second and v_before = v_after);
+end $$;
+
+-- 25. Soft delete NÃO devolve o número ao pool.
+do $$
+declare v_number integer;
+begin
+  update public.kennels set deleted_at = now()
+   where id = 'c1000000-0000-4000-8000-00000000000f';
+
+  select founder_number into v_number from public.kennels
+   where id = 'c1000000-0000-4000-8000-00000000000f';
+
+  perform pg_temp.rec(25, 'exclusão lógica do canil com selo',
+                      'número permanece na linha',
+                      coalesce(v_number::text, 'PERDEU O NÚMERO'),
+                      v_number is not null);
+end $$;
+
+-- 26. LIMITE: com a sequence esgotada, o próximo elegível não recebe selo e o
+--     cadastro NÃO quebra. É o caso que prova que não sai o 101.
+do $$
+declare
+  v_number integer;
+  v_erro   text := 'sem erro';
+begin
+  -- Leva a sequence ao teto. `is_called = true` faz o próximo nextval estourar.
+  perform setval('public.kennel_founder_seq', 100, true);
+
+  insert into public.kennels (id, owner_id, name, slug, city, state, created_by)
+  values ('c1000000-0000-4000-8000-000000000010', 'b1000000-0000-4000-8000-000000000001',
+          'Battery Centro E Um', 'battery-101', 'Campinas', 'SP',
+          'b1000000-0000-4000-8000-000000000001');
+
+  insert into public.media (bucket_id, storage_path, kennel_id, role, mime, size_bytes, owner_id, created_by)
+  values ('kennel-media', 'battery/logo101-' || gen_random_uuid() || '.webp',
+          'c1000000-0000-4000-8000-000000000010', 'kennel_logo', 'image/webp', 1000,
+          'b1000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000001');
+
+  -- Este INSERT dispara o trigger com a sequence esgotada. Precisa PASSAR.
+  insert into public.dogs (id, name, sex, kennel_id, owner_id, created_by)
+  values ('d1000000-0000-4000-8000-000000000022', 'Battery Cão 101', 'male',
+          'c1000000-0000-4000-8000-000000000010',
+          'b1000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000001');
+
+  select founder_number into v_number from public.kennels
+   where id = 'c1000000-0000-4000-8000-000000000010';
+
+  perform pg_temp.rec(26, 'pool esgotado: 101º canil elegível',
+                      'sem selo, e o cadastro não quebra',
+                      'selo ' || coalesce(v_number::text, 'nenhum') || ', cadastro ' || v_erro,
+                      v_number is null);
+exception when others then
+  perform pg_temp.rec(26, 'pool esgotado: 101º canil elegível',
+                      'sem selo, e o cadastro não quebra',
+                      'CADASTRO QUEBROU: ' || sqlstate || ' ' || sqlerrm, false);
+end $$;
+
+-- Restaura a sequence ao valor de antes da bateria.
+do $$
+declare b record;
+begin
+  select * into b from founder_seq_backup;
+  perform setval('public.kennel_founder_seq', b.last_value, b.is_called);
+end $$;
+
 -- -----------------------------------------------------------------------------
 -- Limpeza. Vem ANTES do relatório de propósito: a Management API devolve o
 -- resultado do último statement, então o SELECT final tem de ser o último.
@@ -486,6 +654,8 @@ end $$;
 -- auth.users cascateia para profiles.
 -- -----------------------------------------------------------------------------
 
+-- Mídia antes dos canis: media.kennel_id é FK RESTRICT.
+delete from public.media where storage_path like 'battery/%';
 delete from public.dog_identifiers
  where dog_id in (select id from public.dogs
                    where name like 'Battery%' or name = 'Rex do Dois');

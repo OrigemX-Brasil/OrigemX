@@ -199,6 +199,7 @@ export type Database = {
           created_by: string | null
           deleted_at: string | null
           description: string | null
+          founder_number: number | null
           id: string
           logo_url: string | null
           name: string
@@ -215,6 +216,7 @@ export type Database = {
           created_by?: string | null
           deleted_at?: string | null
           description?: string | null
+          founder_number?: number | null
           id?: string
           logo_url?: string | null
           name: string
@@ -231,6 +233,7 @@ export type Database = {
           created_by?: string | null
           deleted_at?: string | null
           description?: string | null
+          founder_number?: number | null
           id?: string
           logo_url?: string | null
           name?: string
@@ -402,7 +405,15 @@ export type Database = {
     Functions: {
       dog_descendant_ids: { Args: { p_dog_id: string }; Returns: string[] }
       gen_public_id: { Args: never; Returns: string }
+      kennel_is_founder_eligible: {
+        Args: { p_kennel_id: string }
+        Returns: boolean
+      }
       media_used_bytes: { Args: { p_owner_id: string }; Returns: number }
+      try_assign_founder_number: {
+        Args: { p_kennel_id: string }
+        Returns: number
+      }
     }
     Enums: {
       [_ in never]: never

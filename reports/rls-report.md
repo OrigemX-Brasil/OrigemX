@@ -2,10 +2,10 @@
 
 |           |                                            |
 | --------- | ------------------------------------------ |
-| Data      | 2026-08-02T23:13:35.037Z                   |
+| Data      | 2026-08-03T04:10:27.592Z                   |
 | Projeto   | `https://lcqhnfdsrioufwvnrqnt.supabase.co` |
-| Execução  | `mscf21yy`                                 |
-| Resultado | **APROVADO** — 46/46 PASS                  |
+| Execução  | `mscpnqfw`                                 |
+| Resultado | **APROVADO** — 52/52 PASS                  |
 
 ## Método
 
@@ -75,3 +75,9 @@ falha. O que a RLS isola é:
 | 10. Mídia               | mime fora da lista de imagem                                            | erro CHECK media_mime_valid            | erro 23514: new row for relation "media" violates check constraint "media_mime_valid"                                                                               | **PASS** |
 | 10. Mídia               | arquivo acima do teto do banco                                          | erro CHECK media_size_positive         | erro 23514: new row for relation "media" violates check constraint "media_size_positive"                                                                            | **PASS** |
 | 10. Mídia               | quota do usuário soma o que ele gravou                                  | pelo menos 12345 bytes                 | 12345                                                                                                                                                               | **PASS** |
+| 11. Selo Fundador       | canil sem cão não recebe selo                                           | todos sem número                       | 0 com número                                                                                                                                                        | **PASS** |
+| 11. Selo Fundador       | 5 atribuições CONCORRENTES não geram número duplicado                   | 5 números distintos                    | 5 atribuídos, 5 distintos                                                                                                                                           | **PASS** |
+| 11. Selo Fundador       | nenhum número fora do intervalo 1..100                                  | todos entre 1 e 100                    | min 1, max 5                                                                                                                                                        | **PASS** |
+| 11. Selo Fundador       | usuário grava founder_number pela API                                   | erro de permissão de coluna            | erro 42501: permission denied for table kennels                                                                                                                     | **PASS** |
+| 11. Selo Fundador       | usuário grava founder_number no canil de outro                          | erro de permissão                      | erro 42501: permission denied for table kennels                                                                                                                     | **PASS** |
+| 11. Selo Fundador       | exclusão lógica não devolve o número ao pool                            | número permanece                       | nº 1                                                                                                                                                                | **PASS** |

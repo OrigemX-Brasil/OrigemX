@@ -1,0 +1,21 @@
+-- =============================================================================
+-- OrigemX — fecha kennel_is_founder_eligible para authenticated
+--
+-- Erro meu na migration do selo: concedi EXECUTE a `authenticated` por reflexo,
+-- sem verificar quem de fato precisa. Ninguém precisa.
+--
+-- A função é chamada só por `try_assign_founder_number`, que é SECURITY DEFINER
+-- e portanto roda com os privilégios do dono — não exige nada do chamador. A
+-- tela usa `founderEligibility` em TypeScript, que não toca no banco.
+--
+-- Aberta a `authenticated`, ela virava um endpoint em
+-- /rest/v1/rpc/kennel_is_founder_eligible que devolve booleano para QUALQUER
+-- kennel_id. Não vaza coluna, mas responde "este canil tem logo, tem cão e tem
+-- cidade preenchida" sobre canis que a RLS esconde — inclusive rascunhos de
+-- outras pessoas.
+--
+-- Migration corretiva e não edição da anterior: aquela já está aplicada, e
+-- reescrever histórico aplicado faz o checksum divergir entre ambientes.
+-- =============================================================================
+
+revoke execute on function public.kennel_is_founder_eligible(uuid) from public, anon, authenticated;

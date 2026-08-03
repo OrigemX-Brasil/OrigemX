@@ -870,6 +870,158 @@ async function main() {
   await admin.from("kennels").delete().eq("id", kennelMedia.id);
 
   // ---------------------------------------------------------------------------
+  // Cenário 11 — selo Criador Fundador sob CONCORRÊNCIA REAL
+  //
+  // A bateria SQL roda tudo numa sessão só e não prova concorrência. Aqui os
+  // cadastros saem em paralelo pela API, que é onde a corrida existe de fato:
+  // N canis a um cão de serem elegíveis, e o cão de todos entrando ao mesmo
+  // tempo.
+  //
+  // ATENÇÃO: este cenário CONSOME números reais do pool de 100, e não há como
+  // devolvê-los daqui — `nextval` não é transacional, e supabase-js não executa
+  // SQL arbitrário para dar `setval`. É consequência do mecanismo, não descuido.
+  //
+  // Em dev, rodar `npm run db:founder-reset` depois de uma bateria de execuções
+  // devolve a sequence ao zero. Em produção este script não roda.
+  // ---------------------------------------------------------------------------
+
+  const CONCURRENT = 5;
+
+  // Cria N canis completos exceto pelo cão.
+  const founderKennels = await Promise.all(
+    Array.from({ length: CONCURRENT }, async (_unused, i) => {
+      const { data: k } = await A.client
+        .from("kennels")
+        .insert({
+          owner_id: A.id,
+          created_by: A.id,
+          name: `Canil Fundador ${i}`,
+          slug: `rls-${RUN}-fundador-${i}`,
+          city: "Campinas",
+          state: "SP",
+        })
+        .select("id")
+        .single();
+
+      if (k) {
+        await A.client.from("media").insert({
+          bucket_id: BUCKET,
+          storage_path: `${A.id}/canis/${k.id}/logo-${RUN}-${i}.webp`,
+          kennel_id: k.id,
+          role: "kennel_logo",
+          mime: "image/webp",
+          size_bytes: 1000,
+          owner_id: A.id,
+          created_by: A.id,
+        });
+      }
+      return k?.id ?? null;
+    }),
+  );
+
+  const kennelIds = founderKennels.filter((id): id is string => Boolean(id));
+
+  // Nenhum tem selo ainda: falta o cão.
+  const { data: beforeDogs } = await admin
+    .from("kennels")
+    .select("id, founder_number")
+    .in("id", kennelIds);
+  record(
+    "11. Selo Fundador",
+    "canil sem cão não recebe selo",
+    "todos sem número",
+    `${(beforeDogs ?? []).filter((k) => k.founder_number !== null).length} com número`,
+    (beforeDogs ?? []).every((k) => k.founder_number === null),
+  );
+
+  // AQUI é a corrida: N inserções simultâneas, cada uma disparando o trigger.
+  await Promise.all(
+    kennelIds.map((kennelId, i) =>
+      A.client.from("dogs").insert({
+        name: `Cão Fundador ${i}`,
+        sex: "male",
+        kennel_id: kennelId,
+        owner_id: A.id,
+        created_by: A.id,
+      }),
+    ),
+  );
+
+  const { data: afterDogs } = await admin
+    .from("kennels")
+    .select("id, founder_number")
+    .in("id", kennelIds);
+
+  const numbers = (afterDogs ?? [])
+    .map((k) => k.founder_number)
+    .filter((n): n is number => n !== null);
+  const unique = new Set(numbers);
+
+  record(
+    "11. Selo Fundador",
+    `${CONCURRENT} atribuições CONCORRENTES não geram número duplicado`,
+    `${CONCURRENT} números distintos`,
+    `${numbers.length} atribuídos, ${unique.size} distintos`,
+    numbers.length === unique.size && numbers.length > 0,
+  );
+
+  record(
+    "11. Selo Fundador",
+    "nenhum número fora do intervalo 1..100",
+    "todos entre 1 e 100",
+    numbers.length > 0 ? `min ${Math.min(...numbers)}, max ${Math.max(...numbers)}` : "nenhum",
+    numbers.every((n) => n >= 1 && n <= 100),
+  );
+
+  // Usuário tentando escolher o próprio número pela API.
+  const grabbed = await A.client
+    .from("kennels")
+    .update({ founder_number: 99 })
+    .eq("id", kennelIds[0]!)
+    .select();
+  record(
+    "11. Selo Fundador",
+    "usuário grava founder_number pela API",
+    "erro de permissão de coluna",
+    describe(grabbed.error, grabbed.data ?? []),
+    !!grabbed.error,
+  );
+
+  // E no canil de outra pessoa.
+  const grabbedOther = await B.client
+    .from("kennels")
+    .update({ founder_number: 50 })
+    .eq("id", kennelIds[0]!)
+    .select();
+  record(
+    "11. Selo Fundador",
+    "usuário grava founder_number no canil de outro",
+    "erro de permissão",
+    describe(grabbedOther.error, grabbedOther.data ?? []),
+    !!grabbedOther.error,
+  );
+
+  // Exclusão lógica não devolve o número.
+  const deletedKennel = kennelIds[0]!;
+  await A.client
+    .from("kennels")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", deletedKennel);
+
+  const { data: afterDelete } = await admin
+    .from("kennels")
+    .select("founder_number")
+    .eq("id", deletedKennel)
+    .maybeSingle();
+  record(
+    "11. Selo Fundador",
+    "exclusão lógica não devolve o número ao pool",
+    "número permanece",
+    afterDelete?.founder_number != null ? `nº ${afterDelete.founder_number}` : "PERDEU",
+    afterDelete?.founder_number != null,
+  );
+
+  // ---------------------------------------------------------------------------
   // Limpeza
   // ---------------------------------------------------------------------------
 

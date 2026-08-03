@@ -13,6 +13,7 @@
     "db:list": "supabase migration list --linked",
     "db:push": "supabase db push --linked",
     "db:types": "supabase gen types typescript --linked > src/lib/types/database.ts",
+    "db:founder-reset": "supabase db query --linked --file supabase/tests/reset-founder-seq.sql",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:rls": "node --env-file-if-exists=.env.local scripts/test-rls.mts"

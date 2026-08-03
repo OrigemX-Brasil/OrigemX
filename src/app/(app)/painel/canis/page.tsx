@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { getAuthUser } from "@/modules/auth/queries";
 import { calculateCompleteness } from "@/modules/kennels/completeness";
+import { FounderBadge } from "@/modules/kennels/components/founder-badge";
 import { listMyKennels } from "@/modules/kennels/queries";
 
 export const metadata: Metadata = { title: "Canis" };
@@ -63,6 +64,7 @@ export default async function CanisPage({
                     <span className="text-fg-faint font-mono text-xs">/c/{kennel.slug}</span>
                   </span>
                   <span className="flex items-center gap-3">
+                    <FounderBadge number={kennel.founder_number} size="sm" />
                     {kennel.published_at ? (
                       <span className="text-fg-faint text-xs">Publicado</span>
                     ) : (

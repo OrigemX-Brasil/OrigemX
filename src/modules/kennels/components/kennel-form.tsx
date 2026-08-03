@@ -4,7 +4,7 @@ import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 
 import { createKennel, updateKennel, type KennelFormState } from "../actions";
-import { KENNEL_FORM_FIELDS, type KennelField } from "../fields";
+import { KENNEL_FORM_FIELDS, type KennelField, type KennelFieldName } from "../fields";
 import { slugify, validateKennel, type FieldErrors, type KennelInput } from "../validation";
 
 /**
@@ -102,7 +102,13 @@ function Submit({ label }: { label: string }) {
 export function KennelForm({
   kennel,
 }: {
-  kennel?: Partial<Record<string, string | null>> & { id?: string };
+  /**
+   * Chaves do formulário, não `Record<string, …>`: com index signature aberta,
+   * qualquer coluna nova de outro tipo (como `founder_number`, que é number)
+   * quebraria a chamada. Assim o componente aceita a linha inteira e ignora o
+   * que não é campo dele.
+   */
+  kennel?: Partial<Record<KennelFieldName, string | null>> & { id?: string };
 }) {
   const isEdit = Boolean(kennel?.id);
   const action = isEdit ? updateKennel : createKennel;
