@@ -1,8 +1,18 @@
+import type { Metadata } from "next";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { excerpt, publicMetadata, siteUrl } from "./metadata";
 
 const ORIGINAL = process.env.NEXT_PUBLIC_SITE_URL;
+
+/**
+ * `Metadata["twitter"]` é união discriminada pelo próprio `card`, então o
+ * TypeScript não deixa lê-lo sem estreitar antes — e estreitar aqui seria
+ * assumir a resposta que o teste quer verificar.
+ */
+function twitterCard(m: Metadata): string | undefined {
+  return (m.twitter as { card?: string } | null | undefined)?.card;
+}
 
 beforeEach(() => {
   process.env.NEXT_PUBLIC_SITE_URL = "https://origemxbr.com";
@@ -76,13 +86,13 @@ describe("publicMetadata", () => {
 
   it("com imagem, usa card grande", () => {
     const m = publicMetadata({ ...base, imageUrl: "https://cdn.test/foto.webp" });
-    expect(m.twitter?.card).toBe("summary_large_image");
+    expect(twitterCard(m)).toBe("summary_large_image");
     expect(m.openGraph?.images).toBeDefined();
   });
 
   it("sem imagem, cai para card simples em vez de anunciar imagem quebrada", () => {
     const m = publicMetadata(base);
-    expect(m.twitter?.card).toBe("summary");
+    expect(twitterCard(m)).toBe("summary");
     expect(m.openGraph?.images).toBeUndefined();
   });
 

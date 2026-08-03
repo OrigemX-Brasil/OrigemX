@@ -1,7 +1,7 @@
 {
-  "when": "2026-08-03T05:51:57.641Z",
+  "when": "2026-08-03T08:50:16.304Z",
   "project": "https://lcqhnfdsrioufwvnrqnt.supabase.co",
-  "run": "msctaac7",
+  "run": "mscznj7q",
   "fatal": null,
   "checks": [
     {
@@ -393,7 +393,7 @@
       "cenario": "12. Bucket público",
       "verificacao": "URL pública não carrega token nem expiração",
       "esperado": "sem ?token= e sem expires",
-      "obtido": "/storage/v1/object/public/kennel-media-public/46365da7-347c-4b53-a091-d6ef6cd24b2b/canis/publico-msctaac7.png",
+      "obtido": "/storage/v1/object/public/kennel-media-public/19e4adaa-e230-4c64-803e-e41d52417081/canis/publico-mscznj7q.png",
       "status": "PASS"
     },
     {

@@ -404,6 +404,30 @@ export type Database = {
     }
     Functions: {
       dog_descendant_ids: { Args: { p_dog_id: string }; Returns: string[] }
+      dog_is_public: {
+        Args: {
+          p_deleted_at: string
+          p_kennel_id: string
+          p_owner_id: string
+          p_published_at: string
+        }
+        Returns: boolean
+      }
+      dog_pedigree: {
+        Args: { p_dog_id: string; p_generations?: number }
+        Returns: {
+          born_on: string
+          breed: string
+          dog_id: string
+          generation: number
+          is_public: boolean
+          kennel_name: string
+          name: string
+          pos: number
+          public_id: string
+          sex: string
+        }[]
+      }
       gen_public_id: { Args: never; Returns: string }
       kennel_is_founder_eligible: {
         Args: { p_kennel_id: string }

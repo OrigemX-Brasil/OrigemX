@@ -3,10 +3,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Wordmark } from "@/modules/auth/components/wordmark";
+import { PedigreeTree } from "@/modules/pedigree/components/pedigree-tree";
+import { getPedigree } from "@/modules/pedigree/queries";
 import { PublicImage } from "@/modules/public/components/public-image";
 import { excerpt, publicMetadata } from "@/modules/public/metadata";
 import {
-  getPublicDogById,
   getPublicDogByPublicId,
   getPublicKennelById,
   getPublicMedia,
@@ -75,41 +76,6 @@ export async function generateMetadata({
   });
 }
 
-/** Pai ou mãe: link só quando o ancestral é público de verdade. */
-async function ParentLine({ id, label }: { id: string | null; label: string }) {
-  if (!id) {
-    return (
-      <div className="flex items-baseline justify-between gap-4">
-        <dt className="text-fg-muted text-sm">{label}</dt>
-        <dd className="text-fg-faint text-sm">Não informado</dd>
-      </div>
-    );
-  }
-
-  const parent = await getPublicDogById(id);
-
-  return (
-    <div className="flex items-baseline justify-between gap-4">
-      <dt className="text-fg-muted text-sm">{label}</dt>
-      <dd className="text-right text-sm">
-        {parent ? (
-          <Link
-            href={`/d/${parent.public_id}`}
-            className="text-link hover:text-link-hover underline underline-offset-4 transition-colors"
-          >
-            {parent.name}
-          </Link>
-        ) : (
-          // A RLS não devolveu o ancestral: é rascunho de outra pessoa. Mostrar
-          // que existe um vínculo, sem link e sem nome, é mais honesto que
-          // fingir que não há pai.
-          <span className="text-fg-faint">Registro não público</span>
-        )}
-      </dd>
-    </div>
-  );
-}
-
 export default async function CaoPublicoPage({
   params,
 }: {
@@ -119,10 +85,13 @@ export default async function CaoPublicoPage({
   const dog = await getPublicDogByPublicId(public_id);
   if (!dog) notFound();
 
-  const [kennel, media, registrations] = await Promise.all([
+  const [kennel, media, registrations, pedigree] = await Promise.all([
     dog.kennel_id ? getPublicKennelById(dog.kennel_id) : Promise.resolve(null),
     getPublicMedia({ dogId: dog.id }),
     getPublicRegistrations(dog.id),
+    // Uma consulta para a árvore inteira, em paralelo com o resto. Entra no
+    // mesmo ISR da página porque usa o mesmo client anônimo.
+    getPedigree(dog.id),
   ]);
 
   const [principal, ...restante] = media;
@@ -183,17 +152,7 @@ export default async function CaoPublicoPage({
             ))}
           </dl>
 
-          <section className="flex flex-col gap-3">
-            <h2 className="font-display text-lg font-semibold tracking-tight">Pedigree</h2>
-            <dl className="border-border bg-surface rounded-card divide-border flex flex-col divide-y border px-5">
-              <div className="py-4">
-                <ParentLine id={dog.sire_id} label="Pai" />
-              </div>
-              <div className="py-4">
-                <ParentLine id={dog.dam_id} label="Mãe" />
-              </div>
-            </dl>
-          </section>
+          <PedigreeTree pedigree={pedigree} />
 
           {restante.length > 0 ? (
             <section className="flex flex-col gap-3">

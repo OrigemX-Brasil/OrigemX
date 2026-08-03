@@ -2,15 +2,20 @@
 
 ## Estado atual: VERIFICADO em projeto de desenvolvimento
 
-Aplicado e verificado em 2026-07-31 contra o projeto de desenvolvimento
-`lcqhnfdsrioufwvnrqnt` (Postgres 17.6).
+Aplicado e verificado contra o projeto de desenvolvimento
+`lcqhnfdsrioufwvnrqnt` (Postgres 17.6). Última verificação: 2026-08-03.
 
-| Verificação                                                       | Resultado                    |
-| ----------------------------------------------------------------- | ---------------------------- |
-| `db reset --linked` — aplicação do zero, em banco vazio, na ordem | sem erro                     |
-| `db advisors --linked --type security`                            | `results: []` — zero alertas |
-| Bateria de 21 casos (`tests/battery.sql`)                         | **21 PASS, 0 FAIL**          |
-| `db push` incremental em banco vazio                              | sem erro                     |
+| Verificação                                                       | Resultado                            |
+| ----------------------------------------------------------------- | ------------------------------------ |
+| `db reset --linked` — aplicação do zero, em banco vazio, na ordem | sem erro (2026-07-31)                |
+| Bateria SQL (`tests/battery.sql`)                                 | **27 PASS, 0 FAIL**                  |
+| Evidência pela API (`npm run test:rls`)                           | **59 PASS, 0 FAIL**                  |
+| `db advisors --linked --type security`                            | 5 WARN, todos aceitos e justificados |
+| `db push` incremental                                             | sem erro                             |
+
+Os 5 WARN estão explicados um a um em "Advisors de segurança", abaixo: dois são
+configuração de auth (HaveIBeenPwned, MFA) e três são `SECURITY DEFINER`
+deliberados. **Nenhum é alerta de schema ou de RLS.**
 
 Não há Supabase local neste ambiente (sem Docker) — ver a seção AMBIENTE do
 `CLAUDE.md`. Toda verificação roda contra o projeto de desenvolvimento.
@@ -27,7 +32,7 @@ npx supabase db advisors --linked --type security
 
 ## Bateria de verificação
 
-`tests/battery.sql` roda os 21 casos numa transação, imprime PASS/FAIL e limpa
+`tests/battery.sql` roda os 27 casos numa transação, imprime PASS/FAIL e limpa
 as próprias fixtures. Casos que **devem falhar** rodam dentro de bloco com
 `EXCEPTION`: um caso que não levante erro é marcado FAIL em vez de derrubar a
 execução.
@@ -74,7 +79,20 @@ E os testes de autorização, com um usuário comum autenticado:
 | 19  | anônimo lendo cão COM canil, sem dono, não publicado                   | 0 linhas — é rascunho, não fantasma    |
 | 20  | `delete` físico de canil que tem cães                                  | erro — FK RESTRICT em `dogs.kennel_id` |
 
-Por fim, `supabase db advisors --linked` deve sair sem alertas de segurança.
+E o selo Criador Fundador, que tem seção própria mais abaixo:
+
+| #   | Caso                                        | Esperado                              |
+| --- | ------------------------------------------- | ------------------------------------- |
+| 0   | `handle_new_user` cria `profiles` no signup | perfil criado com `role = 'user'`     |
+| 21  | canil incompleto                            | sem número, e a sequence NÃO avança   |
+| 22  | canil completo                              | número entre 1 e 100, pelo trigger    |
+| 23  | `update` de `founder_number` já atribuído   | erro — trigger de imutabilidade       |
+| 24  | re-disparo em canil que já tem selo         | mesmo número, e a sequence NÃO avança |
+| 25  | exclusão lógica de canil com selo           | número permanece na linha             |
+| 26  | pool esgotado: 101º canil elegível          | sem selo, e o cadastro **não quebra** |
+
+Por fim, `supabase db advisors --linked` deve sair apenas com os cinco WARN
+listados em "Advisors de segurança" — qualquer alerta além desses é regressão.
 
 ### Nota sobre os casos 1 e 2 — dois CHECKs são inalcançáveis
 
@@ -114,10 +132,11 @@ Por isso as policies de `dogs` decidem posse pelas **colunas da própria linha**
 (`private.owns_kennel`). `private.can_manage_dog` continua válida para
 `dog_identifiers`, que consulta `dogs` — uma tabela diferente da sua.
 
-## Advisors de segurança — dois WARN aceitos, com motivo
+## Advisors de segurança — cinco WARN aceitos, com motivo
 
-`db advisors --type security` sai com dois alertas depois que a autenticação
-entrou. Nenhum é regressão de schema; os dois são configuração de auth.
+`db advisors --type security` sai com cinco alertas. Nenhum é regressão de
+schema ou de RLS: dois são configuração de auth e três são funções
+`SECURITY DEFINER` deliberadas.
 
 **`auth_leaked_password_protection`** — a checagem contra o HaveIBeenPwned está
 desligada. Não é esquecimento: o recurso é **gated no plano Pro**
@@ -139,7 +158,27 @@ invisível seria oferecido como pai ou mãe e o ciclo só apareceria no erro do
 banco. Devolve **apenas ids**, nunca colunas, e qualquer `SELECT` feito com
 esses ids continua passando pela RLS.
 
-O acesso de `anon` **foi fechado** na migration
+**`anon_` e `authenticated_security_definer_function_executable` → `dog_pedigree`**
+— os dois WARN mais recentes, aceitos, e aqui o `anon` é **de propósito**: a
+página do QR é anônima por construção, então quem chama a função é justamente
+quem não fez login.
+
+A função é `SECURITY DEFINER` porque a árvore precisa ser percorrida INTEIRA. Se
+rodasse com a RLS do visitante, um bisavô que é rascunho de outro criador
+truncaria o galho e todos os ancestrais acima dele desapareceriam — o pedigree
+pararia no meio, sem explicação e sem o usuário saber que faltou algo.
+
+O que ela devolve para cão restrito é **nome e posição, e nada mais**: `public_id`,
+sexo, raça, nascimento e canil saem `NULL`, decididos campo a campo dentro da
+própria função por `dog_is_public`, e não na tela. Sem `public_id` não há sequer
+URL construível. A profundidade é travada no corpo em 5 gerações, então o
+parâmetro não serve para varrer o banco: no máximo 63 linhas por chamada, todas
+alcançáveis a partir de um cão que o chamador já conhece.
+
+A visibilidade do nome é decisão de produto e está registrada em "Precisa de
+confirmação do cliente", abaixo.
+
+O acesso de `anon` a `dog_descendant_ids` **foi fechado** na migration
 `20260802225046_revoke_dog_descendants_from_anon.sql`. O grant explícito a
 `authenticated` não bastava: função em `public` nasce com `EXECUTE` para
 `PUBLIC`, e `anon` herda daí. Enquanto esteve aberto, um visitante anônimo podia
@@ -233,6 +272,64 @@ Classifica três estados: em ordem, **divergente** (arquivo num bucket, linha
 dizendo outro — corrige) e **órfã** (arquivo em bucket nenhum — só relata, porque
 apagar metadata é decisão humana).
 
+## Pedigree de 5 gerações — uma query, numerada por posição
+
+`public.dog_pedigree(dog_id, generations)` devolve a árvore inteira numa CTE
+recursiva. Nunca N+1: 62 ancestrais seriam 62 idas ao banco por acesso, e esta é
+a página que abre em 4G no meio de uma feira.
+
+**A numeração é Ahnentafel** (Sosa-Stradonitz): o sujeito é 1, o pai de N é 2N e
+a mãe de N é 2N+1. Gerações 1 a 5 ocupam as posições 2 a 63.
+
+Isso resolve de graça a invariante "pedigree renderiza por CAMINHO, não por nó":
+o binário da posição **é** a sequência de viradas pai/mãe, então a chave da linha
+é a posição e o `dog_id` é só um atributo dela. Ancestral repetido por
+linebreeding volta em várias posições e é desenhado várias vezes sem nenhum
+código especial — e a numeração ainda serve de rótulo legível ("posição 11 =
+`1011` = mãe da mãe do pai"), que é o que a interface mostra.
+
+**`UNION ALL`, e aqui é o oposto do trigger de ciclo.** Em `dogs_check_ancestry`
+o `UNION` deduplica, e é justamente a deduplicação que faz a recursão terminar
+com linebreeding. Aqui queremos a repetição, então a terminação vem do limite de
+profundidade — travado no corpo da função, não confiando no parâmetro.
+
+`dog_is_public(deleted_at, published_at, owner_id, kennel_id)` é a **fonte única**
+da regra de visibilidade: a mesma função decide a policy `dogs_select` e os
+campos que o pedigree devolve. Antes ela era uma expressão escrita duas vezes, e
+duplicar regra de visibilidade é como um vazamento nasce seis meses depois.
+
+### Evidência de que a reescrita da policy não mudou comportamento
+
+`dogs_select` foi reescrita para chamar o helper. Como é caminho crítico, o
+comportamento foi capturado caso a caso antes e depois:
+
+| Arquivo                             | O que é                                     |
+| ----------------------------------- | ------------------------------------------- |
+| `reports/baseline-pre-pedigree.md`  | os 86 casos ANTES da reescrita              |
+| `reports/baseline-post-pedigree.md` | comparativo caso a caso: **0 divergências** |
+
+A comparação olha o **texto do resultado** de cada caso, não o placar — um caso
+que saísse de "0 linhas" para "erro de permissão" continuaria PASS e teria
+mudado de comportamento. Os dois arquivos vão para a homologação junto do
+relatório de RLS.
+
+```bash
+npm run evidence:baseline   # captura o antes
+npm run evidence:compare    # captura o depois e compara
+```
+
+### Linhagem de demonstração
+
+```bash
+npm run seed:pedigree
+```
+
+Cria em DESENVOLVIMENTO uma árvore de 5 gerações que exercita de uma vez os
+quatro casos que importam: profundidade cheia, lacuna assimétrica, galho curto e
+quatro ancestrais repetidos. São todos fantasmas (sem dono, sem canil), então não
+encostam em nenhum dado de teste existente. O script é idempotente e traz a
+instrução de limpeza por exclusão lógica no cabeçalho.
+
 ## Decisão anterior, agora resolvida
 
 Hoje o bucket `kennel-media` é privado e a entrega usa **URL assinada com 1h**.
@@ -273,6 +370,35 @@ cai e a policy `dogs_select` tem de ser reapertada.
 
 Enquanto não houver essa definição, nada além dos campos hoje existentes em
 `dogs` deve ser considerado público.
+
+### Nome de ancestral não publicado aparece no pedigree — MUDANÇA DE COMPORTAMENTO
+
+**Isto mudou.** Antes da migration `20260803082954_dog_pedigree`, o nome de um cão
+não publicado de outro criador **não aparecia em lugar nenhum do site**: a página
+do cão mostrava "Registro não público" na linha do pai ou da mãe. Depois dela, o
+nome **aparece** na árvore de qualquer descendente publicado.
+
+O que continua escondido: `public_id` (logo, não há link nem URL para chegar ao
+registro), sexo, raça, data de nascimento e canil. Sai o nome e a posição.
+
+**Por que foi aceito:** pedigree com lacuna não é pedigree. Se o avô materno
+some porque outro criador ainda não publicou o registro dele, o documento perde a
+função — e o nome do ancestral é, no domínio da cinofilia, dado
+convencionalmente público: consta em pedigree impresso, em catálogo de exposição
+e em registro de entidade. Esconder o nome protegeria pouco e quebraria muito.
+
+**O que o cliente precisa decidir:** se isso é aceitável para os criadores dele.
+A pergunta concreta é se um criador se incomoda de ver o nome de um cão que
+cadastrou e ainda não publicou aparecendo na árvore do cão de outra pessoa.
+
+**Custo de reverter:** baixo, e por isso a decisão não é irreversível. É trocar
+`d.name` por um `case when public.dog_is_public(...) then d.name end` dentro de
+`public.dog_pedigree`, numa migration nova. Nenhuma migração de dados, nenhuma
+mudança de policy, nenhuma quebra de URL. A tela já sabe renderizar nó sem link;
+passaria a renderizar nó sem nome.
+
+Vai junto com a definição dos campos públicos, acima — as duas decisões são a
+mesma conversa.
 
 ### Ponto aberto: hard delete de perfil
 

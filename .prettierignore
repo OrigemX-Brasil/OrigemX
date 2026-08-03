@@ -8,3 +8,8 @@ package-lock.json
 # Gerado pela CLI do Supabase
 src/lib/types/database.ts
 supabase/.temp
+
+# Evidência de homologação, gerada por script. O conteúdo é o documento; deixar
+# o Prettier reescrevê-lo faria toda execução produzir diff de formatação e
+# manteria `format:check` vermelho para sempre.
+reports/
