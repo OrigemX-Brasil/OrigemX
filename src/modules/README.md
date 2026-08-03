@@ -13,6 +13,7 @@ modules/
   pedigree/    montagem e render da árvore de 5 gerações
   qr/          QR Code do cão e do canil
   alerts/      alertas in-app baseados em regras (Anexo I.8)
+  capture/     página de captura e sua medição (Anexo I.11)
   public/      consultas e metadata das páginas abertas
   auth/        sessão, login e proteção de rota
 ```
@@ -56,3 +57,13 @@ uma exigir tocar no motor, a separação falhou.
 Alerta **não bloqueia** nada: não existe severidade "erro", e nenhum fluxo de
 gravação consulta o catálogo. E **não existe campo de canal** — in-app apenas,
 porque e-mail, push, WhatsApp e SMS são FORA DE ESCOPO por contrato.
+
+**`capture/` não guarda dado pessoal, e é o que define o módulo.** Sem IP, user
+agent, cookie ou id de usuário — a conversão é agregada por origem, não ligada a
+pessoas. Ver `supabase/README.md`.
+
+A página de captura (`src/app/page.tsx`) **precisa continuar estática**: é o que
+alguém vê depois de escanear um QR numa feira, com 4G disputado. Nada de
+`searchParams`, `headers()` ou `cookies()` nela — qualquer um dos três a torna
+dinâmica e joga fora o cache de borda. A medição acontece por `<img>`, e a
+campanha é recuperada no `/cadastro`, que é dinâmico de propósito.

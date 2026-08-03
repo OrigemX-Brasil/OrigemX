@@ -2,9 +2,9 @@
 
 | | |
 |---|---|
-| Data | 2026-08-03T08:50:16.304Z |
+| Data | 2026-08-03T23:55:49.313Z |
 | Projeto | `https://lcqhnfdsrioufwvnrqnt.supabase.co` |
-| Execução | `mscznj7q` |
+| Execução | `msdw028f` |
 | Resultado | **APROVADO** — 59/59 PASS |
 
 
@@ -38,7 +38,7 @@ falha. O que a RLS isola é:
 | 1. Criação | A registra microchip do próprio cão | sucesso | sucesso | **PASS** |
 | 2. Leitura de B sobre A | B lê o cão RASCUNHO de A | 0 linhas | 0 linha(s) | **PASS** |
 | 2. Leitura de B sobre A | B lê o microchip do cão de A (dado sensível) | 0 linhas | 0 linha(s) | **PASS** |
-| 2. Leitura de B sobre A | B varre TODOS os rascunhos da base procurando os de A | nenhum rascunho de A | 0 rascunho(s) de A em 1 visíveis | **PASS** |
+| 2. Leitura de B sobre A | B varre TODOS os rascunhos da base procurando os de A | nenhum rascunho de A | 0 rascunho(s) de A em 12 visíveis | **PASS** |
 | 2. Leitura de B sobre A | B lê o cão PUBLICADO de A (comportamento esperado: diretório é público) | 1 linha | 1 linha(s) | **PASS** |
 | 3. Escrita de B sobre A | B faz UPDATE no canil de A | 0 linhas afetadas | 0 linha(s) | **PASS** |
 | 3. Escrita de B sobre A | B faz UPDATE no cão publicado de A | 0 linhas afetadas | 0 linha(s) | **PASS** |
@@ -78,14 +78,14 @@ falha. O que a RLS isola é:
 | 10. Mídia | quota do usuário soma o que ele gravou | pelo menos 12345 bytes | 12345 | **PASS** |
 | 11. Selo Fundador | canil sem cão não recebe selo | todos sem número | 0 com número | **PASS** |
 | 11. Selo Fundador | 5 atribuições CONCORRENTES não geram número duplicado | 5 números distintos | 5 atribuídos, 5 distintos | **PASS** |
-| 11. Selo Fundador | nenhum número fora do intervalo 1..100 | todos entre 1 e 100 | min 1, max 5 | **PASS** |
+| 11. Selo Fundador | nenhum número fora do intervalo 1..100 | todos entre 1 e 100 | min 7, max 11 | **PASS** |
 | 11. Selo Fundador | usuário grava founder_number pela API | erro de permissão de coluna | erro 42501: permission denied for table kennels | **PASS** |
 | 11. Selo Fundador | usuário grava founder_number no canil de outro | erro de permissão | erro 42501: permission denied for table kennels | **PASS** |
-| 11. Selo Fundador | exclusão lógica não devolve o número ao pool | número permanece | nº 1 | **PASS** |
+| 11. Selo Fundador | exclusão lógica não devolve o número ao pool | número permanece | nº 7 | **PASS** |
 | 12. Bucket público | A grava no próprio prefixo do bucket público | sucesso | sucesso | **PASS** |
 | 12. Bucket público | B grava no prefixo de A no bucket público | erro de permissão | erro: new row violates row-level security policy | **PASS** |
 | 12. Bucket público | anônimo grava no bucket público | erro de permissão | erro: new row violates row-level security policy | **PASS** |
-| 12. Bucket público | URL pública não carrega token nem expiração | sem ?token= e sem expires | /storage/v1/object/public/kennel-media-public/19e4adaa-e230-4c64-803e-e41d52417081/canis/publico-mscznj7q.png | **PASS** |
+| 12. Bucket público | URL pública não carrega token nem expiração | sem ?token= e sem expires | /storage/v1/object/public/kennel-media-public/5a4c0b10-c6e4-420a-b83a-5c3ab2ff09e6/canis/publico-msdw028f.png | **PASS** |
 | 12. Bucket público | anônimo BAIXA o objeto pela URL pública, sem sessão | HTTP 200 | HTTP 200 | **PASS** |
 | 12. Bucket público | A move o objeto de volta ao bucket privado (despublicar) | sucesso | sucesso | **PASS** |
 | 12. Bucket público | objeto sai do bucket público ao despublicar (fonte: Storage) | não está mais lá | removido | **PASS** |

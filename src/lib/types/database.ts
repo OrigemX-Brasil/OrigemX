@@ -261,6 +261,33 @@ export type Database = {
           },
         ]
       }
+      landing_events: {
+        Row: {
+          created_at: string
+          id: number
+          kind: string
+          path: string
+          source: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: never
+          kind: string
+          path?: string
+          source?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: never
+          kind?: string
+          path?: string
+          source?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       media: {
         Row: {
           alt: string | null
@@ -434,6 +461,10 @@ export type Database = {
         Returns: boolean
       }
       media_used_bytes: { Args: { p_owner_id: string }; Returns: number }
+      record_landing_event: {
+        Args: { p_kind: string; p_path?: string; p_source?: string }
+        Returns: undefined
+      }
       try_assign_founder_number: {
         Args: { p_kennel_id: string }
         Returns: number

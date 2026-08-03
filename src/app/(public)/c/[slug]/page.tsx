@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Wordmark } from "@/modules/auth/components/wordmark";
+import { SignupInvite } from "@/modules/capture/components/signup-invite";
 import { FounderBadge } from "@/modules/kennels/components/founder-badge";
 import { PublicImage } from "@/modules/public/components/public-image";
 import { excerpt, publicMetadata } from "@/modules/public/metadata";
@@ -160,6 +161,8 @@ export default async function CanilPublicoPage({ params }: { params: Promise<{ s
               </ul>
             )}
           </section>
+
+          <SignupInvite source="perfil-canil" />
         </div>
       </main>
     </div>

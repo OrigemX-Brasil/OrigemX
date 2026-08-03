@@ -10,11 +10,11 @@ Aplicado e verificado contra o projeto de desenvolvimento
 | `db reset --linked` — aplicação do zero, em banco vazio, na ordem | sem erro (2026-07-31)                |
 | Bateria SQL (`tests/battery.sql`)                                 | **27 PASS, 0 FAIL**                  |
 | Evidência pela API (`npm run test:rls`)                           | **59 PASS, 0 FAIL**                  |
-| `db advisors --linked --type security`                            | 5 WARN, todos aceitos e justificados |
+| `db advisors --linked --type security`                            | 7 WARN, todos aceitos e justificados |
 | `db push` incremental                                             | sem erro                             |
 
-Os 5 WARN estão explicados um a um em "Advisors de segurança", abaixo: dois são
-configuração de auth (HaveIBeenPwned, MFA) e três são `SECURITY DEFINER`
+Os 7 WARN estão explicados um a um em "Advisors de segurança", abaixo: dois são
+configuração de auth (HaveIBeenPwned, MFA) e cinco são `SECURITY DEFINER`
 deliberados. **Nenhum é alerta de schema ou de RLS.**
 
 Não há Supabase local neste ambiente (sem Docker) — ver a seção AMBIENTE do
@@ -132,11 +132,17 @@ Por isso as policies de `dogs` decidem posse pelas **colunas da própria linha**
 (`private.owns_kennel`). `private.can_manage_dog` continua válida para
 `dog_identifiers`, que consulta `dogs` — uma tabela diferente da sua.
 
-## Advisors de segurança — cinco WARN aceitos, com motivo
+## Advisors de segurança — sete WARN aceitos, com motivo
 
-`db advisors --type security` sai com cinco alertas. Nenhum é regressão de
-schema ou de RLS: dois são configuração de auth e três são funções
-`SECURITY DEFINER` deliberadas.
+`db advisors --type security` sai com sete alertas. Nenhum é regressão de schema
+ou de RLS: dois são configuração de auth e cinco são funções `SECURITY DEFINER`
+deliberadas (`dog_pedigree`, `dog_descendant_ids` e `record_landing_event`).
+
+**`record_landing_event`** é `SECURITY DEFINER` executável por `anon`
+justamente para a aplicação NÃO precisar da chave secreta — ver "Página de
+captura". Ela só insere contagem anônima, com forma fixa e tamanho cortado, e
+recusa em silêncio o que não for `view` ou `signup`. Não lê nada e não devolve
+nada.
 
 **`auth_leaked_password_protection`** — a checagem contra o HaveIBeenPwned está
 desligada. Não é esquecimento: o recurso é **gated no plano Pro**
@@ -271,6 +277,47 @@ comando para rodar antes de um evento.
 Classifica três estados: em ordem, **divergente** (arquivo num bucket, linha
 dizendo outro — corrige) e **órfã** (arquivo em bucket nenhum — só relata, porque
 apagar metadata é decisão humana).
+
+## Página de captura — medição sem dado pessoal
+
+Anexo I.11. A tabela `landing_events` conta acessos e conversões, e o desenho
+inteiro parte de uma restrição: **não guardar nada que identifique uma pessoa.**
+Sem IP, sem user agent, sem cookie, sem id de sessão, sem id de usuário. Uma
+linha diz "houve um acesso desta origem, neste caminho, nesta hora" e nada mais.
+
+Isso custa a atribuição individual — não dá para dizer que _aquele_ visitante
+virou _aquele_ cadastro — e economiza duas coisas: o banner de consentimento,
+que atrasaria justamente a página que precisa abrir rápido em 4G de feira, e a
+responsabilidade de guardar dado pessoal de milhares de pessoas que só
+escanearam um QR. A conversão sai em **agregado**: acessos de uma origem contra
+cadastros da mesma origem.
+
+**Escrita não passa pela API.** Nem `anon` nem `authenticated` têm INSERT; a
+única porta é `public.record_landing_event`, `SECURITY DEFINER`, que fixa a forma
+do que entra e corta tamanho. Assim a aplicação nunca precisa da chave secreta —
+uma chave que bypassa RLS dentro do runtime do site seria risco permanente.
+**Leitura só para admin:** número de acesso é dado de negócio do cliente.
+
+**Como o acesso é contado:** um `<img>` de 42 bytes na página de captura. A
+landing precisa continuar estática para vir do CDN, e página estática não executa
+nada por visita — o pixel resolve isso sem uma linha de JavaScript. A campanha
+vem do `Referer`, porque o HTML é idêntico para todo mundo e a URL do pixel não
+pode carregar o `?de=`.
+
+```bash
+npm run metrics              # últimos 30 dias
+npm run metrics -- --dias 7
+npm run metrics -- --json
+```
+
+O script existe porque o painel administrativo é item separado do contrato e
+ainda não foi feito. Quando existir, lê a mesma tabela.
+
+**Robô é descartado antes de virar linha.** O user agent é lido e jogado fora.
+A lista cobre buscadores, prévia de link de chat (o WhatsApp dispara toda vez que
+alguém cola a URL numa conversa) e runtimes de linguagem — este último entrou
+depois de o teste ponta a ponta flagrar que o `fetch` do Node passava como
+visitante de verdade.
 
 ## QR Code — o único artefato que não dá para corrigir depois
 

@@ -11,7 +11,23 @@
  * Correspondência EXATA. Não usar prefixo aqui: `/login` como prefixo casaria
  * `/login-secreto` também.
  */
-const PUBLIC_EXACT = new Set(["/", "/login", "/cadastro", "/esqueci-senha", "/nova-senha"]);
+const PUBLIC_EXACT = new Set([
+  "/",
+  "/login",
+  "/cadastro",
+  "/esqueci-senha",
+  "/nova-senha",
+  /**
+   * Pixel de medição da página de captura. Aberto porque a página de captura é
+   * aberta — exigir sessão para contar um acesso anônimo seria contraditório.
+   *
+   * O matcher do proxy já pula esta rota, então na prática esta linha não é
+   * consultada. Ela existe como rede: se alguém simplificar o matcher um dia, o
+   * pixel continua respondendo em vez de virar redirect silencioso para o login
+   * — e a métrica morreria sem ninguém perceber.
+   */
+  "/api/e",
+]);
 
 /**
  * Prefixos, sempre terminados em `/` para casar segmento inteiro.

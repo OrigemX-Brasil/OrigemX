@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
+import { normalizeSource, SOURCE_PARAM } from "@/modules/capture/events";
+import { recordEvent } from "@/modules/capture/queries";
 import { sanitizeNext } from "@/modules/auth/redirect";
 
 /**
@@ -62,6 +64,14 @@ export async function signUp(_prev: ActionState, formData: FormData): Promise<Ac
 
   if (error) return { error: traduzir(error.message) };
 
+  // Conversão do Anexo I.11. Grava só a ORIGEM — nem o e-mail, nem o id do
+  // usuário, nem horário além do timestamp da linha. Não dá para ligar este
+  // registro à conta que acabou de nascer, e é assim de propósito.
+  //
+  // Depois do sucesso, e sem `await` bloqueando decisão: a conta já existe, e
+  // uma métrica que falhe não pode virar mensagem de erro para quem se cadastrou.
+  await recordEvent("signup", normalizeSource(String(formData.get(SOURCE_PARAM) ?? "")));
+
   // Com confirmação de e-mail ligada, signUp NÃO devolve sessão. A tela precisa
   // dizer isso, senão o usuário fica esperando um login que não vem.
   return {
@@ -104,11 +114,17 @@ export async function signInWithGoogle(
   // Nenhuma credencial aparece aqui. client_id e secret vivem no projeto
   // Supabase, alimentados por env var no config.toml — trocar dev por cliente
   // não toca este arquivo.
+  // A origem viaja no `redirectTo` porque o OAuth sai do site e volta: sem
+  // carregá-la na URL, o retorno perderia a campanha e todo cadastro por Google
+  // cairia em "direto". É um rótulo curto e público — nada pessoal atravessa.
+  const source = normalizeSource(String(formData.get(SOURCE_PARAM) ?? ""));
+  const callback =
+    `${siteUrl()}/auth/callback?next=${encodeURIComponent(next)}` +
+    `&${SOURCE_PARAM}=${encodeURIComponent(source)}`;
+
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
-    options: {
-      redirectTo: `${siteUrl()}/auth/callback?next=${encodeURIComponent(next)}`,
-    },
+    options: { redirectTo: callback },
   });
 
   if (error || !data?.url) {

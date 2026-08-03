@@ -6,7 +6,12 @@ import { signUp, type ActionState } from "@/modules/auth/actions";
 
 import { Field, FormMessage, SubmitButton } from "./form";
 
-export function SignupForm() {
+/**
+ * `source` é a origem da campanha, resolvida no servidor pela página. Vai como
+ * campo escondido só para sobreviver ao POST — não identifica ninguém, é o
+ * mesmo rótulo curto que já foi contado no acesso.
+ */
+export function SignupForm({ source }: { source?: string }) {
   const [state, formAction] = useActionState<ActionState, FormData>(signUp, {});
 
   // Confirmação de e-mail está ligada, então o cadastro NÃO entra direto.
@@ -26,6 +31,7 @@ export function SignupForm() {
 
   return (
     <form action={formAction} className="flex flex-col gap-5">
+      <input type="hidden" name="de" value={source ?? ""} />
       <FormMessage error={state.error} />
       <Field
         label="Nome"

@@ -36,12 +36,14 @@ function Button() {
   );
 }
 
-export function GoogleButton({ next }: { next: string }) {
+export function GoogleButton({ next, source }: { next: string; source?: string }) {
   const [state, formAction] = useActionState<ActionState, FormData>(signInWithGoogle, {});
 
   return (
     <form action={formAction} className="flex flex-col gap-3">
       <input type="hidden" name="next" value={next} />
+      {/* Só na tela de cadastro. No login fica vazio: entrar não é converter. */}
+      <input type="hidden" name="de" value={source ?? ""} />
       <Button />
       <FormMessage error={state.error} />
     </form>

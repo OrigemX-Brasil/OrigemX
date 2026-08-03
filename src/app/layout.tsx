@@ -18,7 +18,22 @@ const sora = Sora({
   subsets: ["latin"],
   variable: "--font-sora",
   display: "swap",
-  weight: ["400", "600", "700"],
+  /**
+   * Só os pesos que existem na tela: `font-display` aparece 25 vezes com
+   * `font-semibold` e uma com `font-bold`, nunca sem peso. O regular (400)
+   * estava declarado e não era usado em lugar nenhum.
+   *
+   * MEDIDO, e o resultado contraria a intuição: tirar o 400 economizou 120
+   * bytes, não um terço do arquivo. O Google serve Sora como fonte VARIÁVEL —
+   * um arquivo só cobre a faixa inteira de pesos, então declarar menos pesos
+   * não encolhe o download. A lista continua aqui por ser documentação correta
+   * do que a interface usa, não por economia.
+   *
+   * Ao acrescentar um `font-display` com peso novo, inclua o peso aqui: se o
+   * Next passar a servir instâncias estáticas, o navegador sintetizaria o traço
+   * e a tipografia sairia deformada.
+   */
+  weight: ["600", "700"],
 });
 
 const inter = Inter({

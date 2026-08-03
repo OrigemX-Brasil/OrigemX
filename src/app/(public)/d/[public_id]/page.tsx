@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Wordmark } from "@/modules/auth/components/wordmark";
+import { SignupInvite } from "@/modules/capture/components/signup-invite";
 import { PedigreeTree } from "@/modules/pedigree/components/pedigree-tree";
 import { getPedigree } from "@/modules/pedigree/queries";
 import { PublicImage } from "@/modules/public/components/public-image";
@@ -174,6 +175,8 @@ export default async function CaoPublicoPage({
               </ul>
             </section>
           ) : null}
+
+          <SignupInvite source="perfil-cao" />
         </div>
       </main>
     </div>

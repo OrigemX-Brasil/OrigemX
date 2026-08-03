@@ -1,7 +1,7 @@
 {
-  "when": "2026-08-03T08:50:16.304Z",
+  "when": "2026-08-03T23:55:49.313Z",
   "project": "https://lcqhnfdsrioufwvnrqnt.supabase.co",
-  "run": "mscznj7q",
+  "run": "msdw028f",
   "fatal": null,
   "checks": [
     {
@@ -64,7 +64,7 @@
       "cenario": "2. Leitura de B sobre A",
       "verificacao": "B varre TODOS os rascunhos da base procurando os de A",
       "esperado": "nenhum rascunho de A",
-      "obtido": "0 rascunho(s) de A em 1 visíveis",
+      "obtido": "0 rascunho(s) de A em 12 visíveis",
       "status": "PASS"
     },
     {
@@ -344,7 +344,7 @@
       "cenario": "11. Selo Fundador",
       "verificacao": "nenhum número fora do intervalo 1..100",
       "esperado": "todos entre 1 e 100",
-      "obtido": "min 1, max 5",
+      "obtido": "min 7, max 11",
       "status": "PASS"
     },
     {
@@ -365,7 +365,7 @@
       "cenario": "11. Selo Fundador",
       "verificacao": "exclusão lógica não devolve o número ao pool",
       "esperado": "número permanece",
-      "obtido": "nº 1",
+      "obtido": "nº 7",
       "status": "PASS"
     },
     {
@@ -393,7 +393,7 @@
       "cenario": "12. Bucket público",
       "verificacao": "URL pública não carrega token nem expiração",
       "esperado": "sem ?token= e sem expires",
-      "obtido": "/storage/v1/object/public/kennel-media-public/19e4adaa-e230-4c64-803e-e41d52417081/canis/publico-mscznj7q.png",
+      "obtido": "/storage/v1/object/public/kennel-media-public/5a4c0b10-c6e4-420a-b83a-5c3ab2ff09e6/canis/publico-msdw028f.png",
       "status": "PASS"
     },
     {
