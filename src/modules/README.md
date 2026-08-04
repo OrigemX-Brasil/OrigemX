@@ -36,6 +36,19 @@ Três camadas, cada uma respondendo uma pergunta diferente:
 | `npm run test:rls` | a RLS barra pela API REST, com sessões reais                    |
 | `npm run test:e2e` | os fluxos críticos funcionam no navegador, na build de produção |
 
+Mais o teste de carga, que é um procedimento e não roda no dia a dia:
+
+```bash
+npm run seed:load          # 5k usuários, 5k canis, 50k cães
+npm run loadtest:prepare   # confere o volume e exporta as fixtures
+npm run loadtest:action    # descobre os ids das Server Actions e PROVA que gravam
+K6_BIN=<caminho> npm run loadtest
+npm run loadtest:report    # reports/loadtest-<data>.md
+npm run seed:load-clean    # devolve o banco ao tamanho de dev
+```
+
+O `k6` é binário, baixado à parte — não é dependência npm.
+
 A suíte E2E vive em [`e2e/`](../../e2e) e **cria os próprios dados**: cada teste
 tem usuário, canil e cão próprios, criados e destruídos nele mesmo. Roda contra
 banco vazio ou cheio com o mesmo resultado, e a ordem dos testes não importa.

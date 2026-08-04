@@ -1,0 +1,1 @@
+select pg_stat_statements_reset() is not null as ok;
