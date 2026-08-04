@@ -13,3 +13,10 @@ supabase/.temp
 # o Prettier reescrevê-lo faria toda execução produzir diff de formatação e
 # manteria `format:check` vermelho para sempre.
 reports/
+
+# HTML de e-mail é deliberadamente arcaico e o Prettier o trata como HTML
+# moderno: requota a fonte dentro do `style` (`&quot;Segoe UI&quot;`) e reflui
+# espaço entre elementos inline — que em e-mail vira buraco visível, num meio
+# onde não há como corrigir depois de enviado. São arquivos para copiar e colar
+# no painel do Supabase, não código do app.
+supabase/templates/*.html
