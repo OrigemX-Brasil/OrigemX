@@ -59,3 +59,8 @@ next-env.d.ts
 
 # Artefatos do Playwright MCP (snapshots e logs de sessao de auditoria)
 .playwright-mcp/
+
+# Artefatos da suite E2E (traces, screenshots, relatorio HTML)
+reports/e2e-artifacts/
+playwright-report/
+test-results/

@@ -79,13 +79,40 @@ export async function listMyKennels(
   };
 }
 
-/** Canil por id, para a tela de edição. A RLS barra o que não é do usuário. */
+/**
+ * Canil por id.
+ *
+ * ⚠️ ISTO NÃO BASTA PARA A TELA DE EDIÇÃO. A policy `kennels_select` também
+ * devolve canil PUBLICADO de terceiro — o diretório é público. Para o painel,
+ * use `getManageableKennelById`.
+ */
 export async function getKennelById(id: string) {
   const supabase = await createClient();
   const { data } = await supabase
     .from("kennels")
     .select(`${LIST_COLUMNS}, owner_id, deleted_at`)
     .eq("id", id)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  return data;
+}
+
+/**
+ * O canil, só se for deste usuário.
+ *
+ * Filtra por `owner_id` NA CONSULTA. Buscar e conferir depois daria no mesmo
+ * resultado hoje, mas deixa a checagem solta num `if` que a próxima tela pode
+ * esquecer de copiar — que foi exatamente o que aconteceu com o cão publicado
+ * de terceiro, achado pelo teste E2E de isolamento.
+ */
+export async function getManageableKennelById(id: string, userId: string) {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("kennels")
+    .select(`${LIST_COLUMNS}, owner_id, deleted_at`)
+    .eq("id", id)
+    .eq("owner_id", userId)
     .is("deleted_at", null)
     .maybeSingle();
 

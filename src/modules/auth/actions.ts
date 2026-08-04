@@ -214,6 +214,13 @@ function traduzir(message: string): string {
     return "Confirme seu e-mail antes de entrar. Procure o link que enviamos.";
   }
   if (m.includes("user already registered")) return "Já existe uma conta com esse e-mail.";
+  // Antes do teste de `password`: a mensagem de e-mail inválido do Supabase é
+  // "Email address ... is invalid" e caía no genérico "Não foi possível
+  // concluir" — quem digitou o e-mail errado não tinha como saber onde estava o
+  // erro. Achado montando a suíte E2E.
+  if (m.includes("email address") && m.includes("invalid")) {
+    return "E-mail inválido. Confira o endereço e tente de novo.";
+  }
   if (m.includes("password")) return `A senha precisa ter ao menos ${MIN_PASSWORD} caracteres.`;
   if (m.includes("rate limit") || m.includes("too many")) {
     return "Muitas tentativas. Aguarde alguns minutos e tente de novo.";

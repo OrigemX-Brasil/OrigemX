@@ -119,6 +119,48 @@ export async function getDogById(id: string) {
 }
 
 /**
+ * O cão, só se este usuário puder GERENCIÁ-LO.
+ *
+ * `getDogById` não serve para a tela de edição, e isso não era óbvio: a policy
+ * `dogs_select` devolve também cão PUBLICADO de terceiro, porque o perfil
+ * público é aberto. A tela do painel usava aquela função e, para um cão
+ * publicado de outra pessoa, montava o formulário de edição inteiro — com
+ * galeria, botão de publicar e botão de excluir.
+ *
+ * Nada era gravado de fato: a policy de UPDATE recusava e o `delete` não tem
+ * grant para ninguém. Mas oferecer o controle é errado por si só — o usuário
+ * clica, não acontece nada, e ele não entende se o produto quebrou ou se aquilo
+ * não era dele. Achado pelo teste E2E de isolamento.
+ *
+ * O critério espelha `private.can_manage_dog` no banco: dono, quem cadastrou,
+ * ou dono do canil onde o cão está.
+ */
+export async function getManageableDogById(id: string, userId: string) {
+  const dog = await getDogById(id);
+  if (!dog) return null;
+
+  if (dog.owner_id === userId || dog.created_by === userId) return dog;
+
+  // Dono do canil gerencia o que está nele, mesmo sem ser dono do animal.
+  // Filtra por `owner_id` na consulta, e não depois: `getKennelById` também
+  // devolveria canil publicado de terceiro.
+  if (dog.kennel_id) {
+    const supabase = await createClient();
+    const { data } = await supabase
+      .from("kennels")
+      .select("id")
+      .eq("id", dog.kennel_id)
+      .eq("owner_id", userId)
+      .is("deleted_at", null)
+      .maybeSingle();
+
+    if (data) return dog;
+  }
+
+  return null;
+}
+
+/**
  * Vários cães de uma vez — usado para mostrar pai e mãe já selecionados.
  *
  * O teto existe mesmo o único chamador passando dois ids. Sem ele a função é

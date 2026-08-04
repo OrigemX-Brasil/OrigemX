@@ -26,6 +26,35 @@ Dentro de cada módulo:
 | `types.ts`    | Tipos de domínio derivados de `@/lib/types/database`.             |
 | `components/` | UI do domínio.                                                    |
 
+## Testes
+
+Três camadas, cada uma respondendo uma pergunta diferente:
+
+| Comando            | O que prova                                                     |
+| ------------------ | --------------------------------------------------------------- |
+| `npm test`         | lógica pura — completude, pedigree, QR, alertas, captura        |
+| `npm run test:rls` | a RLS barra pela API REST, com sessões reais                    |
+| `npm run test:e2e` | os fluxos críticos funcionam no navegador, na build de produção |
+
+A suíte E2E vive em [`e2e/`](../../e2e) e **cria os próprios dados**: cada teste
+tem usuário, canil e cão próprios, criados e destruídos nele mesmo. Roda contra
+banco vazio ou cheio com o mesmo resultado, e a ordem dos testes não importa.
+
+```bash
+npm run test:e2e:install   # uma vez: baixa o Chromium
+npm run test:e2e
+```
+
+Ela sobe a **build de produção**, não o `next dev`: metade do que verifica só
+existe ali — ISR, cache das páginas públicas e o comportamento de prefetch dos
+`<Link>`.
+
+**A limpeza tem ordem obrigatória.** `dogs.owner_id` é `ON DELETE SET NULL`;
+apagar o usuário antes dos cães os deixaria sem dono E sem canil, que é a
+definição de ancestral fantasma — e fantasma é publicamente legível. A suíte
+encheria o banco de cães de teste visíveis para qualquer visitante. Ver
+`e2e/support/admin.ts`.
+
 ## Regras
 
 **Listagem sempre paginada.** Toda função de lista em `queries.ts` recebe
@@ -36,6 +65,14 @@ concentrar o acesso aqui é o que torna a regra verificável por leitura.
 **Autorização não mora aqui.** Quem decide o que o usuário vê é a RLS, em
 `supabase/migrations/`. Filtro em `queries.ts` é para a _consulta_ estar certa,
 nunca para _proteger_ dado.
+
+**Mas VISIBILIDADE não é POSSE, e a tela de edição precisa da segunda.** As
+policies de leitura devolvem também o que é público de terceiro — cão publicado,
+canil publicado —, porque o perfil aberto é o produto. Uma tela de painel que
+use `getDogById` ou `getKennelById` monta formulário de edição para registro
+alheio: nada é gravado (o UPDATE é recusado), mas oferecer o controle já é erro.
+Use `getManageableDogById` / `getManageableKennelById`. Foi um bug real,
+encontrado pelo teste E2E de isolamento.
 
 **`pedigree/` não tem tabela.** Ele monta a árvore percorrendo `dogs.sire_id` /
 `dogs.dam_id` recursivamente. Renderiza por **caminho**, não por nó: em

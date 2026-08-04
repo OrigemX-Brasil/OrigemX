@@ -15,18 +15,21 @@ import { CompletenessMeter } from "@/modules/kennels/components/completeness-met
 import { FounderBadge, FounderChecklist } from "@/modules/kennels/components/founder-badge";
 import { KennelForm } from "@/modules/kennels/components/kennel-form";
 import { founderEligibility } from "@/modules/kennels/founder";
-import { countKennelDogs, getKennelById } from "@/modules/kennels/queries";
+import { countKennelDogs, getManageableKennelById } from "@/modules/kennels/queries";
 import { QrCard } from "@/modules/qr/components/qr-card";
 
 export const metadata: Metadata = { title: "Editar canil" };
 
 export default async function EditarCanilPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [kennel, user] = await Promise.all([getKennelById(id), getAuthUser()]);
+  const user = await getAuthUser();
+  if (!user) notFound();
 
-  // A RLS já devolve nada quando o canil é de outra pessoa ou foi excluído
-  // logicamente. Aqui só traduzimos ausência em 404.
-  if (!kennel || !user) notFound();
+  // `getManageableKennelById`, não `getKennelById`: a policy de leitura também
+  // devolve canil PUBLICADO de terceiro, porque o diretório é público. Esta tela
+  // edita, então precisa de posse, não de visibilidade.
+  const kennel = await getManageableKennelById(id, user.id);
+  if (!kennel) notFound();
 
   const [logo, dogCount] = await Promise.all([
     getKennelLogo(kennel.id),

@@ -19,6 +19,9 @@
     "seed:load-clean": "supabase db query --linked --file supabase/tests/seed-load-clean.sql",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:install": "playwright install chromium",
     "test:rls": "node --env-file-if-exists=.env.local scripts/test-rls.mts",
     "media:reconcile": "node --env-file-if-exists=.env.local scripts/reconcile-media.mts",
     "metrics": "node --env-file-if-exists=.env.local scripts/metrics.mts",
@@ -34,6 +37,7 @@
     "react-dom": "19.2.4"
   },
   "devDependencies": {
+    "@playwright/test": "1.62.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/qrcode": "1.5.6",

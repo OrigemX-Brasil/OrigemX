@@ -6,7 +6,7 @@ import { getAuthUser } from "@/modules/auth/queries";
 import { softDeleteDog } from "@/modules/dogs/actions";
 import { isGhostAncestor, type AncestorCandidate } from "@/modules/dogs/ancestors";
 import { DogForm } from "@/modules/dogs/components/dog-form";
-import { getDogById, getDogsByIds } from "@/modules/dogs/queries";
+import { getDogsByIds, getManageableDogById } from "@/modules/dogs/queries";
 import { listMyKennels } from "@/modules/kennels/queries";
 import { ImageUploader } from "@/modules/media/components/image-uploader";
 import { MediaGallery } from "@/modules/media/components/media-gallery";
@@ -20,8 +20,13 @@ export const metadata: Metadata = { title: "Editar cão" };
 export default async function EditarCaoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
-  const [dog, user] = await Promise.all([getDogById(id), getAuthUser()]);
-  if (!dog || !user) notFound();
+  const user = await getAuthUser();
+  if (!user) notFound();
+
+  // `getManageableDogById`, não `getDogById`: a policy de leitura devolve também
+  // cão publicado de terceiro, e esta tela monta formulário de edição.
+  const dog = await getManageableDogById(id, user.id);
+  if (!dog) notFound();
 
   const [kennels, parents, gallery, usedBytes] = await Promise.all([
     listMyKennels(user.id, { limit: 100 }),
