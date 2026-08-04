@@ -149,6 +149,20 @@ function NodeRow({ node, pedigree }: { node: PedigreeNode; pedigree: Pedigree })
       {node.is_public && node.public_id ? (
         <Link
           href={`/d/${node.public_id}`}
+          /**
+           * SEM PREFETCH, e aqui é o que mais importa da auditoria.
+           *
+           * Uma árvore de 5 gerações tem até 62 links. Com o prefetch padrão, o
+           * Next baixa o payload de cada um que entra na viewport — medido em
+           * navegador real, esta página disparava 35 requisições e ~106 KB, NOVE
+           * VEZES o próprio caminho crítico de 11,9 KB. A mesma URL chegava a
+           * ser buscada 6 vezes.
+           *
+           * Quem escaneia um QR na feira abre o perfil, lê e sai; clica em zero
+           * ou um ancestral. Pagar por 62 é o oposto do que a página precisa em
+           * 4G congestionado.
+           */
+          prefetch={false}
           className="text-link hover:text-link-hover rounded-control text-sm font-medium underline underline-offset-4 transition-colors"
         >
           {node.name}

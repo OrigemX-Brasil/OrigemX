@@ -30,6 +30,21 @@ export function SignupInvite({ source }: { source: string }) {
         </p>
         <Link
           href={`/?${SOURCE_PARAM}=${source}`}
+          /**
+           * SEM PREFETCH, e por um motivo além do peso: com prefetch, o Next
+           * baixava o payload da página de captura aqui dentro, o React
+           * processava o `<img src="/api/e">` que vem nele e DISPARAVA O PIXEL.
+           *
+           * Medido: um único acesso a `/d/<cao>` gravava
+           * `view · direto · /d/<cao>` em `landing_events`. Todo visitante de
+           * perfil inflava o número de acessos da landing, e a conversão
+           * entregue ao cliente saía menor que a real.
+           *
+           * A rota do pixel também passou a recusar referer que não seja a
+           * captura — as duas defesas, porque esta depende de ninguém reativar
+           * o prefetch por engano.
+           */
+          prefetch={false}
           className="text-link hover:text-link-hover rounded-control focus-visible:outline-ring self-start text-sm font-medium underline underline-offset-4 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
         >
           Conhecer o OrigemX

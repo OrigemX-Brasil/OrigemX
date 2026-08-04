@@ -1,5 +1,3 @@
-import Image from "next/image";
-
 /**
  * Imagem de página pública, com placeholder obrigatório.
  *
@@ -8,9 +6,20 @@ import Image from "next/image";
  * dessincronizada — entra um bloco neutro com a inicial do nome. Nome, raça,
  * registro e pedigree valem mais que a foto.
  *
- * `unoptimized`: as imagens já sobem comprimidas em WebP, em dois tamanhos
- * (320 e 1600). O otimizador do Next re-encodaria o que já está ótimo e
- * somaria um salto antes do CDN.
+ * `<img>` PURO, e não `next/image`, nas páginas públicas.
+ *
+ * O componente do Next era usado com `unoptimized`, porque as imagens já sobem
+ * comprimidas em WebP nos dois tamanhos que a tela usa (320 e 1600) — o
+ * otimizador re-encodaria o que já está ótimo e ainda somaria um salto antes do
+ * CDN. Com ele desligado, o que sobrava era o runtime do componente: peso sem
+ * contrapartida numa página que abre por QR em 4G de feira.
+ *
+ * O que o `next/image` dava e continua garantido aqui, à mão: `width`/`height`
+ * explícitos (sem eles o layout salta quando a foto chega), `loading="lazy"`
+ * fora da primeira imagem, e `fetchPriority` na que é o LCP.
+ *
+ * O painel autenticado segue usando `next/image` — lá a rede não é o gargalo e
+ * não vale manter duas implementações por gosto.
  */
 export function PublicImage({
   src,
@@ -45,17 +54,20 @@ export function PublicImage({
   }
 
   return (
-    <Image
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
       src={src}
       alt={alt}
+      // Dimensão explícita em toda imagem: sem isso o layout salta quando a
+      // foto carrega, e em 4G lento o salto acontece com o usuário já lendo.
       width={width}
       height={height}
       sizes={sizes}
-      // Dimensão explícita em toda imagem: sem isso o layout salta quando a
-      // foto carrega, e em 4G lento o salto acontece com o usuário já lendo.
-      priority={priority}
-      loading={priority ? undefined : "lazy"}
-      unoptimized
+      // A principal é o LCP: carrega cedo e com prioridade. O resto espera
+      // entrar na viewport.
+      loading={priority ? "eager" : "lazy"}
+      fetchPriority={priority ? "high" : "auto"}
+      decoding={priority ? "sync" : "async"}
       className={className}
     />
   );

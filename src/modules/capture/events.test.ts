@@ -5,6 +5,7 @@ import {
   EXTERNAL_SOURCE,
   formatRate,
   isBot,
+  isCapturePath,
   MAX_SOURCE_LENGTH,
   normalizePath,
   normalizeSource,
@@ -99,6 +100,29 @@ describe("readReferer — de onde o pixel foi carregado", () => {
 
   it("sem host esperado, não faz a checagem de domínio", () => {
     expect(readReferer("https://qualquer.coisa/?de=x").source).toBe("x");
+  });
+});
+
+describe("isCapturePath — a trava que mantém a métrica honesta", () => {
+  it("só a página de captura conta como acesso", () => {
+    expect(isCapturePath("/")).toBe(true);
+  });
+
+  /**
+   * O caso que originou a função: o prefetch do convite no rodapé fazia o pixel
+   * disparar a partir do perfil do cão, e um acesso a perfil era contado como
+   * acesso à landing.
+   */
+  it.each(["/d/n5xyxy8kd73b", "/c/canil-do-vale", "/c/aurora/p/abc", "/painel", "/cadastro"])(
+    "%s NÃO conta como acesso à captura",
+    (path) => {
+      expect(isCapturePath(path)).toBe(false);
+    },
+  );
+
+  it("caminho da raiz com barra sobrando não passa — readReferer já normaliza", () => {
+    expect(isCapturePath("//")).toBe(false);
+    expect(isCapturePath("")).toBe(false);
   });
 });
 

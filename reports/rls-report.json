@@ -1,7 +1,7 @@
 {
-  "when": "2026-08-03T23:55:49.313Z",
+  "when": "2026-08-04T04:37:35.850Z",
   "project": "https://lcqhnfdsrioufwvnrqnt.supabase.co",
-  "run": "msdw028f",
+  "run": "mse62eri",
   "fatal": null,
   "checks": [
     {
@@ -344,7 +344,7 @@
       "cenario": "11. Selo Fundador",
       "verificacao": "nenhum número fora do intervalo 1..100",
       "esperado": "todos entre 1 e 100",
-      "obtido": "min 7, max 11",
+      "obtido": "min 12, max 16",
       "status": "PASS"
     },
     {
@@ -365,7 +365,7 @@
       "cenario": "11. Selo Fundador",
       "verificacao": "exclusão lógica não devolve o número ao pool",
       "esperado": "número permanece",
-      "obtido": "nº 7",
+      "obtido": "nº 12",
       "status": "PASS"
     },
     {
@@ -393,7 +393,7 @@
       "cenario": "12. Bucket público",
       "verificacao": "URL pública não carrega token nem expiração",
       "esperado": "sem ?token= e sem expires",
-      "obtido": "/storage/v1/object/public/kennel-media-public/5a4c0b10-c6e4-420a-b83a-5c3ab2ff09e6/canis/publico-msdw028f.png",
+      "obtido": "/storage/v1/object/public/kennel-media-public/654ede55-80f6-412b-9cdb-24e0dbd85610/canis/publico-mse62eri.png",
       "status": "PASS"
     },
     {

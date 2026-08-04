@@ -56,3 +56,6 @@ supabase/logs/
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Artefatos do Playwright MCP (snapshots e logs de sessao de auditoria)
+.playwright-mcp/

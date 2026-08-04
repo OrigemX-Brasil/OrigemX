@@ -1,4 +1,4 @@
-import { readReferer, isBot } from "@/modules/capture/events";
+import { isBot, isCapturePath, readReferer } from "@/modules/capture/events";
 import { recordEvent } from "@/modules/capture/queries";
 import { siteUrl } from "@/modules/public/metadata";
 
@@ -54,6 +54,13 @@ export async function GET(request: Request) {
     if (isBot(request.headers.get("user-agent"))) return respond();
 
     const { path, source } = readReferer(request.headers.get("referer"), siteUrl().hostname);
+
+    // SÓ CONTA QUEM ESTAVA NA PÁGINA DE CAPTURA. Sem esta linha, o prefetch do
+    // convite no rodapé de `/d/` e `/c/` fazia o pixel disparar a partir do
+    // perfil do cão — medido, e cada visita a perfil inflava o número da
+    // landing. Ver `isCapturePath`.
+    if (!isCapturePath(path)) return respond();
+
     await recordEvent("view", source, path);
   } catch {
     // Medição nunca derruba nada. O pixel sai igual.

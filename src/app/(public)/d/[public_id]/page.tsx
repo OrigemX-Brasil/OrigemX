@@ -12,7 +12,6 @@ import {
   getPublicDogByPublicId,
   getPublicKennelById,
   getPublicMedia,
-  getPublicRegistrations,
   type PublicDog,
 } from "@/modules/public/queries";
 
@@ -86,10 +85,13 @@ export default async function CaoPublicoPage({
   const dog = await getPublicDogByPublicId(public_id);
   if (!dog) notFound();
 
-  const [kennel, media, registrations, pedigree] = await Promise.all([
+  // `getPublicRegistrations` NÃO entra aqui de propósito: a policy de
+  // `dog_identifiers` barra o anônimo por completo, então ela devolveria zero
+  // linhas em toda regeneração de ISR. Volta no dia em que o cliente decidir
+  // expor número de registro — ver o comentário na própria função.
+  const [kennel, media, pedigree] = await Promise.all([
     dog.kennel_id ? getPublicKennelById(dog.kennel_id) : Promise.resolve(null),
     getPublicMedia({ dogId: dog.id }),
-    getPublicRegistrations(dog.id),
     // Uma consulta para a árvore inteira, em paralelo com o resto. Entra no
     // mesmo ISR da página porque usa o mesmo client anônimo.
     getPedigree(dog.id),
@@ -100,7 +102,13 @@ export default async function CaoPublicoPage({
   return (
     <div className="flex min-h-dvh flex-col">
       <header className="border-border border-b px-5 py-4 lg:px-8">
-        <Link href="/" className="rounded-control">
+        {/*
+          Sem prefetch como todo link desta página — e este em especial: por ser
+          o wordmark do cabeçalho, entra na viewport SEMPRE. Era ele que ainda
+          baixava o payload da captura e fazia o pixel disparar depois de eu
+          desligar o prefetch do convite no rodapé. Medido.
+        */}
+        <Link href="/" prefetch={false} className="rounded-control">
           <Wordmark className="text-base" />
         </Link>
       </header>
@@ -128,6 +136,9 @@ export default async function CaoPublicoPage({
               {kennel ? (
                 <Link
                   href={`/c/${kennel.slug}`}
+                  // Mesma razão dos links da árvore: página de leitura, saída
+                  // improvável, 4G disputado. Ver pedigree-tree.tsx.
+                  prefetch={false}
                   className="text-link hover:text-link-hover self-start text-sm underline underline-offset-4 transition-colors"
                 >
                   {kennel.name}
@@ -143,14 +154,6 @@ export default async function CaoPublicoPage({
             <Row label="Cor" value={dog.color} />
             <Row label="Pelagem" value={dog.coat} />
             <Row label="Identificador" value={dog.public_id} mono />
-            {registrations.map((r) => (
-              <Row
-                key={r.id}
-                label={r.issuer ? `Registro ${r.issuer}` : "Registro"}
-                value={r.value}
-                mono
-              />
-            ))}
           </dl>
 
           <PedigreeTree pedigree={pedigree} />

@@ -71,6 +71,31 @@ export function normalizePath(raw: string | null | undefined): string {
   return raw.slice(0, MAX_PATH_LENGTH);
 }
 
+/**
+ * O caminho da página de captura. Só acesso a ELA vira `view`.
+ *
+ * Ver `isCapturePath`.
+ */
+export const CAPTURE_PATH = "/";
+
+/**
+ * O acesso veio mesmo da página de captura?
+ *
+ * ISTO EXISTE POR CAUSA DE UM BUG REAL, achado na auditoria de performance. O
+ * convite ao cadastro no rodapé de `/d/` e `/c/` aponta para a captura; com o
+ * prefetch do Next ligado, o payload dela era baixado ali, o React processava o
+ * `<img src="/api/e">` que vem dentro e o pixel disparava. Um acesso ao perfil
+ * de um cão era contado como acesso à landing.
+ *
+ * O prefetch foi desligado nesses links, mas essa correção depende de ninguém
+ * reativá-lo por engano seis meses depois. Esta checagem torna a métrica correta
+ * por CONSTRUÇÃO: não importa quem chame o pixel, só conta quem estava na
+ * página de captura.
+ */
+export function isCapturePath(path: string): boolean {
+  return path === CAPTURE_PATH;
+}
+
 export type RefererInfo = { path: string; source: string };
 
 /**

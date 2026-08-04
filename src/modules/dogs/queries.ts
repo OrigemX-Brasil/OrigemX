@@ -118,9 +118,18 @@ export async function getDogById(id: string) {
   return data;
 }
 
-/** Vários cães de uma vez — usado para mostrar pai e mãe já selecionados. */
+/**
+ * Vários cães de uma vez — usado para mostrar pai e mãe já selecionados.
+ *
+ * O teto existe mesmo o único chamador passando dois ids. Sem ele a função é
+ * segura só por sorte do chamador, e o próximo que passar uma lista grande não
+ * encontra limite nenhum — que é exatamente como a invariante de "nenhuma
+ * listagem sem limite" costuma ser furada.
+ */
+const BY_IDS_LIMIT = 100;
+
 export async function getDogsByIds(ids: readonly string[]): Promise<DogListItem[]> {
-  const unique = [...new Set(ids.filter(Boolean))];
+  const unique = [...new Set(ids.filter(Boolean))].slice(0, BY_IDS_LIMIT);
   if (unique.length === 0) return [];
 
   const supabase = await createClient();
@@ -128,7 +137,8 @@ export async function getDogsByIds(ids: readonly string[]): Promise<DogListItem[
     .from("dogs")
     .select(LIST_COLUMNS)
     .in("id", unique)
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .limit(BY_IDS_LIMIT);
 
   return (data ?? []) as DogListItem[];
 }

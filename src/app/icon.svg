@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!--
+    Ícone da aba. O X da marca, com o mesmo gradiente azul→violeta do Wordmark.
+
+    SVG e não .ico: um arquivo, poucos bytes, escala em qualquer densidade. Com
+    ele o Next emite <link rel="icon"> e o navegador para de chutar
+    /favicon.ico — que era 404 para todo visitante, medido na auditoria.
+
+    Cores literais aqui, e não tokens: SVG servido como arquivo estático não
+    enxerga as CSS variables da aplicação. São os mesmos valores de
+    --color-azul e --color-violeta em tokens.css; mudou lá, muda aqui.
+  -->
+  <defs>
+    <linearGradient id="x" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0066FF" />
+      <stop offset="100%" stop-color="#7B3DFF" />
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" rx="7" fill="#0B0F1A" />
+  <path
+    d="M9 9 L23 23 M23 9 L9 23"
+    stroke="url(#x)"
+    stroke-width="4.5"
+    stroke-linecap="round"
+  />
+</svg>

@@ -91,7 +91,7 @@ E o selo Criador Fundador, que tem seção própria mais abaixo:
 | 25  | exclusão lógica de canil com selo           | número permanece na linha             |
 | 26  | pool esgotado: 101º canil elegível          | sem selo, e o cadastro **não quebra** |
 
-Por fim, `supabase db advisors --linked` deve sair apenas com os cinco WARN
+Por fim, `supabase db advisors --linked` deve sair apenas com os sete WARN
 listados em "Advisors de segurança" — qualquer alerta além desses é regressão.
 
 ### Nota sobre os casos 1 e 2 — dois CHECKs são inalcançáveis
@@ -277,6 +277,44 @@ comando para rodar antes de um evento.
 Classifica três estados: em ordem, **divergente** (arquivo num bucket, linha
 dizendo outro — corrige) e **órfã** (arquivo em bucket nenhum — só relata, porque
 apagar metadata é decisão humana).
+
+## Auditoria de performance — o que ela achou
+
+Rodada antes do teste de carga, com **45.000 cães semeados** no projeto de
+desenvolvimento. O volume não é detalhe: com 59 linhas todo plano é seq scan, e
+está certo — varrer 59 linhas é mais barato que abrir índice. Conclusão tirada
+daquele tamanho é chute.
+
+```bash
+npm run seed:load         # semeia 45k caes em 8 camadas + ANALYZE
+npm run seed:load-clean   # remove (DELETE fisico de fixture, ver o arquivo)
+```
+
+O `ANALYZE` no fim é obrigatório: sem estatística fresca o planner continua
+achando que a tabela é pequena e todo `EXPLAIN` seguinte é ficção.
+
+### O achado que valeu a auditoria
+
+`listPublicDogsOfKennel` levava **1227 ms** para devolver 48 linhas. O índice
+`dogs_kennel_published_idx` existia para ela, mas ordenava por `published_at` e
+a consulta ordena por `created_at` — ordenação diferente, índice inútil para o
+`ORDER BY`. O planner caía no índice de `created_at` e descartava 3.492 linhas
+no heap.
+
+Corrigido na migration `20260804022015_perf_indexes`: mesma ordenação da
+consulta, parcial só nos publicados. **1227 ms → 2,9 ms**, buffers de 3571 para 49.
+
+### O que NÃO era problema
+
+O `Seq Scan on dogs` dentro da CTE recursiva do pedigree assusta e é correto: a
+59 linhas custa 2,54. Com 45 mil, o planner trocou sozinho para
+`Index Scan using dogs_pkey`, sem nenhuma mudança de código, e a RPC completa de
+5 gerações ficou em **30 ms**. Não mexer.
+
+### Índices verificados
+
+Zero FKs sem índice (consulta em `pg_constraint` × `pg_index`). O índice
+trigram de nome é usado por `ILIKE` quando não há predicado mais barato.
 
 ## Página de captura — medição sem dado pessoal
 
