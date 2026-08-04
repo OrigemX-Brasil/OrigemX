@@ -234,10 +234,18 @@ async function main() {
 
   console.log("\nVOLUME CONFIRMADO");
   console.log(`  usuários ......................... ${volume.usuarios}`);
-  console.log(`  canis ............................ ${volume.canis} (${volume.canisPublicados} publicados)`);
-  console.log(`  cães ............................. ${volume.caes} (${volume.caesPublicados} publicados)`);
-  console.log(`  vínculos de parentesco (FK) ...... ${volume.porCamada.slice(1).reduce((a, n) => a + n * 2, 0)}`);
-  console.log(`  linhas de ancestral percorríveis .. ${volume.linhasDeAncestral.toLocaleString("pt-BR")}`);
+  console.log(
+    `  canis ............................ ${volume.canis} (${volume.canisPublicados} publicados)`,
+  );
+  console.log(
+    `  cães ............................. ${volume.caes} (${volume.caesPublicados} publicados)`,
+  );
+  console.log(
+    `  vínculos de parentesco (FK) ...... ${volume.porCamada.slice(1).reduce((a, n) => a + n * 2, 0)}`,
+  );
+  console.log(
+    `  linhas de ancestral percorríveis .. ${volume.linhasDeAncestral.toLocaleString("pt-BR")}`,
+  );
   console.log(`  cães por camada .................. ${volume.porCamada.join(", ")}`);
 
   console.log("\nFIXTURES");

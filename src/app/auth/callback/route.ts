@@ -1,5 +1,6 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { after, NextResponse, type NextRequest } from "next/server";
 
+import { notificarEvento } from "@/lib/notify";
 import { createClient } from "@/lib/supabase/server";
 import { isNewAccount, normalizeSource, SOURCE_PARAM } from "@/modules/capture/events";
 import { recordEvent } from "@/modules/capture/queries";
@@ -45,6 +46,29 @@ export async function GET(request: NextRequest) {
   // taxa entregue ao cliente sairia menor do que a real.
   if (isNewAccount(data.user?.created_at)) {
     await recordEvent("signup", normalizeSource(searchParams.get(SOURCE_PARAM)));
+
+    // Aviso interno, no MESMO sinal que a métrica usa. Uma segunda regra para
+    // responder "é conta nova?" divergiria da primeira no primeiro ajuste.
+    const usuario = data.user;
+    if (usuario) {
+      after(async () => {
+        try {
+          await notificarEvento({
+            tipo: "conta-criada",
+            // O Google devolve o nome em `full_name` ou `name`, conforme o
+            // escopo concedido. Nenhum dos dois é garantido.
+            nome:
+              (usuario.user_metadata?.full_name as string | undefined) ??
+              (usuario.user_metadata?.name as string | undefined) ??
+              null,
+            origem: "google",
+            id: usuario.id,
+          });
+        } catch {
+          // O login por Google não pode falhar por causa de e-mail interno.
+        }
+      });
+    }
   }
 
   return NextResponse.redirect(`${origin}${next}`);

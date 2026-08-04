@@ -22,6 +22,16 @@ const eslintConfig = defineConfig([
     files: ["e2e/**/*.ts", "playwright.config.ts"],
     rules: { "react-hooks/rules-of-hooks": "off" },
   },
+  {
+    /**
+     * Script do k6, que roda no runtime próprio dele e não no Node.
+     *
+     * A função de cada VU tem de ser o `export default` do módulo — é a API do
+     * k6, não uma escolha de estilo, e não há como nomeá-la sem quebrar.
+     */
+    files: ["loadtest/k6/**/*.js"],
+    rules: { "import/no-anonymous-default-export": "off" },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

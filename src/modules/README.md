@@ -108,6 +108,35 @@ Alerta **não bloqueia** nada: não existe severidade "erro", e nenhum fluxo de
 gravação consulta o catálogo. E **não existe campo de canal** — in-app apenas,
 porque e-mail, push, WhatsApp e SMS são FORA DE ESCOPO por contrato.
 
+**Notificação interna fica em [`src/lib/notify/`](../lib/notify), fora de
+`modules/`** — não é domínio, é infraestrutura, e três domínios diferentes a
+chamam.
+
+Não confundir com e-mail transacional: aquele sai do Supabase pelo SMTP do
+Resend e vai para o **usuário**; este sai do nosso código pela **API** do Resend
+e vai para a **equipe**.
+
+Três regras que o módulo garante por construção, não por disciplina de quem
+chama:
+
+- **Nunca propaga.** A assinatura devolve `void` e o corpo é um try/catch.
+  Cadastrar um canil não pode falhar porque a caixa da equipe está fora do ar.
+- **Minimização pelo tipo.** `EventoInterno` declara os campos que podem sair;
+  telefone e documento não têm onde encaixar. Um teste ainda afirma que um
+  objeto contaminado não vaza nada na saída.
+- **Sem chave, loga.** Sem `RESEND_API_KEY`, escreve no console. Dev, teste e CI
+  não tocam em rede.
+
+Os disparos vão dentro de **`after()` do `next/server`**, não `await` solto: a
+resposta sai antes, e o Next mantém a execução viva depois dela — um
+`void notificar(...)` seria congelado junto com a função serverless. E `after`
+roda mesmo quando `redirect()` é chamado, que é o que `createKennel` exige.
+
+O **corta-circuito horário** existe por um motivo concreto: numa feira, 150
+cadastros gerariam ~270 e-mails, a cota diária estouraria à tarde e o evento
+importante da manhã seguinte falharia em silêncio. Acima do teto, os individuais
+param e sai um único "volume alto".
+
 **`capture/` não guarda dado pessoal, e é o que define o módulo.** Sem IP, user
 agent, cookie ou id de usuário — a conversão é agregada por origem, não ligada a
 pessoas. Ver `supabase/README.md`.

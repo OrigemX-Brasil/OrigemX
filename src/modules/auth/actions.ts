@@ -2,6 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
+
+import { notificarEvento } from "@/lib/notify";
 
 import { createClient } from "@/lib/supabase/server";
 import { normalizeSource, SOURCE_PARAM } from "@/modules/capture/events";
@@ -50,7 +53,7 @@ export async function signUp(_prev: ActionState, formData: FormData): Promise<Ac
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signUp({
+  const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
@@ -63,6 +66,29 @@ export async function signUp(_prev: ActionState, formData: FormData): Promise<Ac
   });
 
   if (error) return { error: traduzir(error.message) };
+
+  // Aviso interno para a equipe. `after` põe isto DEPOIS da resposta: uma
+  // chamada ao Resend somaria centenas de milissegundos ao cadastro, e quem
+  // acabou de se inscrever não pode esperar por e-mail que não é dele.
+  //
+  // Só o nome e o id opaco atravessam — o tipo de `EventoInterno` não tem onde
+  // encaixar e-mail, telefone ou documento.
+  if (data.user) {
+    const { id } = data.user;
+    after(async () => {
+      try {
+        await notificarEvento({
+          tipo: "conta-criada",
+          nome: fullName || null,
+          origem: "email",
+          id,
+        });
+      } catch {
+        // `notificarEvento` já não propaga. Este catch é a segunda barreira:
+        // nada aqui pode transformar um cadastro bem-sucedido em erro na tela.
+      }
+    });
+  }
 
   // Conversão do Anexo I.11. Grava só a ORIGEM — nem o e-mail, nem o id do
   // usuário, nem horário além do timestamp da linha. Não dá para ligar este

@@ -2,7 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 
+import { notificarEvento } from "@/lib/notify";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/modules/auth/queries";
 
@@ -96,6 +98,26 @@ export async function createKennel(
     }
     return { formError: "Não foi possível salvar o canil. Tente novamente.", values: input };
   }
+
+  // Aviso interno. Precisa vir ANTES do `redirect`, que lança por dentro — mas
+  // o `after` executa mesmo assim: a documentação do Next é explícita em que ele
+  // roda inclusive quando `redirect` ou `notFound` são chamados. Sem isso, a
+  // notificação de canil nunca sairia.
+  const criado = data.id;
+  after(async () => {
+    try {
+      await notificarEvento({
+        tipo: "canil-criado",
+        nome: name,
+        slug,
+        cidade: values.city ?? null,
+        estado: values.state ?? null,
+        id: criado,
+      });
+    } catch {
+      // Criar canil não pode falhar porque a caixa da equipe está fora do ar.
+    }
+  });
 
   revalidatePath("/painel/canis");
   redirect(`/painel/canis/${data.id}`);

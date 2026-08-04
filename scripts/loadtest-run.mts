@@ -106,9 +106,7 @@ async function main() {
     console.log("  → reports/loadtest-queries.json");
   }
 
-  console.log(
-    `\nk6 saiu com código ${codigo}${codigo === 99 ? " — THRESHOLD REPROVADO" : ""}\n`,
-  );
+  console.log(`\nk6 saiu com código ${codigo}${codigo === 99 ? " — THRESHOLD REPROVADO" : ""}\n`);
 
   // Threshold reprovado NÃO derruba este script: o relatório ainda precisa ser
   // gerado, e a falha é o resultado a reportar, não um acidente a esconder.

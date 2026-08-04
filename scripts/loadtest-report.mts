@@ -234,9 +234,7 @@ function main() {
     push(`|---|---|---|---|---|`);
     for (const r of queries.rows.slice(0, 10)) {
       const q = String(r.consulta ?? "").replace(/\|/g, "\\|");
-      push(
-        `| ${r.calls} | ${r.total_ms} ms | ${r.media_ms} ms | ${r.max_ms} ms | \`${q}\` |`,
-      );
+      push(`| ${r.calls} | ${r.total_ms} ms | ${r.media_ms} ms | ${r.max_ms} ms | \`${q}\` |`);
     }
     push();
   }

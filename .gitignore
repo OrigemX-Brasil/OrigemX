@@ -64,3 +64,6 @@ next-env.d.ts
 reports/e2e-artifacts/
 playwright-report/
 test-results/
+
+# Arquivos intermediarios do teste de carga
+reports/tmp/

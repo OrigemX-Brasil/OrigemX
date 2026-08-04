@@ -116,9 +116,7 @@ async function postarAcao(
 }
 
 async function main() {
-  const fixtures = JSON.parse(
-    readFileSync("reports/loadtest-fixtures.json", "utf8"),
-  ) as Fixtures;
+  const fixtures = JSON.parse(readFileSync("reports/loadtest-fixtures.json", "utf8")) as Fixtures;
 
   const user = fixtures.usuarios[0];
   if (!user) falhar("sem usuários nas fixtures — rode `npm run loadtest:prepare` antes.");
