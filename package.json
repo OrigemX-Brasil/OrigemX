@@ -28,6 +28,7 @@
     "loadtest:prepare": "node --env-file-if-exists=.env.local scripts/loadtest-prepare.mts",
     "loadtest:action": "node --env-file-if-exists=.env.local scripts/loadtest-action.mts",
     "loadtest": "node --env-file-if-exists=.env.local scripts/loadtest-run.mts",
+    "loadtest:diagnose": "node --env-file-if-exists=.env.local scripts/loadtest-diagnose-login.mts",
     "loadtest:report": "node --env-file-if-exists=.env.local scripts/loadtest-report.mts",
     "evidence:baseline": "npm run db:founder-reset && npm run test:rls && node --env-file-if-exists=.env.local scripts/policy-baseline.mts --out reports/baseline-pre-pedigree.md --label \"antes da reescrita de dogs_select\"",
     "evidence:compare": "npm run db:founder-reset && npm run test:rls && node --env-file-if-exists=.env.local scripts/policy-baseline.mts --out reports/baseline-post-pedigree.md --compare reports/baseline-pre-pedigree.md --label \"depois da reescrita de dogs_select\""

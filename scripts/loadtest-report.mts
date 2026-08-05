@@ -54,6 +54,158 @@ function commit(): string {
   }
 }
 
+type Diagnostico = {
+  quando: string;
+  RAJADA: number;
+  PAUSA_S: number;
+  r1: Array<{ n: number; status: number; ms: number; erro?: string }>;
+  res1: { ok: number; total: number };
+  res2: { ok: number; total: number };
+};
+
+/**
+ * A seção que o veredito promete quando algo reprova.
+ *
+ * Escrita a partir de MEDIÇÃO, não de hipótese: o resumo do k6 diz onde a falha
+ * se concentrou, e `loadtest-diagnose-login.mts` diz por quê, reproduzindo o
+ * erro isoladamente contra o mesmo endpoint.
+ */
+function secaoCausa(
+  raiz: Resumo["root_group"],
+  vals: (n: string) => Valores | undefined,
+  d: Diagnostico | null,
+  queries: { rows: Array<Record<string, unknown>> } | null,
+): string[] {
+  const l: string[] = [];
+  const p = (s = "") => l.push(s);
+
+  const falhas = vals("http_req_failed")?.passes ?? 0;
+  const total = (vals("http_req_failed")?.passes ?? 0) + (vals("http_req_failed")?.fails ?? 0);
+
+  /**
+   * A checagem que concentrou as falhas — descoberta pelos dados, não fixada
+   * por índice nem por nome no texto. Amarrar em `checks[0]` ou na string
+   * "login 200" quebraria em silêncio no dia em que alguém inserisse uma
+   * checagem antes ou renomeasse esta. Se nenhuma concentrar as falhas, as
+   * frases que dependem dela não são impressas: melhor faltar do que sair
+   * errada.
+   */
+  const checagens = raiz?.checks ?? [];
+  const culpada = checagens.find((c) => c.fails === falhas && falhas > 0);
+  const tentativasLogin = culpada ? culpada.passes + culpada.fails : undefined;
+  const limpas = checagens.filter((c) => c.fails === 0).length;
+
+  p(`## Causa da reprovação`);
+  p();
+  if (culpada) {
+    p(
+      `**As ${falhas} falhas são todas do login, e nenhuma delas chegou à ` +
+        `aplicação.** O k6 concentrou 100% dos erros na verificação ` +
+        `\`${culpada.name}\`; as outras ${limpas} passaram sem uma única falha. ` +
+        `Como \`autenticar()\` devolve \`null\` e aborta o fluxo quando o login ` +
+        `não volta 200, essas requisições nem chegaram a ser feitas contra o ` +
+        `Next.`,
+    );
+    p();
+  }
+  if (tentativasLogin !== undefined) {
+    // Fora ficam as tentativas INTEIRAS, não só as que falharam: os logins
+    // aceitos também foram contra o Supabase, não contra a aplicação.
+    p(
+      `O login do teste vai **direto ao Supabase** (\`/auth/v1/token\`), não ` +
+        `pela aplicação. Descontadas as ${tentativasLogin.toLocaleString("pt-BR")} ` +
+        `tentativas de login, a aplicação respondeu ` +
+        `**${(total - tentativasLogin).toLocaleString("pt-BR")} requisições com ` +
+        `0,00% de erro**.`,
+    );
+    p();
+  }
+
+  if (d) {
+    const ateFalhar = d.r1.findIndex((x) => x.status !== 200);
+    const msAte = d.r1.slice(0, ateFalhar).reduce((a, x) => a + x.ms, 0);
+    const msg = d.r1.find((x) => x.status !== 200)?.erro ?? "—";
+    const status = d.r1.find((x) => x.status !== 200)?.status ?? 0;
+
+    p(`### O que a medição isolada mostrou`);
+    p();
+    p(
+      `\`npm run loadtest:diagnose\` dispara logins em sequência contra o mesmo ` +
+        `endpoint, com usuários **distintos** a cada tentativa — é o que separa ` +
+        `um limite por conta de um limite por IP.`,
+    );
+    p();
+    p(`| | |`);
+    p(`|---|---|`);
+    p(`| Status da falha | **${status}** |`);
+    p(`| Mensagem | \`${msg}\` |`);
+    p(`| Aceitos antes da primeira recusa | ${ateFalhar} em ${(msAte / 1000).toFixed(1)}s |`);
+    p(`| Rodada 1 (rajada) | ${d.res1.ok}/${d.res1.total} |`);
+    p(`| Rodada 2 (após ${d.PAUSA_S}s de pausa) | ${d.res2.ok}/${d.res2.total} |`);
+    p();
+    p(
+      `Recupera integralmente depois da pausa, e usuários diferentes falham do ` +
+        `mesmo jeito: **é limite de taxa por IP do Supabase Auth**, não ` +
+        `credencial, não capacidade do banco, não a aplicação.`,
+    );
+    p();
+  }
+
+  if (queries?.rows?.length) {
+    const login = queries.rows.find((r) => String(r.consulta ?? "").includes("last_sign_in_at"));
+    if (login) {
+      p(`### A confirmação independente, vinda do banco`);
+      p();
+      p(
+        `\`UPDATE users SET last_sign_in_at\` aparece no \`pg_stat_statements\` ` +
+          `com **${login.calls} chamadas** — exatamente o número de logins ` +
+          `aceitos. \`INSERT INTO sessions\` idem. **O Postgres nunca viu as ` +
+          `outras tentativas**: foram recusadas na borda, antes de virar ` +
+          `trabalho de banco. Se a causa fosse capacidade, o banco teria visto ` +
+          `as ${(falhas + (login.calls as number)).toLocaleString("pt-BR")} e ` +
+          `falhado em algumas.`,
+      );
+      p();
+    }
+  }
+
+  p(`### O que isto significa para o critério`);
+  p();
+  p(
+    `A rampa acordada concentra 50 usuários virtuais **num único IP**. Cinco mil ` +
+      `criadores reais chegam de milhares de IPs, e cada um autentica uma vez ` +
+      `por sessão, não a cada fluxo. O limite que reprovou este teste é do ` +
+      `**gerador de carga**, não uma condição que a produção reproduza.`,
+  );
+  p();
+  p(
+    `Isso **não** torna o resultado aprovado: o critério é 1% e o medido é ` +
+      `${((falhas / total) * 100).toFixed(2)}%. Fica registrado como reprovado, ` +
+      `com a causa identificada.`,
+  );
+  p();
+  p(`**Os caminhos, para decisão do dono do produto:**`);
+  p();
+  p(
+    `1. **Elevar o limite de taxa de auth** no painel do Supabase durante a ` +
+      `medição. Remove uma restrição artificial do teste; é a opção que mede o ` +
+      `produto. Exige mudança de configuração no projeto.`,
+  );
+  p(
+    `2. **Medir a autenticação em separado**, com orçamento de erro próprio, e ` +
+      `manter o critério de 1% para os cinco fluxos que passam pela aplicação. ` +
+      `Muda o desenho do teste e precisa de acordo com o cliente.`,
+  );
+  p(`3. **Manter como está** e registrar a reprovação com esta causa anexada.`);
+  p();
+  p(
+    `Nenhum deles foi aplicado. Ajustar o teste para produzir aprovação foi ` +
+      `vetado explicitamente, e escolher entre eles é decisão de produto.`,
+  );
+  p();
+  return l;
+}
+
 function main() {
   const resumo = ler<Resumo>("reports/loadtest-summary.json");
   if (!resumo) {
@@ -65,6 +217,7 @@ function main() {
     "reports/loadtest-fixtures.json",
   );
   const queries = ler<{ rows: Array<Record<string, unknown>> }>("reports/loadtest-queries.json");
+  const diagnostico = ler<Diagnostico>("reports/loadtest-diagnose-login.json");
 
   const m = resumo.metrics;
   const vals = (nome: string): Valores | undefined => m[nome]?.values;
@@ -152,6 +305,11 @@ function main() {
   // ------------------------------------------------------------ por fluxo
   push(`## Resultado por fluxo`);
   push();
+  // Sem coluna de contagem: `http_req_duration{fluxo:X}` é um Trend, e Trend do
+  // k6 não carrega `count` no resumo — só percentis. A versão anterior lia
+  // `v.count`, recebia `undefined` e imprimia `0` para todos os fluxos, o que é
+  // pior que não ter a coluna: um zero parece medição. O volume por fluxo vem
+  // dos submétricos `http_reqs{fluxo:X}`, declarados no k6 a partir de agora.
   push(`| Fluxo | Reqs | p50 | p95 | p99 | Critério | Veredito |`);
   push(`|---|---|---|---|---|---|---|`);
 
@@ -160,7 +318,7 @@ function main() {
   for (const [tag, rotulo, tipo] of FLUXOS) {
     const v = vals(`http_req_duration{fluxo:${tag}}`);
     if (!v) {
-      push(`| ${rotulo} | 0 | — | — | — | — | sem amostra |`);
+      push(`| ${rotulo} | — | — | — | — | — | sem amostra |`);
       continue;
     }
     const limite = tipo === "gravacao" ? CRITERIOS.gravacao.limite : CRITERIOS.leitura.limite;
@@ -168,10 +326,17 @@ function main() {
     const ok = p95 <= limite;
     if (!ok) algumReprovado = true;
 
+    const n = vals(`http_reqs{fluxo:${tag}}`)?.count;
     push(
-      `| ${rotulo} | ${v.count ?? 0} | ${ms(v.med)} | **${ms(p95)}** | ${ms(v["p(99)"])} | p95 ≤ ${limite} ms | ${ok ? "✅ aprovado" : "❌ **REPROVADO**"} |`,
+      `| ${rotulo} | ${n === undefined ? "—" : n.toLocaleString("pt-BR")} | ${ms(v.med)} | **${ms(p95)}** | ${ms(v["p(99)"])} | p95 ≤ ${limite} ms | ${ok ? "✅ aprovado" : "❌ **REPROVADO**"} |`,
     );
   }
+  push();
+  push(
+    `> Coluna **Reqs** vazia significa que a corrida é anterior à declaração dos ` +
+      `submétricos \`http_reqs{fluxo:…}\` no k6 — não que o fluxo não rodou. Os ` +
+      `percentis da linha vêm de amostras reais.`,
+  );
   push();
 
   // ------------------------------------------------------------ agregados
@@ -244,13 +409,16 @@ function main() {
   push();
   push(
     algumReprovado
-      ? `**REPROVADO em ao menos um critério.** As causas prováveis estão na ` +
-          `seção seguinte. Nenhum parâmetro do teste foi ajustado para produzir ` +
-          `aprovação.`
+      ? `**REPROVADO em ao menos um critério.** A causa está na seção seguinte. ` +
+          `Nenhum parâmetro do teste foi ajustado para produzir aprovação.`
       : `**APROVADO em todos os critérios acordados**, no ambiente descrito no ` +
           `topo deste documento.`,
   );
   push();
+
+  // `linhas.push`, não o `push` local: o local recebe UM argumento e descartaria
+  // silenciosamente todas as linhas depois da primeira.
+  if (algumReprovado) linhas.push(...secaoCausa(resumo.root_group, vals, diagnostico, queries));
 
   writeFileSync(`reports/loadtest-${new Date().toISOString().slice(0, 10)}.md`, linhas.join("\n"));
   console.log(

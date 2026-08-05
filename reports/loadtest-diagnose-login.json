@@ -1,0 +1,280 @@
+{
+  "quando": "2026-08-05T01:14:32.360Z",
+  "RAJADA": 40,
+  "PAUSA_S": 65,
+  "r1": [
+    {
+      "n": 1,
+      "status": 200,
+      "ms": 2086
+    },
+    {
+      "n": 2,
+      "status": 200,
+      "ms": 210
+    },
+    {
+      "n": 3,
+      "status": 200,
+      "ms": 212
+    },
+    {
+      "n": 4,
+      "status": 200,
+      "ms": 212
+    },
+    {
+      "n": 5,
+      "status": 200,
+      "ms": 212
+    },
+    {
+      "n": 6,
+      "status": 200,
+      "ms": 208
+    },
+    {
+      "n": 7,
+      "status": 200,
+      "ms": 228
+    },
+    {
+      "n": 8,
+      "status": 200,
+      "ms": 215
+    },
+    {
+      "n": 9,
+      "status": 200,
+      "ms": 252
+    },
+    {
+      "n": 10,
+      "status": 200,
+      "ms": 204
+    },
+    {
+      "n": 11,
+      "status": 200,
+      "ms": 211
+    },
+    {
+      "n": 12,
+      "status": 200,
+      "ms": 216
+    },
+    {
+      "n": 13,
+      "status": 200,
+      "ms": 195
+    },
+    {
+      "n": 14,
+      "status": 200,
+      "ms": 203
+    },
+    {
+      "n": 15,
+      "status": 200,
+      "ms": 195
+    },
+    {
+      "n": 16,
+      "status": 200,
+      "ms": 198
+    },
+    {
+      "n": 17,
+      "status": 200,
+      "ms": 200
+    },
+    {
+      "n": 18,
+      "status": 200,
+      "ms": 192
+    },
+    {
+      "n": 19,
+      "status": 200,
+      "ms": 203
+    },
+    {
+      "n": 20,
+      "status": 200,
+      "ms": 203
+    },
+    {
+      "n": 21,
+      "status": 200,
+      "ms": 191
+    },
+    {
+      "n": 22,
+      "status": 200,
+      "ms": 191
+    },
+    {
+      "n": 23,
+      "status": 200,
+      "ms": 192
+    },
+    {
+      "n": 24,
+      "status": 200,
+      "ms": 199
+    },
+    {
+      "n": 25,
+      "status": 200,
+      "ms": 199
+    },
+    {
+      "n": 26,
+      "status": 200,
+      "ms": 199
+    },
+    {
+      "n": 27,
+      "status": 200,
+      "ms": 199
+    },
+    {
+      "n": 28,
+      "status": 200,
+      "ms": 193
+    },
+    {
+      "n": 29,
+      "status": 200,
+      "ms": 200
+    },
+    {
+      "n": 30,
+      "status": 200,
+      "ms": 220
+    },
+    {
+      "n": 31,
+      "status": 200,
+      "ms": 211
+    },
+    {
+      "n": 32,
+      "status": 200,
+      "ms": 194
+    },
+    {
+      "n": 33,
+      "status": 200,
+      "ms": 196
+    },
+    {
+      "n": 34,
+      "status": 429,
+      "ms": 193,
+      "erro": "Request rate limit reached"
+    },
+    {
+      "n": 35,
+      "status": 429,
+      "ms": 236,
+      "erro": "Request rate limit reached"
+    },
+    {
+      "n": 36,
+      "status": 429,
+      "ms": 193,
+      "erro": "Request rate limit reached"
+    },
+    {
+      "n": 37,
+      "status": 429,
+      "ms": 182,
+      "erro": "Request rate limit reached"
+    },
+    {
+      "n": 38,
+      "status": 429,
+      "ms": 176,
+      "erro": "Request rate limit reached"
+    },
+    {
+      "n": 39,
+      "status": 200,
+      "ms": 194
+    },
+    {
+      "n": 40,
+      "status": 429,
+      "ms": 178,
+      "erro": "Request rate limit reached"
+    }
+  ],
+  "r2": [
+    {
+      "n": 1,
+      "status": 200,
+      "ms": 250
+    },
+    {
+      "n": 2,
+      "status": 200,
+      "ms": 193
+    },
+    {
+      "n": 3,
+      "status": 200,
+      "ms": 189
+    },
+    {
+      "n": 4,
+      "status": 200,
+      "ms": 196
+    },
+    {
+      "n": 5,
+      "status": 200,
+      "ms": 193
+    },
+    {
+      "n": 6,
+      "status": 200,
+      "ms": 191
+    },
+    {
+      "n": 7,
+      "status": 200,
+      "ms": 188
+    },
+    {
+      "n": 8,
+      "status": 200,
+      "ms": 188
+    },
+    {
+      "n": 9,
+      "status": 200,
+      "ms": 189
+    },
+    {
+      "n": 10,
+      "status": 200,
+      "ms": 187
+    }
+  ],
+  "res1": {
+    "ok": 34,
+    "total": 40,
+    "porStatus": {
+      "200": 34,
+      "429": 6
+    }
+  },
+  "res2": {
+    "ok": 10,
+    "total": 10,
+    "porStatus": {
+      "200": 10
+    }
+  }
+}

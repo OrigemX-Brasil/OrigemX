@@ -80,6 +80,21 @@ export const options = {
     "http_req_duration{fluxo:pedigree}": ["p(95)<2000"],
     "http_req_duration{fluxo:cadastro}": ["p(95)<3000"],
     "http_req_duration{fluxo:atualizacao}": ["p(95)<3000"],
+
+    /*
+     * Contagem por fluxo. `count>=0` sempre passa — não é critério, é o jeito
+     * de existir o submétrico: o k6 só materializa `http_reqs{fluxo:X}` no
+     * resumo se algum threshold o nomear. Sem isto o relatório não tem de onde
+     * tirar quantas requisições cada fluxo fez, porque `http_req_duration` é um
+     * Trend e Trend não carrega `count`.
+     */
+    "http_reqs{fluxo:sessao}": ["count>=0"],
+    "http_reqs{fluxo:listagem}": ["count>=0"],
+    "http_reqs{fluxo:busca}": ["count>=0"],
+    "http_reqs{fluxo:publico}": ["count>=0"],
+    "http_reqs{fluxo:pedigree}": ["count>=0"],
+    "http_reqs{fluxo:cadastro}": ["count>=0"],
+    "http_reqs{fluxo:atualizacao}": ["count>=0"],
   },
 
   summaryTrendStats: ["avg", "min", "med", "p(90)", "p(95)", "p(99)", "max"],
