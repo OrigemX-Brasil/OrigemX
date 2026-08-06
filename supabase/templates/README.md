@@ -14,6 +14,10 @@ para a **equipe** pela API do Resend.
 | `reset-password.html` | Reset password       | `resetPasswordForEmail()`, mesmo arquivo    |
 | `change-email.html`   | Change Email Address | ⚠️ nenhum caminho do app — ver abaixo       |
 
+> ⚠️ **Editar o arquivo aqui não muda nada em produção.** O painel guarda a
+> própria cópia do HTML; o repositório é só a fonte. Toda alteração exige
+> **recolar** no painel de cada projeto — ver "Como recolar", no fim.
+
 **Assuntos sugeridos**, que também são colados no painel:
 
 ```
@@ -38,15 +42,51 @@ mesmo template para os dois endereços**, o antigo e o novo. Por isso o texto
 mostra de onde para onde a mudança vai: quem recebe no endereço antigo precisa
 entender que está sendo **avisado**, não convidado a confirmar um cadastro.
 
+## O link: `token_hash`, nunca `{{ .ConfirmationURL }}`
+
+Esta é a decisão mais importante dos três arquivos, e custou um bug em produção.
+
+O Supabase tem **dois padrões de link, mutuamente exclusivos**:
+
+| Padrão                   | O link aponta para          | Quem verifica | Chega na rota como           |
+| ------------------------ | --------------------------- | ------------- | ---------------------------- |
+| `{{ .ConfirmationURL }}` | `/auth/v1/verify` do GoTrue | o **GoTrue**  | `?code=` ou `#access_token=` |
+| **`token_hash`**         | a **nossa** rota            | **nós**       | `?token_hash=&type=`         |
+
+Com `{{ .ConfirmationURL }}` a sessão volta num **fragmento de URL** (`#…`), e
+**fragmento não é enviado no HTTP** — nenhum código de servidor consegue lê-lo.
+O sintoma era exatamente este: o link ativava a conta, e a página de destino
+dizia "Esse link expirou ou já foi usado". Falso erro, toda vez.
+
+Por isso os três usam:
+
+```
+{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=TIPO&next=DESTINO
+```
+
+| Template         | `type`         | `next`        |
+| ---------------- | -------------- | ------------- |
+| `confirm-signup` | `signup`       | `/painel`     |
+| `reset-password` | `recovery`     | `/nova-senha` |
+| `change-email`   | `email_change` | `/painel`     |
+
+**O `type` não é decorativo**: é ele que diz ao `verifyOtp` qual token
+verificar. Trocar `recovery` por `signup` faz o link de senha falhar.
+
+Vantagem colateral: como o destino é a própria Site URL, o link **não depende da
+allow-list de Redirect URLs**. Com `{{ .ConfirmationURL }}`, um `redirect_to`
+fora da lista era descartado em silêncio e o usuário caía na home.
+
 ## Variáveis
 
 O painel usa template Go do GoTrue. Cada template só recebe algumas:
 
 | Variável                           | Onde vale                                      |
 | ---------------------------------- | ---------------------------------------------- |
-| `{{ .ConfirmationURL }}`           | os três                                        |
+| `{{ .TokenHash }}`                 | os três — é o que vai no link                  |
 | `{{ .SiteURL }}`                   | os três                                        |
 | `{{ .Email }}` / `{{ .NewEmail }}` | só no change-email                             |
+| `{{ .ConfirmationURL }}`           | existe, mas **não usamos** — ver acima         |
 | `{{ .Token }}`                     | código de 8 dígitos; nenhum template daqui usa |
 
 **Variável que o template não recebe sai literal na caixa do usuário** — um
@@ -98,6 +138,26 @@ externa não existem lá. As regras seguidas:
 - pré-cabeçalho escondido, que é o texto de prévia na lista de e-mails;
 - o endereço do link também em texto — cliente corporativo reescreve ou bloqueia
   botão, e sem isso a pessoa fica sem saída.
+
+## Como recolar
+
+O painel não lê este repositório. Em **Authentication → Emails**, para cada
+template: abrir, apagar o conteúdo e colar o arquivo inteiro.
+
+| Colar em             | Arquivo               |
+| -------------------- | --------------------- |
+| Confirm signup       | `confirm-signup.html` |
+| Reset password       | `reset-password.html` |
+| Change Email Address | `change-email.html`   |
+
+Depois de colar, **conferir na hora**: pedir um link de recuperação para um
+e-mail seu e olhar o endereço do botão. Ele precisa apontar para o **seu
+domínio** com `token_hash=` — se apontar para `…supabase.co/auth/v1/verify`, a
+cópia antiga ainda está no ar e o bug do "link expirado" continua.
+
+E conferir a **Site URL** do projeto (Authentication → URL Configuration): é ela
+que o `{{ .SiteURL }}` vira. Apontando para `localhost`, todo link enviado é
+inútil para quem recebe.
 
 ## Handover ao cliente
 
