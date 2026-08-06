@@ -111,6 +111,18 @@ function skip(cenario: string, verificacao: string, motivo: string) {
  */
 const PULAR_SELO = process.env.RLS_PULAR_SELO_FUNDADOR === "1";
 
+/**
+ * A janela do selo, como está no CHECK `kennels_founder_number_range`.
+ *
+ * O piso continua 1 por causa do canil que recebeu o nº 1 antes da mudança de
+ * janela; a emissão nova começa em 100 (ver
+ * `20260806230030_founder_number_janela_100.sql`). Ao mexer na janela no banco,
+ * estes dois números mudam junto — a asserção fixada em 1..100 passou a dar
+ * falso vermelho no dia em que o teto virou 199.
+ */
+const SELO_MIN = 1;
+const SELO_MAX = 199;
+
 /** Descreve o resultado de uma operação PostgREST em uma linha legível. */
 function describe(error: { code?: string; message: string } | null, rows?: unknown[]): string {
   if (error) return `erro ${error.code ?? "?"}: ${error.message}`;
@@ -956,7 +968,11 @@ async function main() {
       `${CONCURRENT} atribuições CONCORRENTES não geram número duplicado`,
       motivo,
     );
-    skip("11b. Selo Fundador (concorrência)", "nenhum número fora do intervalo 1..100", motivo);
+    skip(
+      "11b. Selo Fundador (concorrência)",
+      `nenhum número fora do intervalo ${SELO_MIN}..${SELO_MAX}`,
+      motivo,
+    );
     skip(
       "11b. Selo Fundador (concorrência)",
       "exclusão lógica não devolve o número ao pool",
@@ -1043,10 +1059,10 @@ async function main() {
 
     record(
       "11b. Selo Fundador (concorrência)",
-      "nenhum número fora do intervalo 1..100",
-      "todos entre 1 e 100",
+      `nenhum número fora do intervalo ${SELO_MIN}..${SELO_MAX}`,
+      `todos entre ${SELO_MIN} e ${SELO_MAX}`,
       numbers.length > 0 ? `min ${Math.min(...numbers)}, max ${Math.max(...numbers)}` : "nenhum",
-      numbers.every((n) => n >= 1 && n <= 100),
+      numbers.every((n) => n >= SELO_MIN && n <= SELO_MAX),
     );
 
     // Exclusão lógica não devolve o número. Precisa de um canil COM selo, então

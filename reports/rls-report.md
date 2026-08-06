@@ -2,15 +2,11 @@
 
 | | |
 |---|---|
-| Data | 2026-08-06T21:54:44.564Z |
+| Data | 2026-08-06T23:04:48.512Z |
 | Projeto | `https://lcqhnfdsrioufwvnrqnt.supabase.co` |
-| Execução | `msi1zxtd` |
-| Resultado | **APROVADO** — 56/60 PASS, 4 PULADO |
+| Execução | `msi4htmw` |
+| Resultado | **APROVADO** — 60/60 PASS |
 
-
-> ⚠️ **4 verificação(ões) PULADA(S).** Esta execução não
-> cobre a bateria inteira — ver as linhas marcadas `PULADO` na tabela,
-> com o motivo de cada uma.
 
 ## Método
 
@@ -80,17 +76,17 @@ falha. O que a RLS isola é:
 | 10. Mídia | mime fora da lista de imagem | erro CHECK media_mime_valid | erro 23514: new row for relation "media" violates check constraint "media_mime_valid" | **PASS** |
 | 10. Mídia | arquivo acima do teto do banco | erro CHECK media_size_positive | erro 23514: new row for relation "media" violates check constraint "media_size_positive" | **PASS** |
 | 10. Mídia | quota do usuário soma o que ele gravou | pelo menos 12345 bytes | 12345 | **PASS** |
-| 11b. Selo Fundador (concorrência) | canil sem cão não recebe selo | — | pulado por RLS_PULAR_SELO_FUNDADOR=1 — consumiria 5 dos 100 selos, sem como devolvê-los sem setval | **PULADO** |
-| 11b. Selo Fundador (concorrência) | 5 atribuições CONCORRENTES não geram número duplicado | — | pulado por RLS_PULAR_SELO_FUNDADOR=1 — consumiria 5 dos 100 selos, sem como devolvê-los sem setval | **PULADO** |
-| 11b. Selo Fundador (concorrência) | nenhum número fora do intervalo 1..100 | — | pulado por RLS_PULAR_SELO_FUNDADOR=1 — consumiria 5 dos 100 selos, sem como devolvê-los sem setval | **PULADO** |
-| 11b. Selo Fundador (concorrência) | exclusão lógica não devolve o número ao pool | — | pulado por RLS_PULAR_SELO_FUNDADOR=1 — consumiria 5 dos 100 selos, sem como devolvê-los sem setval | **PULADO** |
+| 11b. Selo Fundador (concorrência) | canil sem cão não recebe selo | todos sem número | 0 com número | **PASS** |
+| 11b. Selo Fundador (concorrência) | 5 atribuições CONCORRENTES não geram número duplicado | 5 números distintos | 5 atribuídos, 5 distintos | **PASS** |
+| 11b. Selo Fundador (concorrência) | nenhum número fora do intervalo 1..199 | todos entre 1 e 199 | min 100, max 104 | **PASS** |
+| 11b. Selo Fundador (concorrência) | exclusão lógica não devolve o número ao pool | número permanece | nº 100 | **PASS** |
 | 11a. Selo Fundador (autorização) | usuário grava founder_number no PRÓPRIO canil | erro de permissão de coluna | erro 42501: permission denied for table kennels | **PASS** |
 | 11a. Selo Fundador (autorização) | usuário grava founder_number no canil de OUTRO | erro de permissão | erro 42501: permission denied for table kennels | **PASS** |
 | 11a. Selo Fundador (autorização) | após as duas tentativas, o número no banco não mudou | continua nulo | nulo | **PASS** |
 | 12. Bucket público | A grava no próprio prefixo do bucket público | sucesso | sucesso | **PASS** |
 | 12. Bucket público | B grava no prefixo de A no bucket público | erro de permissão | erro: new row violates row-level security policy | **PASS** |
 | 12. Bucket público | anônimo grava no bucket público | erro de permissão | erro: new row violates row-level security policy | **PASS** |
-| 12. Bucket público | URL pública não carrega token nem expiração | sem ?token= e sem expires | /storage/v1/object/public/kennel-media-public/046d55c5-f76d-4847-8f08-2156ff18c7a6/canis/publico-msi1zxtd.png | **PASS** |
+| 12. Bucket público | URL pública não carrega token nem expiração | sem ?token= e sem expires | /storage/v1/object/public/kennel-media-public/322b9c9b-26bb-498c-94e4-fadd00866b4a/canis/publico-msi4htmw.png | **PASS** |
 | 12. Bucket público | anônimo BAIXA o objeto pela URL pública, sem sessão | HTTP 200 | HTTP 200 | **PASS** |
 | 12. Bucket público | A move o objeto de volta ao bucket privado (despublicar) | sucesso | sucesso | **PASS** |
 | 12. Bucket público | objeto sai do bucket público ao despublicar (fonte: Storage) | não está mais lá | removido | **PASS** |

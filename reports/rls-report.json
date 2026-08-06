@@ -1,7 +1,7 @@
 {
-  "when": "2026-08-06T21:54:44.564Z",
+  "when": "2026-08-06T23:04:48.512Z",
   "project": "https://lcqhnfdsrioufwvnrqnt.supabase.co",
-  "run": "msi1zxtd",
+  "run": "msi4htmw",
   "fatal": null,
   "checks": [
     {
@@ -329,30 +329,30 @@
     {
       "cenario": "11b. Selo Fundador (concorrência)",
       "verificacao": "canil sem cão não recebe selo",
-      "esperado": "—",
-      "obtido": "pulado por RLS_PULAR_SELO_FUNDADOR=1 — consumiria 5 dos 100 selos, sem como devolvê-los sem setval",
-      "status": "PULADO"
+      "esperado": "todos sem número",
+      "obtido": "0 com número",
+      "status": "PASS"
     },
     {
       "cenario": "11b. Selo Fundador (concorrência)",
       "verificacao": "5 atribuições CONCORRENTES não geram número duplicado",
-      "esperado": "—",
-      "obtido": "pulado por RLS_PULAR_SELO_FUNDADOR=1 — consumiria 5 dos 100 selos, sem como devolvê-los sem setval",
-      "status": "PULADO"
+      "esperado": "5 números distintos",
+      "obtido": "5 atribuídos, 5 distintos",
+      "status": "PASS"
     },
     {
       "cenario": "11b. Selo Fundador (concorrência)",
-      "verificacao": "nenhum número fora do intervalo 1..100",
-      "esperado": "—",
-      "obtido": "pulado por RLS_PULAR_SELO_FUNDADOR=1 — consumiria 5 dos 100 selos, sem como devolvê-los sem setval",
-      "status": "PULADO"
+      "verificacao": "nenhum número fora do intervalo 1..199",
+      "esperado": "todos entre 1 e 199",
+      "obtido": "min 100, max 104",
+      "status": "PASS"
     },
     {
       "cenario": "11b. Selo Fundador (concorrência)",
       "verificacao": "exclusão lógica não devolve o número ao pool",
-      "esperado": "—",
-      "obtido": "pulado por RLS_PULAR_SELO_FUNDADOR=1 — consumiria 5 dos 100 selos, sem como devolvê-los sem setval",
-      "status": "PULADO"
+      "esperado": "número permanece",
+      "obtido": "nº 100",
+      "status": "PASS"
     },
     {
       "cenario": "11a. Selo Fundador (autorização)",
@@ -400,7 +400,7 @@
       "cenario": "12. Bucket público",
       "verificacao": "URL pública não carrega token nem expiração",
       "esperado": "sem ?token= e sem expires",
-      "obtido": "/storage/v1/object/public/kennel-media-public/046d55c5-f76d-4847-8f08-2156ff18c7a6/canis/publico-msi1zxtd.png",
+      "obtido": "/storage/v1/object/public/kennel-media-public/322b9c9b-26bb-498c-94e4-fadd00866b4a/canis/publico-msi4htmw.png",
       "status": "PASS"
     },
     {
