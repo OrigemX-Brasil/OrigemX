@@ -53,7 +53,7 @@ const admin = createClient(URL, SECRET, {
 // Relatório
 // -----------------------------------------------------------------------------
 
-type Status = "PASS" | "FAIL";
+type Status = "PASS" | "FAIL" | "PULADO";
 
 type Check = {
   cenario: string;
@@ -74,6 +74,42 @@ function record(
 ) {
   checks.push({ cenario, verificacao, esperado, obtido, status: ok ? "PASS" : "FAIL" });
 }
+
+/**
+ * Registra o que NÃO foi verificado, e por quê.
+ *
+ * Cenário pulado entra no relatório como linha própria em vez de sumir. Um
+ * documento de homologação que omite em silêncio o que deixou de testar é pior
+ * que um que reprova: quem lê conclui cobertura que não houve.
+ *
+ * `PULADO` não conta como falha — mas aparece no cabeçalho, para ninguém
+ * assinar "APROVADO" achando que a bateria foi inteira.
+ */
+function skip(cenario: string, verificacao: string, motivo: string) {
+  checks.push({
+    cenario,
+    verificacao,
+    esperado: "—",
+    obtido: motivo,
+    status: "PULADO",
+  });
+}
+
+/**
+ * Pula o que CONSOME os selos de Fundador.
+ *
+ * O pool é de 100, `nextval` não volta atrás, e devolver os números exige
+ * `setval` com a trigger de congelamento desabilitada — operação delicada
+ * demais para um banco de produção. Contra produção, ligar esta flag.
+ *
+ * O que se perde é a prova de concorrência do `nextval`, que é comportamento do
+ * Postgres e idêntico em qualquer instância — já provado no projeto de dev. O
+ * que NÃO se perde: as checagens de autorização do próprio cenário 11 continuam
+ * rodando, com um canil sem selo, porque provar que ninguém grava
+ * `founder_number` pela API é justamente o tipo de coisa que precisa valer no
+ * banco real.
+ */
+const PULAR_SELO = process.env.RLS_PULAR_SELO_FUNDADOR === "1";
 
 /** Descreve o resultado de uma operação PostgREST em uma linha legível. */
 function describe(error: { code?: string; message: string } | null, rows?: unknown[]): string {
@@ -870,118 +906,187 @@ async function main() {
   await admin.from("kennels").delete().eq("id", kennelMedia.id);
 
   // ---------------------------------------------------------------------------
-  // Cenário 11 — selo Criador Fundador sob CONCORRÊNCIA REAL
+  // Cenário 11 — selo Criador Fundador
   //
-  // A bateria SQL roda tudo numa sessão só e não prova concorrência. Aqui os
-  // cadastros saem em paralelo pela API, que é onde a corrida existe de fato:
-  // N canis a um cão de serem elegíveis, e o cão de todos entrando ao mesmo
-  // tempo.
+  // Dividido em dois por natureza, e não por gosto:
   //
-  // ATENÇÃO: este cenário CONSOME números reais do pool de 100, e não há como
-  // devolvê-los daqui — `nextval` não é transacional, e supabase-js não executa
-  // SQL arbitrário para dar `setval`. É consequência do mecanismo, não descuido.
+  //   11a. AUTORIZAÇÃO — ninguém grava `founder_number` pela API, nem no próprio
+  //        canil nem no de outro. É RLS e GRANT de coluna, não custa selo
+  //        nenhum, e roda SEMPRE. É o que precisa valer no banco real.
   //
-  // Em dev, rodar `npm run db:founder-reset` depois de uma bateria de execuções
-  // devolve a sequence ao zero. Em produção este script não roda.
+  //   11b. CONCORRÊNCIA — N cadastros em paralelo, cada um disparando o trigger,
+  //        para provar que `nextval` não gera número duplicado sob corrida. A
+  //        bateria SQL roda tudo numa sessão só e não provaria isso.
+  //
+  // 11b CONSOME números reais do pool de 100, e não há como devolvê-los daqui:
+  // `nextval` não é transacional, e supabase-js não executa SQL arbitrário para
+  // dar `setval`. É consequência do mecanismo, não descuido. Em dev,
+  // `npm run db:founder-reset` devolve a sequence ao zero.
+  //
+  // Contra PRODUÇÃO, `RLS_PULAR_SELO_FUNDADOR=1` pula 11b e mantém 11a. O que
+  // deixa de ser provado ali é atomicidade de sequence do Postgres — idêntica em
+  // qualquer instância e já verificada em dev —, e o relatório declara a lacuna
+  // em vez de omiti-la.
   // ---------------------------------------------------------------------------
 
   const CONCURRENT = 5;
 
-  // Cria N canis completos exceto pelo cão.
-  const founderKennels = await Promise.all(
-    Array.from({ length: CONCURRENT }, async (_unused, i) => {
-      const { data: k } = await A.client
-        .from("kennels")
-        .insert({
-          owner_id: A.id,
-          created_by: A.id,
-          name: `Canil Fundador ${i}`,
-          slug: `rls-${RUN}-fundador-${i}`,
-          city: "Campinas",
-          state: "SP",
-        })
-        .select("id")
-        .single();
-
-      if (k) {
-        await A.client.from("media").insert({
-          bucket_id: BUCKET,
-          storage_path: `${A.id}/canis/${k.id}/logo-${RUN}-${i}.webp`,
-          kennel_id: k.id,
-          role: "kennel_logo",
-          mime: "image/webp",
-          size_bytes: 1000,
-          owner_id: A.id,
-          created_by: A.id,
-        });
-      }
-      return k?.id ?? null;
-    }),
-  );
-
-  const kennelIds = founderKennels.filter((id): id is string => Boolean(id));
-
-  // Nenhum tem selo ainda: falta o cão.
-  const { data: beforeDogs } = await admin
+  // Canil sem cão e, portanto, SEM selo — o suficiente para 11a. Fica fora do
+  // `if` de propósito: é o que permite provar a proteção de escrita mesmo
+  // quando a parte que consome o pool não roda.
+  const { data: kennelSelo } = await A.client
     .from("kennels")
-    .select("id, founder_number")
-    .in("id", kennelIds);
-  record(
-    "11. Selo Fundador",
-    "canil sem cão não recebe selo",
-    "todos sem número",
-    `${(beforeDogs ?? []).filter((k) => k.founder_number !== null).length} com número`,
-    (beforeDogs ?? []).every((k) => k.founder_number === null),
-  );
+    .insert({
+      owner_id: A.id,
+      created_by: A.id,
+      name: "Canil Selo",
+      slug: `rls-${RUN}-selo`,
+      city: "Campinas",
+      state: "SP",
+    })
+    .select("id")
+    .single();
 
-  // AQUI é a corrida: N inserções simultâneas, cada uma disparando o trigger.
-  await Promise.all(
-    kennelIds.map((kennelId, i) =>
-      A.client.from("dogs").insert({
-        name: `Cão Fundador ${i}`,
-        sex: "male",
-        kennel_id: kennelId,
-        owner_id: A.id,
-        created_by: A.id,
+  // ── 11b. Concorrência — só fora de produção, porque gasta selo ──────────────
+  if (PULAR_SELO) {
+    const motivo = `pulado por RLS_PULAR_SELO_FUNDADOR=1 — consumiria ${CONCURRENT} dos 100 selos, sem como devolvê-los sem setval`;
+    skip("11b. Selo Fundador (concorrência)", "canil sem cão não recebe selo", motivo);
+    skip(
+      "11b. Selo Fundador (concorrência)",
+      `${CONCURRENT} atribuições CONCORRENTES não geram número duplicado`,
+      motivo,
+    );
+    skip("11b. Selo Fundador (concorrência)", "nenhum número fora do intervalo 1..100", motivo);
+    skip(
+      "11b. Selo Fundador (concorrência)",
+      "exclusão lógica não devolve o número ao pool",
+      motivo,
+    );
+  } else {
+    // Cria N canis completos exceto pelo cão.
+    const founderKennels = await Promise.all(
+      Array.from({ length: CONCURRENT }, async (_unused, i) => {
+        const { data: k } = await A.client
+          .from("kennels")
+          .insert({
+            owner_id: A.id,
+            created_by: A.id,
+            name: `Canil Fundador ${i}`,
+            slug: `rls-${RUN}-fundador-${i}`,
+            city: "Campinas",
+            state: "SP",
+          })
+          .select("id")
+          .single();
+
+        if (k) {
+          await A.client.from("media").insert({
+            bucket_id: BUCKET,
+            storage_path: `${A.id}/canis/${k.id}/logo-${RUN}-${i}.webp`,
+            kennel_id: k.id,
+            role: "kennel_logo",
+            mime: "image/webp",
+            size_bytes: 1000,
+            owner_id: A.id,
+            created_by: A.id,
+          });
+        }
+        return k?.id ?? null;
       }),
-    ),
-  );
+    );
 
-  const { data: afterDogs } = await admin
-    .from("kennels")
-    .select("id, founder_number")
-    .in("id", kennelIds);
+    const kennelIds = founderKennels.filter((id): id is string => Boolean(id));
 
-  const numbers = (afterDogs ?? [])
-    .map((k) => k.founder_number)
-    .filter((n): n is number => n !== null);
-  const unique = new Set(numbers);
+    // Nenhum tem selo ainda: falta o cão.
+    const { data: beforeDogs } = await admin
+      .from("kennels")
+      .select("id, founder_number")
+      .in("id", kennelIds);
+    record(
+      "11b. Selo Fundador (concorrência)",
+      "canil sem cão não recebe selo",
+      "todos sem número",
+      `${(beforeDogs ?? []).filter((k) => k.founder_number !== null).length} com número`,
+      (beforeDogs ?? []).every((k) => k.founder_number === null),
+    );
 
-  record(
-    "11. Selo Fundador",
-    `${CONCURRENT} atribuições CONCORRENTES não geram número duplicado`,
-    `${CONCURRENT} números distintos`,
-    `${numbers.length} atribuídos, ${unique.size} distintos`,
-    numbers.length === unique.size && numbers.length > 0,
-  );
+    // AQUI é a corrida: N inserções simultâneas, cada uma disparando o trigger.
+    await Promise.all(
+      kennelIds.map((kennelId, i) =>
+        A.client.from("dogs").insert({
+          name: `Cão Fundador ${i}`,
+          sex: "male",
+          kennel_id: kennelId,
+          owner_id: A.id,
+          created_by: A.id,
+        }),
+      ),
+    );
 
-  record(
-    "11. Selo Fundador",
-    "nenhum número fora do intervalo 1..100",
-    "todos entre 1 e 100",
-    numbers.length > 0 ? `min ${Math.min(...numbers)}, max ${Math.max(...numbers)}` : "nenhum",
-    numbers.every((n) => n >= 1 && n <= 100),
-  );
+    const { data: afterDogs } = await admin
+      .from("kennels")
+      .select("id, founder_number")
+      .in("id", kennelIds);
+
+    const numbers = (afterDogs ?? [])
+      .map((k) => k.founder_number)
+      .filter((n): n is number => n !== null);
+    const unique = new Set(numbers);
+
+    record(
+      "11b. Selo Fundador (concorrência)",
+      `${CONCURRENT} atribuições CONCORRENTES não geram número duplicado`,
+      `${CONCURRENT} números distintos`,
+      `${numbers.length} atribuídos, ${unique.size} distintos`,
+      numbers.length === unique.size && numbers.length > 0,
+    );
+
+    record(
+      "11b. Selo Fundador (concorrência)",
+      "nenhum número fora do intervalo 1..100",
+      "todos entre 1 e 100",
+      numbers.length > 0 ? `min ${Math.min(...numbers)}, max ${Math.max(...numbers)}` : "nenhum",
+      numbers.every((n) => n >= 1 && n <= 100),
+    );
+
+    // Exclusão lógica não devolve o número. Precisa de um canil COM selo, então
+    // só faz sentido aqui dentro.
+    const deletedKennel = kennelIds[0]!;
+    await A.client
+      .from("kennels")
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("id", deletedKennel);
+
+    const { data: afterDelete } = await admin
+      .from("kennels")
+      .select("founder_number")
+      .eq("id", deletedKennel)
+      .maybeSingle();
+    record(
+      "11b. Selo Fundador (concorrência)",
+      "exclusão lógica não devolve o número ao pool",
+      "número permanece",
+      afterDelete?.founder_number != null ? `nº ${afterDelete.founder_number}` : "PERDEU",
+      afterDelete?.founder_number != null,
+    );
+  }
+
+  // ── 11a. Autorização — roda SEMPRE, inclusive em produção ───────────────────
+  //
+  // Um canil sem selo prova a mesma coisa: o que se testa é o GRANT de coluna e
+  // a policy, não o valor gravado. `founder_number` continuar nulo depois da
+  // tentativa é parte do resultado esperado.
+  const idSelo = kennelSelo?.id ?? "";
 
   // Usuário tentando escolher o próprio número pela API.
   const grabbed = await A.client
     .from("kennels")
     .update({ founder_number: 99 })
-    .eq("id", kennelIds[0]!)
+    .eq("id", idSelo)
     .select();
   record(
-    "11. Selo Fundador",
-    "usuário grava founder_number pela API",
+    "11a. Selo Fundador (autorização)",
+    "usuário grava founder_number no PRÓPRIO canil",
     "erro de permissão de coluna",
     describe(grabbed.error, grabbed.data ?? []),
     !!grabbed.error,
@@ -991,34 +1096,29 @@ async function main() {
   const grabbedOther = await B.client
     .from("kennels")
     .update({ founder_number: 50 })
-    .eq("id", kennelIds[0]!)
+    .eq("id", idSelo)
     .select();
   record(
-    "11. Selo Fundador",
-    "usuário grava founder_number no canil de outro",
+    "11a. Selo Fundador (autorização)",
+    "usuário grava founder_number no canil de OUTRO",
     "erro de permissão",
     describe(grabbedOther.error, grabbedOther.data ?? []),
     !!grabbedOther.error,
   );
 
-  // Exclusão lógica não devolve o número.
-  const deletedKennel = kennelIds[0]!;
-  await A.client
-    .from("kennels")
-    .update({ deleted_at: new Date().toISOString() })
-    .eq("id", deletedKennel);
-
-  const { data: afterDelete } = await admin
+  // A prova de que nenhuma das duas tentativas passou de fato — erro devolvido
+  // pela API não basta se a linha tiver mudado assim mesmo.
+  const { data: seloDepois } = await admin
     .from("kennels")
     .select("founder_number")
-    .eq("id", deletedKennel)
+    .eq("id", idSelo)
     .maybeSingle();
   record(
-    "11. Selo Fundador",
-    "exclusão lógica não devolve o número ao pool",
-    "número permanece",
-    afterDelete?.founder_number != null ? `nº ${afterDelete.founder_number}` : "PERDEU",
-    afterDelete?.founder_number != null,
+    "11a. Selo Fundador (autorização)",
+    "após as duas tentativas, o número no banco não mudou",
+    "continua nulo",
+    seloDepois?.founder_number == null ? "nulo" : `GRAVOU nº ${seloDepois.founder_number}`,
+    seloDepois?.founder_number == null,
   );
 
   // ---------------------------------------------------------------------------
@@ -1159,6 +1259,10 @@ async function main() {
 
 function writeReport(fatal?: string) {
   const failed = checks.filter((c) => c.status === "FAIL");
+  // Separado de propósito: `checks.length - failed.length` contaria PULADO como
+  // aprovado, e o cabeçalho anunciaria uma cobertura que não houve.
+  const passed = checks.filter((c) => c.status === "PASS");
+  const skipped = checks.filter((c) => c.status === "PULADO");
   const when = new Date().toISOString();
 
   const md = [
@@ -1169,9 +1273,19 @@ function writeReport(fatal?: string) {
     `| Data | ${when} |`,
     `| Projeto | \`${URL}\` |`,
     `| Execução | \`${RUN}\` |`,
-    `| Resultado | **${failed.length === 0 && !fatal ? "APROVADO" : "REPROVADO"}** — ${checks.length - failed.length}/${checks.length} PASS |`,
+    `| Resultado | **${failed.length === 0 && !fatal ? "APROVADO" : "REPROVADO"}** — ${passed.length}/${checks.length} PASS${skipped.length ? `, ${skipped.length} PULADO` : ""} |`,
     ``,
     fatal ? `> **ERRO FATAL:** ${fatal}\n` : ``,
+    // A lacuna vai no CABEÇALHO, não enterrada na tabela: quem assina o
+    // documento precisa ver o que não foi verificado antes de ver o "APROVADO".
+    ...(skipped.length
+      ? [
+          `> ⚠️ **${skipped.length} verificação(ões) PULADA(S).** Esta execução não`,
+          `> cobre a bateria inteira — ver as linhas marcadas \`PULADO\` na tabela,`,
+          `> com o motivo de cada uma.`,
+          ``,
+        ]
+      : []),
     `## Método`,
     ``,
     `Dois usuários reais (A e B) e um cliente anônimo, falando com a API REST do`,
@@ -1211,12 +1325,15 @@ function writeReport(fatal?: string) {
   );
 
   for (const c of checks) {
-    console.log(`${c.status === "PASS" ? "  PASS" : "  FAIL"}  ${c.cenario} — ${c.verificacao}`);
+    const rotulo = { PASS: "  PASS", FAIL: "  FAIL", PULADO: "  PULA" }[c.status];
+    console.log(`${rotulo}  ${c.cenario} — ${c.verificacao}`);
     if (c.status === "FAIL")
       console.log(`        esperado: ${c.esperado}\n        obtido:   ${c.obtido}`);
   }
   console.log(
-    `\n${checks.length - failed.length}/${checks.length} PASS · relatório em reports/rls-report.md\n`,
+    `\n${passed.length}/${checks.length} PASS` +
+      (skipped.length ? ` · ${skipped.length} PULADO` : "") +
+      ` · relatório em reports/rls-report.md\n`,
   );
 
   return failed.length === 0 && !fatal;

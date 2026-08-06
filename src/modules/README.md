@@ -36,6 +36,33 @@ Três camadas, cada uma respondendo uma pergunta diferente:
 | `npm run test:rls` | a RLS barra pela API REST, com sessões reais                    |
 | `npm run test:e2e` | os fluxos críticos funcionam no navegador, na build de produção |
 
+### Rodando `test:rls` contra PRODUÇÃO
+
+O script aponta para o projeto das variáveis de ambiente, então basta trocar o
+arquivo de env — não há nada linkado a mudar:
+
+```bash
+RLS_PULAR_SELO_FUNDADOR=1 node --env-file=.env.production.local scripts/test-rls.mts
+```
+
+**A flag não é opcional em produção.** Sem ela, o cenário 11b faz 5 atribuições
+concorrentes de `founder_number` e **consome 5 dos 100 selos de Fundador**.
+`nextval` não volta atrás: devolvê-los exige `setval` com a trigger
+`kennels_freeze_founder_number` desabilitada, o que é operação delicada demais
+para um banco com criadores reais dentro. E `db:founder-reset` **recusa** se
+existir qualquer canil com selo que não seja fixture — que é o caso assim que o
+primeiro criador de verdade se cadastra.
+
+O que se deixa de provar é atomicidade de sequence do Postgres, idêntica em
+qualquer instância e já verificada em dev. O que **continua** rodando é o 11a: as
+checagens de autorização do selo, com um canil sem número — porque provar que
+ninguém grava `founder_number` pela API é exatamente o que precisa valer no banco
+real.
+
+Verificação pulada entra no relatório como linha `PULADO`, com o motivo, e o
+cabeçalho anuncia a lacuna. Relatório de homologação que omite em silêncio o que
+não testou é pior que um que reprova.
+
 Mais o teste de carga, que é um procedimento e não roda no dia a dia:
 
 ```bash
