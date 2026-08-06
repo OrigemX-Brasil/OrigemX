@@ -9,6 +9,7 @@ import { notificarEvento } from "@/lib/notify";
 import { createClient } from "@/lib/supabase/server";
 import { normalizeSource, SOURCE_PARAM } from "@/modules/capture/events";
 import { recordEvent } from "@/modules/capture/queries";
+import { registrarAuthError, tratarAuthError } from "@/modules/auth/errors";
 import { sanitizeNext } from "@/modules/auth/redirect";
 
 /**
@@ -65,7 +66,7 @@ export async function signUp(_prev: ActionState, formData: FormData): Promise<Ac
     },
   });
 
-  if (error) return { error: traduzir(error.message) };
+  if (error) return { error: tratarAuthError("signUp", error) };
 
   // Aviso interno para a equipe. `after` põe isto DEPOIS da resposta: uma
   // chamada ao Resend somaria centenas de milissegundos ao cadastro, e quem
@@ -120,7 +121,7 @@ export async function signIn(_prev: ActionState, formData: FormData): Promise<Ac
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
-  if (error) return { error: traduzir(error.message) };
+  if (error) return { error: tratarAuthError("signIn", error) };
 
   revalidatePath("/", "layout");
   redirect(next);
@@ -154,6 +155,10 @@ export async function signInWithGoogle(
   });
 
   if (error || !data?.url) {
+    // A mensagem ao usuário continua a mesma — o provedor externo não deve
+    // vazar detalhe para a tela. Mas o log passa a existir: sem ele, "não foi
+    // possível iniciar" era tudo o que sobrava para investigar.
+    registrarAuthError("signInWithGoogle", error ?? { message: "signInWithOAuth sem data.url" });
     return { error: "Não foi possível iniciar o login com Google. Tente novamente." };
   }
 
@@ -176,12 +181,15 @@ export async function requestPasswordReset(
 
   const supabase = await createClient();
 
-  // Sem `await` no resultado do envio de e-mail: o Supabase responde ok mesmo
-  // quando não há SMTP configurado, e um erro aqui não deve virar mensagem
-  // diferente — ver comentário abaixo.
-  await supabase.auth.resetPasswordForEmail(email, {
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
     redirectTo: `${siteUrl()}/auth/confirm?next=/nova-senha`,
   });
+
+  // O erro NÃO muda a resposta — ver o comentário abaixo —, mas vai para o log.
+  // Era o ponto cego mais perigoso do arquivo: uma falha de SMTP aqui deixava a
+  // pessoa esperando um e-mail que nunca saiu, e não havia registro nenhum de
+  // que o envio tinha falhado.
+  if (error) registrarAuthError("requestPasswordReset", error);
 
   // Resposta NEUTRA e sempre igual, inclusive quando o e-mail não existe ou
   // quando não há SMTP. Diferenciar transformaria esta tela em um oráculo para
@@ -208,6 +216,10 @@ export async function updatePassword(_prev: ActionState, formData: FormData): Pr
   const { error } = await supabase.auth.updateUser({ password });
 
   if (error) {
+    // Mensagem fixa, e não a traduzida: aqui o motivo quase sempre é link
+    // expirado, e dizer isso vale mais que qualquer texto genérico do GoTrue.
+    // O erro cru fica no log para os casos em que NÃO é isso.
+    registrarAuthError("updatePassword", error);
     return {
       error:
         "Não foi possível alterar a senha. O link pode ter expirado — peça um novo em " +
@@ -226,30 +238,4 @@ export async function signOut() {
   await supabase.auth.signOut();
   revalidatePath("/", "layout");
   redirect("/login");
-}
-
-/**
- * Mensagens do Supabase chegam em inglês. Traduz as poucas que o usuário
- * realmente encontra, sem revelar mais do que o necessário: credencial inválida
- * não diz se foi o e-mail ou a senha que estava errada.
- */
-function traduzir(message: string): string {
-  const m = message.toLowerCase();
-  if (m.includes("invalid login credentials")) return "E-mail ou senha incorretos.";
-  if (m.includes("email not confirmed")) {
-    return "Confirme seu e-mail antes de entrar. Procure o link que enviamos.";
-  }
-  if (m.includes("user already registered")) return "Já existe uma conta com esse e-mail.";
-  // Antes do teste de `password`: a mensagem de e-mail inválido do Supabase é
-  // "Email address ... is invalid" e caía no genérico "Não foi possível
-  // concluir" — quem digitou o e-mail errado não tinha como saber onde estava o
-  // erro. Achado montando a suíte E2E.
-  if (m.includes("email address") && m.includes("invalid")) {
-    return "E-mail inválido. Confira o endereço e tente de novo.";
-  }
-  if (m.includes("password")) return `A senha precisa ter ao menos ${MIN_PASSWORD} caracteres.`;
-  if (m.includes("rate limit") || m.includes("too many")) {
-    return "Muitas tentativas. Aguarde alguns minutos e tente de novo.";
-  }
-  return "Não foi possível concluir. Tente novamente.";
 }
