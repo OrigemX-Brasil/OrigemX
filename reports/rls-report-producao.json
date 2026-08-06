@@ -1,0 +1,428 @@
+{
+  "when": "2026-08-06T22:20:12.772Z",
+  "project": "https://rvdsrpbybsrrqljparnw.supabase.co",
+  "run": "msi2wpo6",
+  "fatal": null,
+  "checks": [
+    {
+      "cenario": "1. Criação",
+      "verificacao": "A cria o próprio canil",
+      "esperado": "1 linha",
+      "obtido": "1 linha",
+      "status": "PASS"
+    },
+    {
+      "cenario": "1. Criação",
+      "verificacao": "B cria o próprio canil",
+      "esperado": "1 linha",
+      "obtido": "1 linha",
+      "status": "PASS"
+    },
+    {
+      "cenario": "1. Criação",
+      "verificacao": "A cria cão PUBLICADO no próprio canil",
+      "esperado": "1 linha",
+      "obtido": "1 linha",
+      "status": "PASS"
+    },
+    {
+      "cenario": "1. Criação",
+      "verificacao": "A cria cão RASCUNHO no próprio canil",
+      "esperado": "1 linha",
+      "obtido": "1 linha",
+      "status": "PASS"
+    },
+    {
+      "cenario": "1. Criação",
+      "verificacao": "B cria o próprio cão",
+      "esperado": "1 linha",
+      "obtido": "1 linha",
+      "status": "PASS"
+    },
+    {
+      "cenario": "1. Criação",
+      "verificacao": "A registra microchip do próprio cão",
+      "esperado": "sucesso",
+      "obtido": "sucesso",
+      "status": "PASS"
+    },
+    {
+      "cenario": "2. Leitura de B sobre A",
+      "verificacao": "B lê o cão RASCUNHO de A",
+      "esperado": "0 linhas",
+      "obtido": "0 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "2. Leitura de B sobre A",
+      "verificacao": "B lê o microchip do cão de A (dado sensível)",
+      "esperado": "0 linhas",
+      "obtido": "0 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "2. Leitura de B sobre A",
+      "verificacao": "B varre TODOS os rascunhos da base procurando os de A",
+      "esperado": "nenhum rascunho de A",
+      "obtido": "0 rascunho(s) de A em 0 visíveis",
+      "status": "PASS"
+    },
+    {
+      "cenario": "2. Leitura de B sobre A",
+      "verificacao": "B lê o cão PUBLICADO de A (comportamento esperado: diretório é público)",
+      "esperado": "1 linha",
+      "obtido": "1 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "3. Escrita de B sobre A",
+      "verificacao": "B faz UPDATE no canil de A",
+      "esperado": "0 linhas afetadas",
+      "obtido": "0 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "3. Escrita de B sobre A",
+      "verificacao": "B faz UPDATE no cão publicado de A",
+      "esperado": "0 linhas afetadas",
+      "obtido": "0 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "3. Escrita de B sobre A",
+      "verificacao": "B move o cão de A para o próprio canil",
+      "esperado": "0 linhas afetadas",
+      "obtido": "0 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "3. Escrita de B sobre A",
+      "verificacao": "B faz DELETE no cão de A",
+      "esperado": "erro de permissão (exclusão é lógica)",
+      "obtido": "erro 42501: permission denied for table dogs",
+      "status": "PASS"
+    },
+    {
+      "cenario": "3. Escrita de B sobre A",
+      "verificacao": "B faz DELETE no PRÓPRIO cão (DELETE físico é negado a todos)",
+      "esperado": "erro de permissão",
+      "obtido": "erro 42501: permission denied for table dogs",
+      "status": "PASS"
+    },
+    {
+      "cenario": "4. Anônimo",
+      "verificacao": "anônimo lê cão publicado",
+      "esperado": "1 linha",
+      "obtido": "1 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "4. Anônimo",
+      "verificacao": "anônimo lê cão em rascunho",
+      "esperado": "0 linhas",
+      "obtido": "0 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "4. Anônimo",
+      "verificacao": "anônimo lê dog_identifiers (microchip)",
+      "esperado": "0 linhas ou erro de permissão",
+      "obtido": "erro 42501: permission denied for table dog_identifiers",
+      "status": "PASS"
+    },
+    {
+      "cenario": "4. Anônimo",
+      "verificacao": "anônimo tenta INSERT em dogs",
+      "esperado": "erro de permissão",
+      "obtido": "erro 42501: permission denied for table dogs",
+      "status": "PASS"
+    },
+    {
+      "cenario": "5. Storage",
+      "verificacao": "B grava no PRÓPRIO prefixo (controle: precisa funcionar)",
+      "esperado": "sucesso",
+      "obtido": "sucesso",
+      "status": "PASS"
+    },
+    {
+      "cenario": "5. Storage",
+      "verificacao": "B grava no prefixo de A",
+      "esperado": "erro de permissão",
+      "obtido": "erro: new row violates row-level security policy",
+      "status": "PASS"
+    },
+    {
+      "cenario": "5. Storage",
+      "verificacao": "B lista o prefixo de A",
+      "esperado": "vazio ou erro",
+      "obtido": "0 objeto(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "5. Storage",
+      "verificacao": "B baixa arquivo de A",
+      "esperado": "erro de permissão",
+      "obtido": "erro: Object not found",
+      "status": "PASS"
+    },
+    {
+      "cenario": "5. Storage",
+      "verificacao": "anônimo baixa arquivo de A",
+      "esperado": "erro de permissão",
+      "obtido": "erro: Object not found",
+      "status": "PASS"
+    },
+    {
+      "cenario": "6. Admin",
+      "verificacao": "usuário comum se promove a admin",
+      "esperado": "erro de permissão de coluna",
+      "obtido": "erro 42501: permission denied for table profiles",
+      "status": "PASS"
+    },
+    {
+      "cenario": "6. Admin",
+      "verificacao": "usuário comum edita o perfil de outro",
+      "esperado": "0 linhas afetadas",
+      "obtido": "0 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "6. Admin",
+      "verificacao": "usuário comum chama private.is_admin() via RPC",
+      "esperado": "erro — schema private não é exposto",
+      "obtido": "erro: Could not find the function public.is_admin without parameters in the schema cache",
+      "status": "PASS"
+    },
+    {
+      "cenario": "6. Admin",
+      "verificacao": "usuário comum chama função de trigger via RPC",
+      "esperado": "erro — EXECUTE revogado",
+      "obtido": "erro: Could not find the function public.dogs_check_ancestry without parameters in the schema cache",
+      "status": "PASS"
+    },
+    {
+      "cenario": "6. Admin",
+      "verificacao": "papel de B no banco após as tentativas",
+      "esperado": "user",
+      "obtido": "user",
+      "status": "PASS"
+    },
+    {
+      "cenario": "7. Criação de conta",
+      "verificacao": "conta criada com user_metadata.role = 'admin'",
+      "esperado": "profile nasce com role = 'user'",
+      "obtido": "role = user",
+      "status": "PASS"
+    },
+    {
+      "cenario": "7. Criação de conta",
+      "verificacao": "conta em formato OAuth (name/picture) gera profile preenchido",
+      "esperado": "full_name e avatar_url preenchidos",
+      "obtido": "full_name = Fulano do Google, avatar_url = preenchido",
+      "status": "PASS"
+    },
+    {
+      "cenario": "7. Criação de conta",
+      "verificacao": "conta em formato OAuth nasce como usuário comum",
+      "esperado": "role = 'user'",
+      "obtido": "role = user",
+      "status": "PASS"
+    },
+    {
+      "cenario": "8. CRUD de canil",
+      "verificacao": "A exclui o próprio canil (lógico)",
+      "esperado": "1 linha marcada",
+      "obtido": "1 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "8. CRUD de canil",
+      "verificacao": "linha continua na tabela — exclusão é lógica, nunca física",
+      "esperado": "linha existe com deleted_at preenchido",
+      "obtido": "existe, deleted_at preenchido",
+      "status": "PASS"
+    },
+    {
+      "cenario": "8. CRUD de canil",
+      "verificacao": "anônimo lê canil excluído logicamente",
+      "esperado": "0 linhas",
+      "obtido": "0 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "8. CRUD de canil",
+      "verificacao": "B tenta reusar o endereço de um canil excluído de A",
+      "esperado": "erro — slug fica reservado para sempre",
+      "obtido": "erro 23505: duplicate key value violates unique constraint \"kennels_slug_key\"",
+      "status": "PASS"
+    },
+    {
+      "cenario": "9. Genealogia",
+      "verificacao": "A cadastra ancestral fantasma (sem dono e sem canil)",
+      "esperado": "criado",
+      "obtido": "criado",
+      "status": "PASS"
+    },
+    {
+      "cenario": "9. Genealogia",
+      "verificacao": "anônimo lê o fantasma — é nó de árvore, não precisa estar publicado",
+      "esperado": "1 linha",
+      "obtido": "1 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "9. Genealogia",
+      "verificacao": "dog_descendant_ids devolve o descendente",
+      "esperado": "inclui o filho",
+      "obtido": "inclui",
+      "status": "PASS"
+    },
+    {
+      "cenario": "9. Genealogia",
+      "verificacao": "ciclo pela API vira mensagem legível, não 500",
+      "esperado": "erro traduzido, sem jargão de banco",
+      "obtido": "[23514] -> \"Esse cão já aparece como descendente na árvore. Defini-lo como pai ou mãe faria com que ele fosse ancestral de si mesmo, o que o registro não permite.\"",
+      "status": "PASS"
+    },
+    {
+      "cenario": "9. Genealogia",
+      "verificacao": "macho na posição de mãe vira mensagem no campo certo",
+      "esperado": "campo dam_id, texto sobre fêmea",
+      "obtido": "dam_id: \"A mãe precisa ser uma fêmea.\"",
+      "status": "PASS"
+    },
+    {
+      "cenario": "10. Mídia",
+      "verificacao": "A registra metadata do próprio logo",
+      "esperado": "criado",
+      "obtido": "criado",
+      "status": "PASS"
+    },
+    {
+      "cenario": "10. Mídia",
+      "verificacao": "B grava metadata no canil de A",
+      "esperado": "erro de permissão",
+      "obtido": "erro 42501: new row violates row-level security policy for table \"media\"",
+      "status": "PASS"
+    },
+    {
+      "cenario": "10. Mídia",
+      "verificacao": "mime fora da lista de imagem",
+      "esperado": "erro CHECK media_mime_valid",
+      "obtido": "erro 23514: new row for relation \"media\" violates check constraint \"media_mime_valid\"",
+      "status": "PASS"
+    },
+    {
+      "cenario": "10. Mídia",
+      "verificacao": "arquivo acima do teto do banco",
+      "esperado": "erro CHECK media_size_positive",
+      "obtido": "erro 23514: new row for relation \"media\" violates check constraint \"media_size_positive\"",
+      "status": "PASS"
+    },
+    {
+      "cenario": "10. Mídia",
+      "verificacao": "quota do usuário soma o que ele gravou",
+      "esperado": "pelo menos 12345 bytes",
+      "obtido": "12345",
+      "status": "PASS"
+    },
+    {
+      "cenario": "11b. Selo Fundador (concorrência)",
+      "verificacao": "canil sem cão não recebe selo",
+      "esperado": "—",
+      "obtido": "pulado por RLS_PULAR_SELO_FUNDADOR=1 — consumiria 5 dos 100 selos, sem como devolvê-los sem setval",
+      "status": "PULADO"
+    },
+    {
+      "cenario": "11b. Selo Fundador (concorrência)",
+      "verificacao": "5 atribuições CONCORRENTES não geram número duplicado",
+      "esperado": "—",
+      "obtido": "pulado por RLS_PULAR_SELO_FUNDADOR=1 — consumiria 5 dos 100 selos, sem como devolvê-los sem setval",
+      "status": "PULADO"
+    },
+    {
+      "cenario": "11b. Selo Fundador (concorrência)",
+      "verificacao": "nenhum número fora do intervalo 1..100",
+      "esperado": "—",
+      "obtido": "pulado por RLS_PULAR_SELO_FUNDADOR=1 — consumiria 5 dos 100 selos, sem como devolvê-los sem setval",
+      "status": "PULADO"
+    },
+    {
+      "cenario": "11b. Selo Fundador (concorrência)",
+      "verificacao": "exclusão lógica não devolve o número ao pool",
+      "esperado": "—",
+      "obtido": "pulado por RLS_PULAR_SELO_FUNDADOR=1 — consumiria 5 dos 100 selos, sem como devolvê-los sem setval",
+      "status": "PULADO"
+    },
+    {
+      "cenario": "11a. Selo Fundador (autorização)",
+      "verificacao": "usuário grava founder_number no PRÓPRIO canil",
+      "esperado": "erro de permissão de coluna",
+      "obtido": "erro 42501: permission denied for table kennels",
+      "status": "PASS"
+    },
+    {
+      "cenario": "11a. Selo Fundador (autorização)",
+      "verificacao": "usuário grava founder_number no canil de OUTRO",
+      "esperado": "erro de permissão",
+      "obtido": "erro 42501: permission denied for table kennels",
+      "status": "PASS"
+    },
+    {
+      "cenario": "11a. Selo Fundador (autorização)",
+      "verificacao": "após as duas tentativas, o número no banco não mudou",
+      "esperado": "continua nulo",
+      "obtido": "nulo",
+      "status": "PASS"
+    },
+    {
+      "cenario": "12. Bucket público",
+      "verificacao": "A grava no próprio prefixo do bucket público",
+      "esperado": "sucesso",
+      "obtido": "sucesso",
+      "status": "PASS"
+    },
+    {
+      "cenario": "12. Bucket público",
+      "verificacao": "B grava no prefixo de A no bucket público",
+      "esperado": "erro de permissão",
+      "obtido": "erro: new row violates row-level security policy",
+      "status": "PASS"
+    },
+    {
+      "cenario": "12. Bucket público",
+      "verificacao": "anônimo grava no bucket público",
+      "esperado": "erro de permissão",
+      "obtido": "erro: new row violates row-level security policy",
+      "status": "PASS"
+    },
+    {
+      "cenario": "12. Bucket público",
+      "verificacao": "URL pública não carrega token nem expiração",
+      "esperado": "sem ?token= e sem expires",
+      "obtido": "/storage/v1/object/public/kennel-media-public/aaf77ba2-55f7-4e1f-90b8-1deff3f26e23/canis/publico-msi2wpo6.png",
+      "status": "PASS"
+    },
+    {
+      "cenario": "12. Bucket público",
+      "verificacao": "anônimo BAIXA o objeto pela URL pública, sem sessão",
+      "esperado": "HTTP 200",
+      "obtido": "HTTP 200",
+      "status": "PASS"
+    },
+    {
+      "cenario": "12. Bucket público",
+      "verificacao": "A move o objeto de volta ao bucket privado (despublicar)",
+      "esperado": "sucesso",
+      "obtido": "sucesso",
+      "status": "PASS"
+    },
+    {
+      "cenario": "12. Bucket público",
+      "verificacao": "objeto sai do bucket público ao despublicar (fonte: Storage)",
+      "esperado": "não está mais lá",
+      "obtido": "removido",
+      "status": "PASS"
+    }
+  ]
+}
