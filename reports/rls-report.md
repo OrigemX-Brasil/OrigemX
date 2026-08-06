@@ -2,9 +2,9 @@
 
 | | |
 |---|---|
-| Data | 2026-08-06T23:04:48.512Z |
+| Data | 2026-08-06T23:45:22.725Z |
 | Projeto | `https://lcqhnfdsrioufwvnrqnt.supabase.co` |
-| Execução | `msi4htmw` |
+| Execução | `msi5y0qw` |
 | Resultado | **APROVADO** — 60/60 PASS |
 
 
@@ -78,15 +78,15 @@ falha. O que a RLS isola é:
 | 10. Mídia | quota do usuário soma o que ele gravou | pelo menos 12345 bytes | 12345 | **PASS** |
 | 11b. Selo Fundador (concorrência) | canil sem cão não recebe selo | todos sem número | 0 com número | **PASS** |
 | 11b. Selo Fundador (concorrência) | 5 atribuições CONCORRENTES não geram número duplicado | 5 números distintos | 5 atribuídos, 5 distintos | **PASS** |
-| 11b. Selo Fundador (concorrência) | nenhum número fora do intervalo 1..199 | todos entre 1 e 199 | min 100, max 104 | **PASS** |
-| 11b. Selo Fundador (concorrência) | exclusão lógica não devolve o número ao pool | número permanece | nº 100 | **PASS** |
+| 11b. Selo Fundador (concorrência) | nenhum número emitido abaixo de 100 | todos >= 100 | min 105, max 109 | **PASS** |
+| 11b. Selo Fundador (concorrência) | exclusão lógica não devolve o número ao pool | número permanece | nº 108 | **PASS** |
 | 11a. Selo Fundador (autorização) | usuário grava founder_number no PRÓPRIO canil | erro de permissão de coluna | erro 42501: permission denied for table kennels | **PASS** |
 | 11a. Selo Fundador (autorização) | usuário grava founder_number no canil de OUTRO | erro de permissão | erro 42501: permission denied for table kennels | **PASS** |
 | 11a. Selo Fundador (autorização) | após as duas tentativas, o número no banco não mudou | continua nulo | nulo | **PASS** |
 | 12. Bucket público | A grava no próprio prefixo do bucket público | sucesso | sucesso | **PASS** |
 | 12. Bucket público | B grava no prefixo de A no bucket público | erro de permissão | erro: new row violates row-level security policy | **PASS** |
 | 12. Bucket público | anônimo grava no bucket público | erro de permissão | erro: new row violates row-level security policy | **PASS** |
-| 12. Bucket público | URL pública não carrega token nem expiração | sem ?token= e sem expires | /storage/v1/object/public/kennel-media-public/322b9c9b-26bb-498c-94e4-fadd00866b4a/canis/publico-msi4htmw.png | **PASS** |
+| 12. Bucket público | URL pública não carrega token nem expiração | sem ?token= e sem expires | /storage/v1/object/public/kennel-media-public/4eea869f-0f74-4d75-b762-19a9a5e37f19/canis/publico-msi5y0qw.png | **PASS** |
 | 12. Bucket público | anônimo BAIXA o objeto pela URL pública, sem sessão | HTTP 200 | HTTP 200 | **PASS** |
 | 12. Bucket público | A move o objeto de volta ao bucket privado (despublicar) | sucesso | sucesso | **PASS** |
 | 12. Bucket público | objeto sai do bucket público ao despublicar (fonte: Storage) | não está mais lá | removido | **PASS** |

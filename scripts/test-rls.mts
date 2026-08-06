@@ -112,16 +112,21 @@ function skip(cenario: string, verificacao: string, motivo: string) {
 const PULAR_SELO = process.env.RLS_PULAR_SELO_FUNDADOR === "1";
 
 /**
- * A janela do selo, como está no CHECK `kennels_founder_number_range`.
+ * O piso da EMISSÃO nova.
  *
- * O piso continua 1 por causa do canil que recebeu o nº 1 antes da mudança de
- * janela; a emissão nova começa em 100 (ver
- * `20260806230030_founder_number_janela_100.sql`). Ao mexer na janela no banco,
- * estes dois números mudam junto — a asserção fixada em 1..100 passou a dar
- * falso vermelho no dia em que o teto virou 199.
+ * Não existe mais teto: `20260806234150_founder_number_sem_teto.sql` removeu o
+ * `maxvalue` e a borda superior do CHECK, a pedido do produto. Então a asserção
+ * deixou de ser "está dentro da janela" e passou a ser a exigência de verdade —
+ * **número emitido nunca abaixo de 100**.
+ *
+ * É a asserção mais forte, e não a mais fraca: um teto de 2147483647 tornaria a
+ * verificação vazia, enquanto o piso pega o defeito que realmente pode acontecer
+ * — a sequence voltar ao começo por um `setval` errado e emitir 2, 3, 4.
+ *
+ * O canil nº 1 é anterior à mudança de janela e não passa por esta regra: ela
+ * vale para o que é emitido de agora em diante.
  */
-const SELO_MIN = 1;
-const SELO_MAX = 199;
+const EMISSAO_MIN = 100;
 
 /** Descreve o resultado de uma operação PostgREST em uma linha legível. */
 function describe(error: { code?: string; message: string } | null, rows?: unknown[]): string {
@@ -970,7 +975,7 @@ async function main() {
     );
     skip(
       "11b. Selo Fundador (concorrência)",
-      `nenhum número fora do intervalo ${SELO_MIN}..${SELO_MAX}`,
+      `nenhum número emitido abaixo de ${EMISSAO_MIN}`,
       motivo,
     );
     skip(
@@ -1059,10 +1064,10 @@ async function main() {
 
     record(
       "11b. Selo Fundador (concorrência)",
-      `nenhum número fora do intervalo ${SELO_MIN}..${SELO_MAX}`,
-      `todos entre ${SELO_MIN} e ${SELO_MAX}`,
+      `nenhum número emitido abaixo de ${EMISSAO_MIN}`,
+      `todos >= ${EMISSAO_MIN}`,
       numbers.length > 0 ? `min ${Math.min(...numbers)}, max ${Math.max(...numbers)}` : "nenhum",
-      numbers.every((n) => n >= SELO_MIN && n <= SELO_MAX),
+      numbers.every((n) => n >= EMISSAO_MIN),
     );
 
     // Exclusão lógica não devolve o número. Precisa de um canil COM selo, então

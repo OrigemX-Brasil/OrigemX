@@ -1,7 +1,7 @@
 {
-  "when": "2026-08-06T23:04:48.512Z",
+  "when": "2026-08-06T23:45:22.725Z",
   "project": "https://lcqhnfdsrioufwvnrqnt.supabase.co",
-  "run": "msi4htmw",
+  "run": "msi5y0qw",
   "fatal": null,
   "checks": [
     {
@@ -342,16 +342,16 @@
     },
     {
       "cenario": "11b. Selo Fundador (concorrência)",
-      "verificacao": "nenhum número fora do intervalo 1..199",
-      "esperado": "todos entre 1 e 199",
-      "obtido": "min 100, max 104",
+      "verificacao": "nenhum número emitido abaixo de 100",
+      "esperado": "todos >= 100",
+      "obtido": "min 105, max 109",
       "status": "PASS"
     },
     {
       "cenario": "11b. Selo Fundador (concorrência)",
       "verificacao": "exclusão lógica não devolve o número ao pool",
       "esperado": "número permanece",
-      "obtido": "nº 100",
+      "obtido": "nº 108",
       "status": "PASS"
     },
     {
@@ -400,7 +400,7 @@
       "cenario": "12. Bucket público",
       "verificacao": "URL pública não carrega token nem expiração",
       "esperado": "sem ?token= e sem expires",
-      "obtido": "/storage/v1/object/public/kennel-media-public/322b9c9b-26bb-498c-94e4-fadd00866b4a/canis/publico-msi4htmw.png",
+      "obtido": "/storage/v1/object/public/kennel-media-public/4eea869f-0f74-4d75-b762-19a9a5e37f19/canis/publico-msi5y0qw.png",
       "status": "PASS"
     },
     {
