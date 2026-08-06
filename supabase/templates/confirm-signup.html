@@ -8,7 +8,9 @@
   Disparado por `signUp()` em src/modules/auth/actions.ts.
   Variáveis usadas: {{ .TokenHash }} e {{ .SiteURL }}.
 
-  ⚠️ O LINK NÃO USA {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&amp;type=signup&amp;next=/painel, E É DE PROPÓSITO.
+  ⚠️ O LINK NÃO USA A VARIÁVEL `.ConfirmationURL`, E É DE PROPÓSITO.
+  (Escrita sem as chaves aqui de propósito: com elas, o GoTrue a interpolaria
+  dentro deste próprio comentário.)
 
   Aquela variável aponta para o `/auth/v1/verify` do Supabase, que verifica o
   token ele mesmo e devolve a sessão em `#access_token=` — um FRAGMENTO de URL,

@@ -18,8 +18,8 @@
 
   Variáveis: {{ .TokenHash }}, {{ .Email }}, {{ .NewEmail }}, {{ .SiteURL }}.
 
-  ⚠️ `type=email_change`. O link não usa {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&amp;type=email_change&amp;next=/painel pelo mesmo motivo
-  dos outros dois — ver o comentário longo em confirm-signup.html.
+  ⚠️ `type=email_change`. O link não usa a variável `.ConfirmationURL` pelo mesmo
+  motivo dos outros dois — ver o comentário longo em confirm-signup.html.
 -->
 <html lang="pt-BR">
   <head>
