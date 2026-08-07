@@ -67,6 +67,15 @@ export const MAX_USER_BYTES = 200 * 1024 * 1024;
 /** Teto de itens na galeria de um cão. */
 export const MAX_GALLERY_ITEMS = 12;
 
+/**
+ * Quantas fotos comprimem/sobem ao mesmo tempo num upload em lote.
+ *
+ * `compressImage` decodifica a imagem inteira num canvas — pesado o
+ * suficiente para travar um celular médio se disparado 12 vezes de uma vez.
+ * 3 é o teto que mantém a tela responsiva sem alongar demais o lote inteiro.
+ */
+export const GALLERY_UPLOAD_CONCURRENCY = 3;
+
 export type MediaRole = "kennel_logo" | "dog_gallery";
 
 // -----------------------------------------------------------------------------

@@ -8,7 +8,7 @@ import { isGhostAncestor, type AncestorCandidate } from "@/modules/dogs/ancestor
 import { DogForm } from "@/modules/dogs/components/dog-form";
 import { getDogsByIds, getManageableDogById } from "@/modules/dogs/queries";
 import { listMyKennels } from "@/modules/kennels/queries";
-import { ImageUploader } from "@/modules/media/components/image-uploader";
+import { GalleryUploader } from "@/modules/media/components/gallery-uploader";
 import { MediaGallery } from "@/modules/media/components/media-gallery";
 import { PublishToggle } from "@/modules/media/components/publish-toggle";
 import { MAX_GALLERY_ITEMS } from "@/modules/media/constraints";
@@ -99,18 +99,11 @@ export default async function EditarCaoPage({ params }: { params: Promise<{ id: 
 
         <MediaGallery items={gallery} usedBytes={usedBytes} emptyText="Nenhuma imagem ainda." />
 
-        {gallery.length < MAX_GALLERY_ITEMS ? (
-          <ImageUploader
-            role="dog_gallery"
-            entityId={dog.id}
-            ownerId={user.id}
-            label="Adicionar imagem"
-          />
-        ) : (
-          <p className="text-fg-faint text-sm">
-            Limite de {MAX_GALLERY_ITEMS} imagens atingido. Remova uma para enviar outra.
-          </p>
-        )}
+        <GalleryUploader
+          entityId={dog.id}
+          ownerId={user.id}
+          remaining={MAX_GALLERY_ITEMS - gallery.length}
+        />
       </section>
 
       <QrCard

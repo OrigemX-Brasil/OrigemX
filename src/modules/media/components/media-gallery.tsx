@@ -1,6 +1,6 @@
 import Image from "next/image";
 
-import { deleteMedia } from "../actions";
+import { deleteMedia, setDogGalleryCover } from "../actions";
 import { formatBytes, MAX_GALLERY_ITEMS, MAX_USER_BYTES } from "../constraints";
 import type { ResolvedMedia } from "../queries";
 
@@ -11,6 +11,12 @@ import type { ResolvedMedia } from "../queries";
  * cheio baixaria alguns MB; nos thumbnails, dezenas de KB. Se `thumbUrl` for
  * nulo, o item aparece sem imagem em vez de cair para o arquivo cheio — o
  * fallback silencioso é justamente o que faz a regra se perder com o tempo.
+ *
+ * CAPA: o primeiro item de `items` — a query que alimenta este componente já
+ * ordena por `position, created_at`, a MESMA ordem que a página pública usa
+ * para escolher a foto principal (`const [principal, ...resto] = media`).
+ * "Tornar capa" só aparece nos demais; o primeiro já é a capa, não precisa
+ * do próprio botão.
  */
 export function MediaGallery({
   items,
@@ -26,47 +32,77 @@ export function MediaGallery({
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    // `data-testid`: a galeria CONFIRMADA (servida pelo servidor, com
+    // `thumbUrl` real) precisa de um seletor que a distinga da prévia LOCAL
+    // que `GalleryUploader` mostra enquanto processa — as duas vivem na mesma
+    // seção "Galeria" da tela, e um `<img>` da prévia local aparece bem antes
+    // do upload terminar. Sem esta distinção, um teste esperando "a galeria
+    // mostra a foto" passaria cedo demais, olhando para o preview local.
+    <div className="flex flex-col gap-4" data-testid="media-gallery">
       <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-        {items.map((item) => (
-          <li
-            key={item.id}
-            className="border-border bg-surface rounded-card flex flex-col gap-2 border p-2"
-          >
-            <div className="bg-surface-hover rounded-control relative aspect-square overflow-hidden">
-              {item.thumbUrl ? (
-                <Image
-                  src={item.thumbUrl}
-                  alt={item.alt ?? ""}
-                  fill
-                  sizes="(max-width: 640px) 50vw, 25vw"
-                  className="object-cover"
-                  unoptimized
-                />
-              ) : (
-                <span className="text-fg-faint flex h-full items-center justify-center text-xs">
-                  sem prévia
-                </span>
-              )}
-            </div>
+        {items.map((item, index) => {
+          const isCover = index === 0;
 
-            <div className="flex items-center justify-between gap-2">
+          return (
+            <li
+              key={item.id}
+              className="border-border bg-surface rounded-card flex flex-col gap-2 border p-2"
+            >
+              <div className="bg-surface-hover rounded-control relative aspect-square overflow-hidden">
+                {item.thumbUrl ? (
+                  <Image
+                    src={item.thumbUrl}
+                    alt={item.alt ?? ""}
+                    fill
+                    sizes="(max-width: 640px) 50vw, 25vw"
+                    className="object-cover"
+                    unoptimized
+                  />
+                ) : (
+                  <span className="text-fg-faint flex h-full items-center justify-center text-xs">
+                    sem prévia
+                  </span>
+                )}
+                {isCover ? (
+                  <span className="bg-accent text-fg-on-accent rounded-control absolute top-2 left-2 z-10 px-2 py-0.5 text-[11px] font-medium">
+                    Capa
+                  </span>
+                ) : null}
+              </div>
+
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-fg-faint font-mono text-xs">
+                  {item.width && item.height ? `${item.width}×${item.height}` : "—"}
+                </span>
+                <form action={deleteMedia}>
+                  <input type="hidden" name="id" value={item.id} />
+                  <button
+                    type="submit"
+                    className="text-fg-muted hover:text-danger text-xs transition-colors"
+                  >
+                    Remover
+                  </button>
+                </form>
+              </div>
+
+              {!isCover && item.dog_id ? (
+                <form action={setDogGalleryCover}>
+                  <input type="hidden" name="id" value={item.id} />
+                  <input type="hidden" name="dog_id" value={item.dog_id} />
+                  <button
+                    type="submit"
+                    className="text-fg-muted hover:text-fg self-start text-xs transition-colors"
+                  >
+                    Tornar capa
+                  </button>
+                </form>
+              ) : null}
               <span className="text-fg-faint font-mono text-xs">
-                {item.width && item.height ? `${item.width}×${item.height}` : "—"}
+                {formatBytes(item.size_bytes)}
               </span>
-              <form action={deleteMedia}>
-                <input type="hidden" name="id" value={item.id} />
-                <button
-                  type="submit"
-                  className="text-fg-muted hover:text-danger text-xs transition-colors"
-                >
-                  Remover
-                </button>
-              </form>
-            </div>
-            <span className="text-fg-faint font-mono text-xs">{formatBytes(item.size_bytes)}</span>
-          </li>
-        ))}
+            </li>
+          );
+        })}
       </ul>
 
       {typeof usedBytes === "number" ? (

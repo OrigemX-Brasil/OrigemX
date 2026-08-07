@@ -275,3 +275,63 @@ export async function deleteMedia(formData: FormData): Promise<void> {
   }
   if (data.dog_id) revalidatePath(`/painel/caes/${data.dog_id}`);
 }
+
+/**
+ * Troca qual foto é a CAPA da galeria do cão.
+ *
+ * "Capa" não é campo novo, nem RLS nova: é a foto na posição mais baixa de
+ * `media.position` — a MESMA coluna que já ordena a galeria
+ * (`position asc, created_at asc`) e que a página pública já usa para
+ * separar a foto principal do resto (`const [principal, ...resto] = media`
+ * em `/d/[public_id]`). Trocar a capa é só recolocar a escolhida em primeiro
+ * e renumerar o resto na ordem em que já estavam — `media_update` já
+ * concede ao dono escrever a própria linha, então não precisa de policy
+ * nova.
+ *
+ * `Promise<void>` e sem estado de erro devolvido, no mesmo estilo de
+ * `deleteMedia` acima: o botão que chama isto é um `<form>` simples, sem
+ * `useActionState`.
+ */
+export async function setDogGalleryCover(formData: FormData): Promise<void> {
+  const user = await requireUser("/painel");
+  const id = String(formData.get("id") ?? "");
+  const dogId = String(formData.get("dog_id") ?? "");
+  if (!id || !dogId) return;
+
+  const supabase = await createClient();
+
+  const { data: rows } = await supabase
+    .from("media")
+    .select("id, position")
+    .eq("dog_id", dogId)
+    .eq("role", "dog_gallery")
+    .eq("owner_id", user.id)
+    .is("deleted_at", null)
+    .order("position", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  if (!rows || rows.length === 0) return;
+
+  const chosen = rows.find((row) => row.id === id);
+  if (!chosen) return; // Não é uma foto desta galeria — nada a fazer.
+
+  // A escolhida vai para o índice 0; as demais mantêm a ordem relativa que já
+  // tinham, só empurradas uma posição para trás.
+  const ordered = [chosen, ...rows.filter((row) => row.id !== id)];
+
+  const updates = await Promise.all(
+    ordered.map((row, index) =>
+      supabase.from("media").update({ position: index }).eq("id", row.id),
+    ),
+  );
+
+  if (updates.some((u) => u.error)) {
+    console.error(`[media:setDogGalleryCover] falha ao renumerar a galeria do cão ${dogId}`);
+    return;
+  }
+
+  revalidatePath(`/painel/caes/${dogId}`);
+
+  const parent = await parentPublishState(supabase, "dog_gallery", dogId);
+  if (parent.isPublished && parent.publicPath) revalidatePath(parent.publicPath);
+}

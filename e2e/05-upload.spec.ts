@@ -25,14 +25,18 @@ test("sobe a foto, comprime no navegador e a galeria usa o thumbnail", async ({
   const original = await pngDeTeste("upload e2e", 900);
 
   await page.goto(`/painel/caes/${cao.id}`);
-  await page.getByLabel("Adicionar imagem").setInputFiles({
+  await page.getByLabel("Adicionar fotos").setInputFiles({
     name: NOME_ARQUIVO,
     mimeType: MIME,
     buffer: original,
   });
 
   // A galeria só aparece depois que o servidor confirmou a linha.
-  const galeria = page.locator("section", { hasText: "Galeria" });
+  // `getByTestId`, não a seção inteira: a seção "Galeria" também contém a
+  // prévia LOCAL do upload em andamento (blob: URL, aparece antes de o
+  // servidor confirmar), e essa prévia satisfaria "existe um <img>" cedo
+  // demais — o teste pegaria a prévia, não a foto de verdade.
+  const galeria = page.getByTestId("media-gallery");
   await expect(galeria.locator("img").first()).toBeVisible({ timeout: 30_000 });
 
   const { data: media } = await admin
@@ -80,7 +84,7 @@ test("arquivo que não é imagem é recusado antes de subir", async ({ page, cri
   const cao = await criarCao(admin, criador.id, { kennel_id: canil.id });
 
   await page.goto(`/painel/caes/${cao.id}`);
-  await page.getByLabel("Adicionar imagem").setInputFiles({
+  await page.getByLabel("Adicionar fotos").setInputFiles({
     name: "contrato.pdf",
     mimeType: "application/pdf",
     buffer: Buffer.from("%PDF-1.4 nao sou imagem"),
@@ -101,12 +105,12 @@ test("a foto publicada aparece no perfil público, servida sem token", async ({
   const cao = await criarCao(admin, criador.id, { kennel_id: canil.id });
 
   await page.goto(`/painel/caes/${cao.id}`);
-  await page.getByLabel("Adicionar imagem").setInputFiles({
+  await page.getByLabel("Adicionar fotos").setInputFiles({
     name: NOME_ARQUIVO,
     mimeType: MIME,
     buffer: await pngDeTeste("publica", 700),
   });
-  await expect(page.locator("section", { hasText: "Galeria" }).locator("img").first()).toBeVisible({
+  await expect(page.getByTestId("media-gallery").locator("img").first()).toBeVisible({
     timeout: 30_000,
   });
 
@@ -189,12 +193,12 @@ test("foto adicionada DEPOIS de publicar aparece no perfil público sem novo cli
   // antes tirar o cão do ar. É exatamente essa a situação que o bug explora.
   await expect(page.getByRole("button", { name: "Despublicar", exact: true })).toBeVisible();
 
-  await page.getByLabel("Adicionar imagem").setInputFiles({
+  await page.getByLabel("Adicionar fotos").setInputFiles({
     name: NOME_ARQUIVO,
     mimeType: MIME,
     buffer: await pngDeTeste("depois de publicar", 700),
   });
-  await expect(page.locator("section", { hasText: "Galeria" }).locator("img").first()).toBeVisible({
+  await expect(page.getByTestId("media-gallery").locator("img").first()).toBeVisible({
     timeout: 30_000,
   });
 
@@ -225,4 +229,148 @@ test("foto adicionada DEPOIS de publicar aparece no perfil público sem novo cli
   expect(src).not.toContain("token=");
 
   await semSessao.close();
+});
+
+/** UUID do arquivo, presente tanto no caminho cheio quanto no do thumbnail. */
+function fileIdOf(storagePath: string): string {
+  return storagePath
+    .split("/")
+    .pop()!
+    .replace(/\.[a-z0-9]+$/i, "");
+}
+
+/**
+ * ============================================================================
+ * Seleção múltipla — o limite de 12 e a troca de capa.
+ * ============================================================================
+ */
+
+test("selecionar mais fotos do que cabe aceita só até o limite, e avisa o resto", async ({
+  page,
+  criador,
+  admin,
+}) => {
+  const canil = await criarCanil(admin, criador.id);
+  const cao = await criarCao(admin, criador.id, { kennel_id: canil.id });
+
+  // 10 linhas fixture direto no banco — o que se testa é o CLIENTE cortando a
+  // seleção para caber, não o upload dessas 10 (isso já está coberto alhures).
+  await admin.from("media").insert(
+    Array.from({ length: 10 }, (_, i) => ({
+      bucket_id: "kennel-media",
+      storage_path: `${criador.id}/caes/${cao.id}/seed-${i}.webp`,
+      role: "dog_gallery" as const,
+      dog_id: cao.id,
+      mime: "image/webp",
+      size_bytes: 1000,
+      owner_id: criador.id,
+      created_by: criador.id,
+      position: i,
+    })),
+  );
+
+  await page.goto(`/painel/caes/${cao.id}`);
+  // Restam 2 dos 12 — a tela precisa oferecer o input, não a mensagem de
+  // limite atingido.
+  await expect(page.getByLabel("Adicionar fotos")).toBeVisible();
+
+  await page.getByLabel("Adicionar fotos").setInputFiles([
+    { name: "a.png", mimeType: MIME, buffer: await pngDeTeste("lote a", 400) },
+    { name: "b.png", mimeType: MIME, buffer: await pngDeTeste("lote b", 400) },
+    { name: "c.png", mimeType: MIME, buffer: await pngDeTeste("lote c", 400) },
+    { name: "d.png", mimeType: MIME, buffer: await pngDeTeste("lote d", 400) },
+    { name: "e.png", mimeType: MIME, buffer: await pngDeTeste("lote e", 400) },
+  ]);
+
+  // O aviso aparece ANTES do upload terminar — é checagem síncrona na seleção.
+  await expect(page.getByRole("status").filter({ hasText: /cabiam mais 2/ })).toBeVisible();
+
+  // E o resumo, no fim do lote.
+  await expect(page.getByRole("status").filter({ hasText: /2 de 2/ })).toBeVisible({
+    timeout: 30_000,
+  });
+
+  const { count } = await admin
+    .from("media")
+    .select("id", { count: "exact", head: true })
+    .eq("dog_id", cao.id)
+    .is("deleted_at", null);
+
+  // 10 do fixture + exatamente 2 do lote — nunca 12+3, nunca menos que 12.
+  expect(count).toBe(12);
+});
+
+test("trocar a capa muda a foto principal do perfil público", async ({ page, criador, admin }) => {
+  const canil = await criarCanil(admin, criador.id);
+  const cao = await criarCao(admin, criador.id, { kennel_id: canil.id, published: true });
+  await publicar(admin, { kennelId: canil.id });
+
+  await page.goto(`/painel/caes/${cao.id}`);
+
+  await page.getByLabel("Adicionar fotos").setInputFiles({
+    name: "capa-original.png",
+    mimeType: MIME,
+    buffer: await pngDeTeste("capa original", 700),
+  });
+  await expect(page.getByTestId("media-gallery").locator("img")).toHaveCount(1, {
+    timeout: 30_000,
+  });
+
+  await page.getByLabel("Adicionar fotos").setInputFiles({
+    name: "segunda-foto.png",
+    mimeType: MIME,
+    buffer: await pngDeTeste("segunda foto", 700),
+  });
+  await expect(page.getByTestId("media-gallery").locator("img")).toHaveCount(2, {
+    timeout: 30_000,
+  });
+
+  // A ordem de verdade é a do banco — mesmo critério que a página pública usa
+  // (`position asc, created_at asc`) para decidir quem é a capa.
+  const { data: antes } = await admin
+    .from("media")
+    .select("id, storage_path")
+    .eq("dog_id", cao.id)
+    .is("deleted_at", null)
+    .order("position", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  expect(antes).toHaveLength(2);
+  const [capaAntes, segundaAntes] = antes!;
+
+  await page.goto(`/d/${cao.public_id}`);
+  const principalAntes = (await page.locator("main img").first().getAttribute("src")) ?? "";
+  expect(principalAntes).toContain(fileIdOf(capaAntes.storage_path));
+
+  // Troca PELA TELA — o botão só existe no item que NÃO é a capa.
+  await page.goto(`/painel/caes/${cao.id}`);
+  await expect(page.getByTestId("media-gallery")).toContainText("Capa");
+  await page.getByRole("button", { name: "Tornar capa" }).click();
+
+  // Espera de VERDADE, não um `toContainText("Capa")` que já era true antes
+  // do clique e continuaria true de qualquer jeito: o selo troca de card, mas
+  // "existe a palavra Capa em algum lugar" não prova isso. O que prova é o
+  // PRIMEIRO <img> da galeria confirmada passar a apontar para o arquivo que
+  // era o segundo — só então a leitura no banco logo abaixo é confiável.
+  await expect(page.getByTestId("media-gallery").locator("img").first()).toHaveAttribute(
+    "src",
+    new RegExp(fileIdOf(segundaAntes.storage_path)),
+    { timeout: 10_000 },
+  );
+
+  const { data: depois } = await admin
+    .from("media")
+    .select("id, storage_path")
+    .eq("dog_id", cao.id)
+    .is("deleted_at", null)
+    .order("position", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  expect(depois?.[0]?.id, "a que era a segunda foto virou a primeira").toBe(segundaAntes.id);
+  expect(depois?.[1]?.id, "a capa antiga foi para a segunda posição").toBe(capaAntes.id);
+
+  await page.goto(`/d/${cao.public_id}`);
+  const principalDepois = (await page.locator("main img").first().getAttribute("src")) ?? "";
+  expect(principalDepois).toContain(fileIdOf(segundaAntes.storage_path));
+  expect(principalDepois).not.toBe(principalAntes);
 });
