@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 
 import { PedigreeMark } from "@/modules/auth/components/pedigree-mark";
-import { Wordmark } from "@/modules/auth/components/wordmark";
 import { MeasurePixel } from "@/modules/capture/components/measure-pixel";
 import { publicMetadata } from "@/modules/public/metadata";
 
@@ -21,9 +21,10 @@ import { publicMetadata } from "@/modules/public/metadata";
  * qualquer um dos três a tornaria dinâmica e jogaria fora o cache de borda.
  * A medição acontece por `<img>`, no fim do documento — ver `MeasurePixel`.
  *
- * PESO: nenhuma imagem, nenhum ícone de biblioteca, nenhum componente de
- * cliente. O único gráfico é SVG inline de poucos traços. Uma foto de cão aqui
- * custaria mais que a página inteira.
+ * PESO: nenhum ícone de biblioteca, nenhum componente de cliente. A única
+ * exceção deliberada é a logo do cabeçalho, ~38 KB — pedido explícito para
+ * substituir o wordmark de texto aqui também. Fora dela, nenhuma foto: uma
+ * foto de cão custaria mais que a página inteira.
  *
  * A CHAMADA PARA CADASTRO É O CONTEÚDO, não um enfeite no rodapé: quem chega
  * aqui veio de um papel impresso e tem trinta segundos de paciência.
@@ -54,7 +55,14 @@ const DESTAQUES = [
 export default function CapturaPage() {
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col justify-center gap-10 px-5 py-16">
-      <Wordmark className="text-xl" />
+      <Image
+        src="/brand/logo-header.png"
+        alt="OrigemX"
+        width={662}
+        height={132}
+        priority
+        className="h-10 w-auto"
+      />
 
       <div className="flex flex-col gap-5">
         <span className="text-fg-faint font-mono text-xs tracking-[0.2em] uppercase">

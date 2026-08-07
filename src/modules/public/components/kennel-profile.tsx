@@ -1,7 +1,7 @@
+import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { Wordmark } from "@/modules/auth/components/wordmark";
 import { SignupInvite } from "@/modules/capture/components/signup-invite";
 import { FounderBadge } from "@/modules/kennels/components/founder-badge";
 import { PublicImage } from "@/modules/public/components/public-image";
@@ -48,9 +48,17 @@ export async function KennelProfile({ slug, cursor }: { slug: string; cursor?: s
   return (
     <div className="flex min-h-dvh flex-col">
       <header className="border-border border-b px-5 py-4 lg:px-8">
-        {/* Wordmark do cabeçalho entra na viewport sempre. Ver a rota do cão. */}
+        {/* Entra na viewport sempre — por isso `prefetch={false}`. Ver a rota
+            do cão: foi aqui que um prefetch disparava o pixel de medição da
+            captura por engano. */}
         <Link href="/" prefetch={false} className="rounded-control">
-          <Wordmark className="text-base" />
+          <Image
+            src="/brand/logo-header.png"
+            alt="OrigemX"
+            width={662}
+            height={132}
+            className="h-8 w-auto"
+          />
         </Link>
       </header>
 

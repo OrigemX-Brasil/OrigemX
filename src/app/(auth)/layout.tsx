@@ -1,5 +1,6 @@
+import Image from "next/image";
+
 import { PedigreeMark } from "@/modules/auth/components/pedigree-mark";
-import { Wordmark } from "@/modules/auth/components/wordmark";
 
 /**
  * Casca das telas de autenticação.
@@ -16,7 +17,14 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           <span className="text-border-strong lg:hidden">
             <PedigreeMark generations={1} />
           </span>
-          <Wordmark className="text-lg" />
+          <Image
+            src="/brand/logo-header.png"
+            alt="OrigemX"
+            width={662}
+            height={132}
+            priority
+            className="h-8 w-auto"
+          />
         </div>
 
         <div className="hidden max-w-md flex-col gap-8 lg:flex">

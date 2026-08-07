@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { Wordmark } from "@/modules/auth/components/wordmark";
 import { SignupInvite } from "@/modules/capture/components/signup-invite";
 import { PedigreeTree } from "@/modules/pedigree/components/pedigree-tree";
 import { getPedigree } from "@/modules/pedigree/queries";
@@ -109,7 +109,13 @@ export default async function CaoPublicoPage({
           desligar o prefetch do convite no rodapé. Medido.
         */}
         <Link href="/" prefetch={false} className="rounded-control">
-          <Wordmark className="text-base" />
+          <Image
+            src="/brand/logo-header.png"
+            alt="OrigemX"
+            width={662}
+            height={132}
+            className="h-8 w-auto"
+          />
         </Link>
       </header>
 
