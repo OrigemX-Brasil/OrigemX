@@ -1,7 +1,7 @@
 import Image from "next/image";
 
 import { deleteMedia, setDogGalleryCover } from "../actions";
-import { formatBytes, MAX_GALLERY_ITEMS, MAX_USER_BYTES } from "../constraints";
+import { aspectOf, formatBytes, MAX_GALLERY_ITEMS, MAX_USER_BYTES } from "../constraints";
 import type { ResolvedMedia } from "../queries";
 
 /**
@@ -39,27 +39,43 @@ export function MediaGallery({
     // do upload terminar. Sem esta distinção, um teste esperando "a galeria
     // mostra a foto" passaria cedo demais, olhando para o preview local.
     <div className="flex flex-col gap-4" data-testid="media-gallery">
-      <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+      {/*
+        Mosaico em COLUNAS: cada foto aparece na proporção em que foi enviada.
+        Antes, `aspect-square` + `object-cover` recortavam tudo em quadrado —
+        o criador via a foto em pé cortada em cima e embaixo e não tinha como
+        saber o que o perfil público mostraria.
+
+        `break-inside-avoid` nos itens evita o cartão ser partido entre duas
+        colunas; o espaço vertical sai de `mb-3`, porque `gap` em multi-coluna
+        só se aplica entre colunas.
+      */}
+      <ul className="columns-2 gap-3 sm:columns-3 md:columns-4">
         {items.map((item, index) => {
           const isCover = index === 0;
+          const proporcao = aspectOf(item);
 
           return (
             <li
               key={item.id}
-              className="border-border bg-surface rounded-card flex flex-col gap-2 border p-2"
+              className="border-border bg-surface rounded-card mb-3 flex break-inside-avoid flex-col gap-2 border p-2"
             >
-              <div className="bg-surface-hover rounded-control relative aspect-square overflow-hidden">
+              {/* `relative` fica: é o que ancora o selo "Capa". */}
+              <div className="bg-surface-hover rounded-control relative overflow-hidden">
                 {item.thumbUrl ? (
                   <Image
                     src={item.thumbUrl}
                     alt={item.alt ?? ""}
-                    fill
+                    // Sem `fill`: ele exige caixa de altura fixa no pai, que é
+                    // exatamente o quadrado que saiu daqui. Com width/height
+                    // reais + `h-auto w-full`, a altura vem da proporção.
+                    width={proporcao.width}
+                    height={proporcao.height}
                     sizes="(max-width: 640px) 50vw, 25vw"
-                    className="object-cover"
+                    className="h-auto w-full"
                     unoptimized
                   />
                 ) : (
-                  <span className="text-fg-faint flex h-full items-center justify-center text-xs">
+                  <span className="text-fg-faint flex aspect-square items-center justify-center text-xs">
                     sem prévia
                   </span>
                 )}

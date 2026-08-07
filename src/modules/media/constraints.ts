@@ -191,6 +191,26 @@ export function extensionForMime(mime: string): string {
   return mime === "image/webp" ? "webp" : "jpg";
 }
 
+/**
+ * Proporção da imagem, para o mosaico reservar a caixa certa antes de a foto
+ * chegar. As colunas são CSS puro; o que cada item precisa é só saber a razão
+ * entre largura e altura.
+ *
+ * `width`/`height` são NULOS em linha antiga (a coluna nasceu depois de já
+ * haver mídia gravada), e aí 1:1 é o palpite honesto: sem dimensão não há como
+ * saber a orientação, e o quadrado é o que menos distorce a grade.
+ *
+ * Vale para o thumbnail também: `THUMB_DIMENSION` limita o LADO MAIOR, então a
+ * miniatura tem a mesma proporção do arquivo cheio que estas colunas descrevem.
+ */
+export function aspectOf(media: { width: number | null; height: number | null }): {
+  width: number;
+  height: number;
+} {
+  if (!media.width || !media.height) return { width: 1, height: 1 };
+  return { width: media.width, height: media.height };
+}
+
 // -----------------------------------------------------------------------------
 // Resolução de URL — o ponto único que mantém a decisão de bucket aberta
 // -----------------------------------------------------------------------------

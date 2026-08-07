@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SignupInvite } from "@/modules/capture/components/signup-invite";
+import { aspectOf } from "@/modules/media/constraints";
 import { PedigreeTree } from "@/modules/pedigree/components/pedigree-tree";
 import { getPedigree } from "@/modules/pedigree/queries";
 import { PublicImage } from "@/modules/public/components/public-image";
@@ -104,7 +105,7 @@ export default async function CaoPublicoPage({
       <header className="border-border border-b px-5 py-4 lg:px-8">
         {/*
           Sem prefetch como todo link desta página — e este em especial: por ser
-          o wordmark do cabeçalho, entra na viewport SEMPRE. Era ele que ainda
+          o wordmark do cabeçalho, entra na viewport SEMPRE. Era ele que ainda=
           baixava o payload da captura e fazia o pixel disparar depois de eu
           desligar o prefetch do convite no rodapé. Medido.
         */}
@@ -121,7 +122,11 @@ export default async function CaoPublicoPage({
 
       <main className="mx-auto w-full max-w-2xl flex-1 px-5 py-8 lg:px-8">
         <div className="flex flex-col gap-8">
-          <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:gap-6">
+          {/* Lado a lado em TODA largura — ver o mesmo bloco em
+              `kennel-profile.tsx`. */}
+          <div className="flex items-start gap-4 sm:gap-6">
+            {/* Recorte quadrado é intencional aqui: é o avatar do cão. A foto
+                em proporção original aparece no mosaico abaixo. */}
             <PublicImage
               src={principal?.thumbUrl ?? principal?.url}
               alt={principal?.alt ?? dog.name}
@@ -130,14 +135,16 @@ export default async function CaoPublicoPage({
               height={128}
               priority
               sizes="128px"
-              className="border-border rounded-card shrink-0 border object-cover"
+              className="border-border rounded-card size-20 shrink-0 border object-cover sm:size-32"
             />
 
-            <div className="flex flex-col gap-2">
+            <div className="flex min-w-0 flex-col gap-2">
               <span className="text-fg-faint font-mono text-xs tracking-[0.2em] uppercase">
                 Registro
               </span>
-              <h1 className="font-display text-3xl font-semibold tracking-tight">{dog.name}</h1>
+              <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">
+                {dog.name}
+              </h1>
               <p className="text-fg-muted text-sm">{describeDog(dog)}</p>
               {kennel ? (
                 <Link
@@ -167,20 +174,39 @@ export default async function CaoPublicoPage({
           {restante.length > 0 ? (
             <section className="flex flex-col gap-3">
               <h2 className="font-display text-lg font-semibold tracking-tight">Fotos</h2>
-              <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                {restante.map((item) => (
-                  <li key={item.id} className="border-border rounded-card overflow-hidden border">
-                    <PublicImage
-                      src={item.thumbUrl ?? item.url}
-                      alt={item.alt ?? dog.name}
-                      fallbackText={dog.name}
-                      width={320}
-                      height={320}
-                      sizes="(max-width: 640px) 50vw, 33vw"
-                      className="h-auto w-full object-cover"
-                    />
-                  </li>
-                ))}
+              {/*
+                Mosaico em COLUNAS (CSS multi-coluna), não grid.
+                Com `grid`, toda linha cresce até a foto mais alta dela e o
+                resto da linha vira faixa preta — uma foto em pé ao lado de uma
+                deitada deixava metade da linha vazia. Coluna preenche o vão.
+
+                `break-inside-avoid` é obrigatório: sem ele o navegador corta a
+                foto ao meio e joga o resto na coluna seguinte. O espaço
+                vertical sai de `mb-3` nos itens, porque `gap` em multi-coluna
+                só vale entre colunas.
+              */}
+              <ul className="columns-2 gap-3 sm:columns-3">
+                {restante.map((item) => {
+                  const proporcao = aspectOf(item);
+                  return (
+                    <li
+                      key={item.id}
+                      className="border-border rounded-card mb-3 break-inside-avoid overflow-hidden border"
+                    >
+                      <PublicImage
+                        src={item.thumbUrl ?? item.url}
+                        alt={item.alt ?? dog.name}
+                        fallbackText={dog.name}
+                        // Proporção REAL da foto, não 320×320 cravado: é o que
+                        // reserva a caixa certa e evita o salto de layout.
+                        width={proporcao.width}
+                        height={proporcao.height}
+                        sizes="(max-width: 640px) 50vw, 33vw"
+                        className="h-auto w-full"
+                      />
+                    </li>
+                  );
+                })}
               </ul>
             </section>
           ) : null}

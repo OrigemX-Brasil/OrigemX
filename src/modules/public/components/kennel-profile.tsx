@@ -64,7 +64,13 @@ export async function KennelProfile({ slug, cursor }: { slug: string; cursor?: s
 
       <main className="mx-auto w-full max-w-2xl flex-1 px-5 py-8 lg:px-8">
         <div className="flex flex-col gap-8">
-          <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:gap-6">
+          {/* Lado a lado em TODA largura, não só a partir de `sm`. Empilhado, o
+              nome do canil começava abaixo da dobra em celular estreito — e é
+              por celular que quase todo mundo chega, vindo do QR impresso. */}
+          <div className="flex items-start gap-4 sm:gap-6">
+            {/* Avatar recorta de propósito (`object-cover`): quadrado é a forma
+                do slot. Respeitar proporção original é regra do mosaico de
+                fotos, lá embaixo, não daqui. */}
             <PublicImage
               src={logo?.thumbUrl ?? logo?.url}
               alt={logo?.alt ?? `Logo do ${kennel.name}`}
@@ -73,15 +79,17 @@ export async function KennelProfile({ slug, cursor }: { slug: string; cursor?: s
               height={112}
               priority
               sizes="112px"
-              className="border-border rounded-card shrink-0 border object-cover"
+              className="border-border rounded-card size-20 shrink-0 border object-cover sm:size-28"
             />
 
-            <div className="flex flex-col gap-3">
+            {/* `min-w-0`: sem isto, nome longo estica o flex e vaza a tela em
+                vez de quebrar linha. */}
+            <div className="flex min-w-0 flex-col gap-3">
               <div className="flex flex-col gap-2">
                 <span className="text-fg-faint font-mono text-xs tracking-[0.2em] uppercase">
                   Canil
                 </span>
-                <h1 className="font-display text-3xl font-semibold tracking-tight">
+                <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">
                   {kennel.name}
                 </h1>
                 {local ? <p className="text-fg-muted text-sm">{local}</p> : null}

@@ -20,6 +20,12 @@
  *
  * O painel autenticado segue usando `next/image` — lá a rede não é o gargalo e
  * não vale manter duas implementações por gosto.
+ *
+ * TAMANHO VEM DO `className`, e `width`/`height` são só a PROPORÇÃO. Quem
+ * chama precisa dizer o tamanho por CSS (`size-20 sm:size-28` no avatar,
+ * `w-full` no mosaico). O placeholder usa `aspect-ratio` pelo mesmo motivo:
+ * estilo inline venceria qualquer classe, e aí a imagem encolheria no mobile
+ * enquanto o bloco neutro ficaria do tamanho antigo.
  */
 export function PublicImage({
   src,
@@ -44,9 +50,9 @@ export function PublicImage({
   if (!src) {
     return (
       <div
-        style={{ width, height }}
+        style={{ aspectRatio: `${width} / ${height}` }}
         aria-hidden="true"
-        className={`bg-surface-hover text-fg-faint flex shrink-0 items-center justify-center font-display text-2xl ${className ?? ""}`}
+        className={`bg-surface-hover text-fg-faint flex items-center justify-center font-display text-2xl ${className ?? ""}`}
       >
         {fallbackText.trim().charAt(0).toUpperCase() || "·"}
       </div>
