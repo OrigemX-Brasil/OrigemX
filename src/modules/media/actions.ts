@@ -184,6 +184,15 @@ export async function registerMedia(
 
   if (error || !data) {
     await cleanup();
+    // Se for violação do índice "um logo por canil" (media_one_logo_per_kennel),
+    // a causa mais provável é o soft-delete do logo antigo, alguns passos
+    // acima, ter afetado zero linhas por RLS (media_update só permite
+    // owner_id = auth.uid()) — o antigo continuou "vivo" e barrou o novo.
+    console.error(
+      `[media:registerMedia] insert falhou para entity=${entityId}, role=${role}, owner=${user.id}:`,
+      error?.code,
+      error?.message,
+    );
     return { error: "Não foi possível registrar a imagem." };
   }
 
@@ -253,14 +262,42 @@ export async function deleteMedia(formData: FormData): Promise<void> {
     .is("deleted_at", null)
     .maybeSingle();
 
-  if (!data) return;
+  if (!data) {
+    // Diagnóstico: a linha existe, só não pertence a este owner_id? A
+    // policy de SELECT não filtra por owner_id (só pergunta se o canil/cão
+    // "existe" para quem lê), então esta segunda consulta não abre nada que
+    // a RLS já não deixasse este usuário ver — só tira o filtro que o
+    // application-level estava aplicando por cima.
+    const { data: anyOwner } = await supabase
+      .from("media")
+      .select("id, owner_id, kennel_id, dog_id")
+      .eq("id", id)
+      .is("deleted_at", null)
+      .maybeSingle();
 
-  const { data: updated } = await supabase
+    console.error(
+      `[media:deleteMedia] linha não encontrada para user=${user.id}, media id=${id}.`,
+      anyOwner
+        ? `A linha existe, mas media.owner_id=${anyOwner.owner_id} (kennel=${anyOwner.kennel_id ?? "-"}, dog=${anyOwner.dog_id ?? "-"}) — mismatch de dono explica o "nada acontece".`
+        : "A linha não existe (id errado, ou já estava excluída).",
+    );
+    return;
+  }
+
+  const { data: updated, error: updateError } = await supabase
     .from("media")
     .update({ deleted_at: new Date().toISOString() })
     .eq("id", id)
     .is("deleted_at", null)
     .select("id");
+
+  if (updateError) {
+    console.error(`[media:deleteMedia] UPDATE falhou para media id=${id}:`, updateError.message);
+  } else if (!updated || updated.length === 0) {
+    console.error(
+      `[media:deleteMedia] UPDATE afetou zero linhas para media id=${id} mesmo a SELECT anterior tendo encontrado a linha — RLS negando na escrita apesar da leitura ter passado.`,
+    );
+  }
 
   // Só apaga o arquivo se a linha realmente saiu. Na ordem inversa, uma RLS
   // negando deixaria o registro apontando para um arquivo que não existe mais.
