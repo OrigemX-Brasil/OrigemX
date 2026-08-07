@@ -274,6 +274,17 @@ export async function deleteMedia(formData: FormData): Promise<void> {
     revalidatePath("/painel/canis");
   }
   if (data.dog_id) revalidatePath(`/painel/caes/${data.dog_id}`);
+
+  // Sem isto, remover o logo/foto de uma entidade JÁ PUBLICADA some no painel
+  // mas o perfil público continua com a versão antiga até o ISR de 300s vencer
+  // sozinho — a mesma classe de bug que `registerMedia` já trata do lado do
+  // upload, só que faltando aqui do lado da remoção.
+  const role = data.kennel_id ? "kennel_logo" : "dog_gallery";
+  const entityId = data.kennel_id ?? data.dog_id;
+  if (entityId) {
+    const parent = await parentPublishState(supabase, role, entityId);
+    if (parent.isPublished && parent.publicPath) revalidatePath(parent.publicPath);
+  }
 }
 
 /**

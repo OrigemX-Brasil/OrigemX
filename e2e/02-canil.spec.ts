@@ -20,7 +20,7 @@ async function definirSlug(page: import("@playwright/test").Page, slug: string) 
  *
  * O número da completude é ponderado: obrigatório pesa 2, recomendado pesa 1,
  * opcional não entra. Com os campos de hoje (nome 2, endereço 2, sobre 1,
- * cidade 1, estado 1, logo 1) o total é 8.
+ * cidade 1, estado 1, Instagram 1, logo 1) o total é 9.
  *
  * Os percentuais abaixo são calculados à mão de propósito. Se eu lesse a regra
  * do mesmo módulo que a implementa, o teste concordaria com qualquer erro que
@@ -39,10 +39,10 @@ test("cria o canil e mostra a completude, com o que falta por nome", async ({ pa
   await page.waitForURL(/\/painel\/canis\/[0-9a-f-]{36}/);
   await expect(page.getByRole("heading", { name: nome })).toBeVisible();
 
-  // Só os dois obrigatórios preenchidos: (2+2) de 8 = 50%.
+  // Só os dois obrigatórios preenchidos: (2+2) de 9 = 44,4% → 44%.
   const medidor = page.getByRole("progressbar", { name: /completude/i });
-  await expect(medidor).toHaveAttribute("aria-valuenow", "50");
-  await expect(page.getByText("50%")).toBeVisible();
+  await expect(medidor).toHaveAttribute("aria-valuenow", "44");
+  await expect(page.getByText("44%")).toBeVisible();
 
   // O que falta vem por NOME, não só como número — o criador precisa saber
   // onde mexer.
@@ -50,6 +50,7 @@ test("cria o canil e mostra a completude, com o que falta por nome", async ({ pa
   await expect(secao).toContainText("Sobre o canil");
   await expect(secao).toContainText("Cidade");
   await expect(secao).toContainText("Estado");
+  await expect(secao).toContainText("Instagram");
   await expect(secao).toContainText("Logo");
 
   // Nenhum obrigatório em falta.
@@ -67,14 +68,15 @@ test("preencher os recomendados sobe a completude", async ({ page, criador, admi
   await page.getByLabel("Sobre o canil").fill("Criação de Fila Brasileiro desde 1998.");
   await page.getByLabel("Cidade").fill("Bauru");
   await page.getByLabel("Estado").fill("SP");
+  await page.getByLabel("Instagram").fill("@canil.ipe");
   await page.getByRole("button", { name: "Criar canil" }).click();
 
   await page.waitForURL(/\/painel\/canis\/[0-9a-f-]{36}/);
 
-  // Falta só o logo: (8-1) de 8 = 87,5% → arredonda para 88%.
+  // Falta só o logo: (9-1) de 9 = 88,9% → arredonda para 89%.
   await expect(page.getByRole("progressbar", { name: /completude/i })).toHaveAttribute(
     "aria-valuenow",
-    "88",
+    "89",
   );
 
   // E o canil aparece na listagem do dono.
