@@ -201,6 +201,7 @@ export type Database = {
           description: string | null
           founder_number: number | null
           id: string
+          instagram_handle: string | null
           logo_url: string | null
           name: string
           owner_id: string
@@ -218,6 +219,7 @@ export type Database = {
           description?: string | null
           founder_number?: number | null
           id?: string
+          instagram_handle?: string | null
           logo_url?: string | null
           name: string
           owner_id: string
@@ -235,6 +237,7 @@ export type Database = {
           description?: string | null
           founder_number?: number | null
           id?: string
+          instagram_handle?: string | null
           logo_url?: string | null
           name?: string
           owner_id?: string

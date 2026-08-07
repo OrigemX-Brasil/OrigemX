@@ -61,7 +61,10 @@ export default function CapturaPage() {
         width={662}
         height={132}
         priority
-        className="h-10 w-auto"
+        // `main` é flex-col sem `items-center`: sem `self-start`, o stretch
+        // padrão do eixo cruzado ignora `w-auto` e esprema a logo até a
+        // largura inteira do container.
+        className="h-10 w-auto self-start"
       />
 
       <div className="flex flex-col gap-5">
