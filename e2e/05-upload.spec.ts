@@ -231,6 +231,80 @@ test("foto adicionada DEPOIS de publicar aparece no perfil público sem novo cli
   await semSessao.close();
 });
 
+/**
+ * ============================================================================
+ * Remover e trocar o logo — a exclusão lógica precisa ser EXECUTÁVEL.
+ * ============================================================================
+ *
+ * Regressão de um bug que chegou à produção justamente porque nenhum teste
+ * removia mídia: a policy `media_select` filtrava `deleted_at is null` sem
+ * exceção, e como toda mutação do PostgREST vira `UPDATE ... RETURNING`, a
+ * linha resultante da exclusão ficava invisível para a própria policy. O
+ * Postgres recusava com "new row violates row-level security policy", o botão
+ * não dava sinal nenhum na tela, e trocar o logo falhava depois no índice
+ * único — o antigo nunca saía.
+ *
+ * O canil entra PUBLICADO de propósito: é o estado em que o bug apareceu, e é
+ * o que exercita a mídia no bucket público, não no privado.
+ */
+test("remover o logo de um canil publicado funciona, e um novo pode entrar no lugar", async ({
+  page,
+  criador,
+  admin,
+}) => {
+  const canil = await criarCanil(admin, criador.id);
+  await publicar(admin, { kennelId: canil.id });
+
+  await page.goto(`/painel/canis/${canil.id}`);
+  await page.getByLabel("Enviar logo").setInputFiles({
+    name: NOME_ARQUIVO,
+    mimeType: MIME,
+    buffer: await pngDeTeste("logo original", 600),
+  });
+
+  const previa = page.locator("section", { hasText: "Logo do canil" }).locator("img");
+  await expect(previa).toBeVisible({ timeout: 30_000 });
+
+  const { data: original } = await admin
+    .from("media")
+    .select("id, storage_path")
+    .eq("kennel_id", canil.id)
+    .is("deleted_at", null)
+    .single();
+  expect(original, "o logo tem que ter sido registrado").toBeTruthy();
+
+  await page.getByRole("button", { name: "Remover logo" }).click();
+
+  // A prévia some da tela — e, mais importante, a linha saiu de verdade no
+  // banco. Sem a segunda checagem, um simples revalidate mascararia o bug.
+  await expect(previa).toBeHidden({ timeout: 15_000 });
+
+  const { data: depois } = await admin
+    .from("media")
+    .select("id")
+    .eq("kennel_id", canil.id)
+    .is("deleted_at", null);
+  expect(depois ?? [], "a exclusão lógica tem que ter acontecido de fato").toHaveLength(0);
+
+  // E o lugar fica livre: com o antigo ainda vivo, o índice
+  // `media_one_logo_per_kennel` recusaria o novo — que era o segundo sintoma.
+  await page.getByLabel("Enviar logo").setInputFiles({
+    name: NOME_ARQUIVO,
+    mimeType: MIME,
+    buffer: await pngDeTeste("logo novo", 500),
+  });
+  await expect(previa).toBeVisible({ timeout: 30_000 });
+
+  const { data: novo } = await admin
+    .from("media")
+    .select("id, storage_path")
+    .eq("kennel_id", canil.id)
+    .is("deleted_at", null)
+    .single();
+  expect(novo, "o novo logo tem que ter entrado").toBeTruthy();
+  expect(novo!.id, "tem que ser uma linha nova, não a antiga ressuscitada").not.toBe(original!.id);
+});
+
 /** UUID do arquivo, presente tanto no caminho cheio quanto no do thumbnail. */
 function fileIdOf(storagePath: string): string {
   return storagePath
