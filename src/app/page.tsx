@@ -93,7 +93,7 @@ export default function CapturaPage() {
             Já tenho conta
           </Link>
         </div>
-        <p className="text-fg-faint text-xs">Leva menos de um minuto. Não pedimos cartão.</p>
+        <p className="text-fg-faint text-xs">Leva menos de um minuto.</p>
       </div>
 
       <ul className="border-border divide-border grid gap-px overflow-hidden border-y sm:grid-cols-3 sm:border-x sm:rounded-card sm:border">

@@ -1,7 +1,7 @@
+import Image from "next/image";
 import Link from "next/link";
 
 import { signOut } from "@/modules/auth/actions";
-import { Wordmark } from "@/modules/auth/components/wordmark";
 import { requireUser } from "@/modules/auth/queries";
 
 /**
@@ -19,7 +19,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="flex min-h-dvh flex-col">
       <header className="border-border flex items-center justify-between gap-4 border-b px-5 py-4 lg:px-8">
         <Link href="/painel" className="rounded-control">
-          <Wordmark className="text-base" />
+          {/* Intrínseco 662×132 (a proporção real do arquivo); a altura fixa
+              em CSS + `w-auto` é o que evita distorcer — sem `w-auto` o
+              navegador usaria os 662px do atributo `width` como caixa. */}
+          <Image
+            src="/brand/logo-header.png"
+            alt="OrigemX"
+            width={662}
+            height={132}
+            priority
+            className="h-8 w-auto"
+          />
         </Link>
         <form action={signOut}>
           <button
