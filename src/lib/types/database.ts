@@ -206,6 +206,7 @@ export type Database = {
           name: string
           owner_id: string
           published_at: string | null
+          registration_number: string | null
           slug: string
           state: string | null
           updated_at: string
@@ -224,6 +225,7 @@ export type Database = {
           name: string
           owner_id: string
           published_at?: string | null
+          registration_number?: string | null
           slug: string
           state?: string | null
           updated_at?: string
@@ -242,6 +244,7 @@ export type Database = {
           name?: string
           owner_id?: string
           published_at?: string | null
+          registration_number?: string | null
           slug?: string
           state?: string | null
           updated_at?: string

@@ -85,6 +85,11 @@ export async function KennelProfile({ slug, cursor }: { slug: string; cursor?: s
                   {kennel.name}
                 </h1>
                 {local ? <p className="text-fg-muted text-sm">{local}</p> : null}
+                {kennel.registration_number ? (
+                  <p className="text-fg-faint font-mono text-xs">
+                    Registro: {kennel.registration_number}
+                  </p>
+                ) : null}
               </div>
 
               <FounderBadge number={kennel.founder_number} />

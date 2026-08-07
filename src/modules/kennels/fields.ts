@@ -39,6 +39,7 @@ export type KennelFieldName = Extract<
   | "state"
   | "website_url"
   | "instagram_handle"
+  | "registration_number"
   | "logo_url"
 >;
 
@@ -150,6 +151,16 @@ export const KENNEL_FIELDS: readonly KennelField[] = [
     placeholder: "@canilaurora",
     pattern: /^[A-Za-z0-9._]+$/,
     patternError: "Use letras, números, ponto e underscore — sem espaço, sem link completo.",
+  },
+  {
+    name: "registration_number",
+    label: "RG do canil",
+    weight: "optional",
+    input: "text",
+    publicProfile: true,
+    maxLength: 60,
+    help: "Número de registro do canil, se houver (ex.: afixo CBKC/FCI). Aparece no perfil público.",
+    placeholder: "Ex.: CBKC 12345",
   },
   {
     name: "logo_url",

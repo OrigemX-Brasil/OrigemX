@@ -160,6 +160,45 @@ export async function getManageableDogById(id: string, userId: string) {
   return null;
 }
 
+export type DogIdentifiers = {
+  registration: { id: string; value: string; issuer: string | null } | null;
+  microchip: { id: string; value: string } | null;
+};
+
+/**
+ * RG e microchip PRINCIPAIS do cão, para a tela de edição.
+ *
+ * Filtra por `is_primary`: o schema permite mais de um identificador do mesmo
+ * tipo (cão rechipado, reregistrado), mas esta tela só gerencia o principal de
+ * cada tipo — o resto do histórico, se um dia existir tela para isso, não
+ * desaparece, só não é tocado aqui.
+ *
+ * Nunca chamar isto a partir de um client anônimo: a tabela não tem grant
+ * nenhum para `anon`, então nem chegaria a ler — mas a intenção é que este
+ * dado não circule fora do painel do dono.
+ */
+export async function getDogIdentifiers(dogId: string): Promise<DogIdentifiers> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("dog_identifiers")
+    .select("id, kind, issuer, value")
+    .eq("dog_id", dogId)
+    .eq("is_primary", true)
+    .is("deleted_at", null)
+    .limit(2);
+
+  const rows = data ?? [];
+  const registration = rows.find((r) => r.kind === "registration");
+  const microchip = rows.find((r) => r.kind === "microchip");
+
+  return {
+    registration: registration
+      ? { id: registration.id, value: registration.value, issuer: registration.issuer }
+      : null,
+    microchip: microchip ? { id: microchip.id, value: microchip.value } : null,
+  };
+}
+
 /**
  * Vários cães de uma vez — usado para mostrar pai e mãe já selecionados.
  *

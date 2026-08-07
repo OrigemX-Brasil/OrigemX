@@ -14,6 +14,12 @@ import {
 } from "./ancestors";
 import { translateDogError } from "./errors";
 import { DOG_FIELDS, DOG_GHOST_FIELDS, type DogField } from "./fields";
+import {
+  normalizeIdentifierInput,
+  validateIdentifiers,
+  type IdentifierErrors,
+  type IdentifierInput,
+} from "./identifiers";
 import { getDescendantIds, searchAncestorCandidates } from "./queries";
 import { normalizeDogInput, validateDog, type DogFieldErrors, type DogInput } from "./validation";
 
@@ -132,6 +138,84 @@ export async function updateDog(_prev: DogFormState, formData: FormData): Promis
 
   revalidatePath("/painel/caes");
   revalidatePath(`/painel/caes/${id}`);
+  return { values: input };
+}
+
+export type IdentifierFormState = {
+  errors?: IdentifierErrors;
+  formError?: string;
+  values?: IdentifierInput;
+};
+
+/**
+ * RG e microchip do cão. Uma única ação para os dois campos, porque é um
+ * formulário só: deixar campo em branco remove o identificador daquele tipo.
+ *
+ * O antigo sai (soft-delete) antes do novo entrar, mesmo padrão do logo do
+ * canil em `modules/media/actions.ts` — senão o índice único de "um principal
+ * por tipo" recusaria a inserção. `translateDogError` já sabe traduzir tanto
+ * duplicidade de microchip quanto de registro; nenhuma mudança precisou entrar
+ * em `errors.ts`.
+ */
+export async function updateDogIdentifiers(
+  _prev: IdentifierFormState,
+  formData: FormData,
+): Promise<IdentifierFormState> {
+  const dogId = String(formData.get("dog_id") ?? "");
+  if (!dogId) return { formError: "Cão não identificado." };
+
+  const user = await requireUser(`/painel/caes/${dogId}`);
+
+  const input: IdentifierInput = {
+    registration_value: String(formData.get("registration_value") ?? ""),
+    registration_issuer: String(formData.get("registration_issuer") ?? ""),
+    microchip_value: String(formData.get("microchip_value") ?? ""),
+  };
+
+  const errors = validateIdentifiers(input);
+  if (Object.keys(errors).length > 0) return { errors, values: input };
+
+  const values = normalizeIdentifierInput(input);
+  const supabase = await createClient();
+
+  const replace = async (
+    kind: "registration" | "microchip",
+    value: string | null,
+    issuer: string | null,
+  ): Promise<string | null> => {
+    await supabase
+      .from("dog_identifiers")
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("dog_id", dogId)
+      .eq("kind", kind)
+      .eq("is_primary", true)
+      .is("deleted_at", null);
+
+    if (!value) return null; // campo limpo: só remove, sem inserir de novo.
+
+    const { error } = await supabase.from("dog_identifiers").insert({
+      dog_id: dogId,
+      kind,
+      value,
+      issuer,
+      is_primary: true,
+      created_by: user.id,
+    });
+
+    return error ? translateDogError(error).message : null;
+  };
+
+  const registrationError = await replace(
+    "registration",
+    values.registration_value,
+    values.registration_issuer,
+  );
+  if (registrationError) return { formError: registrationError, values: input };
+
+  const microchipError = await replace("microchip", values.microchip_value, null);
+  if (microchipError) return { formError: microchipError, values: input };
+
+  revalidatePath(`/painel/caes/${dogId}`);
   return { values: input };
 }
 

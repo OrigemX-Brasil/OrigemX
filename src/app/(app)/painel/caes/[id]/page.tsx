@@ -6,7 +6,8 @@ import { getAuthUser } from "@/modules/auth/queries";
 import { softDeleteDog } from "@/modules/dogs/actions";
 import { isGhostAncestor, type AncestorCandidate } from "@/modules/dogs/ancestors";
 import { DogForm } from "@/modules/dogs/components/dog-form";
-import { getDogsByIds, getManageableDogById } from "@/modules/dogs/queries";
+import { IdentifiersForm } from "@/modules/dogs/components/identifiers-form";
+import { getDogIdentifiers, getDogsByIds, getManageableDogById } from "@/modules/dogs/queries";
 import { listMyKennels } from "@/modules/kennels/queries";
 import { GalleryUploader } from "@/modules/media/components/gallery-uploader";
 import { MediaGallery } from "@/modules/media/components/media-gallery";
@@ -28,11 +29,12 @@ export default async function EditarCaoPage({ params }: { params: Promise<{ id: 
   const dog = await getManageableDogById(id, user.id);
   if (!dog) notFound();
 
-  const [kennels, parents, gallery, usedBytes] = await Promise.all([
+  const [kennels, parents, gallery, usedBytes, identifiers] = await Promise.all([
     listMyKennels(user.id, { limit: 100 }),
     getDogsByIds([dog.sire_id, dog.dam_id].filter((v): v is string => Boolean(v))),
     getDogGallery(dog.id),
     getUsedBytes(user.id),
+    getDogIdentifiers(dog.id),
   ]);
 
   const toCandidate = (id: string | null): AncestorCandidate | null => {
@@ -88,6 +90,8 @@ export default async function EditarCaoPage({ params }: { params: Promise<{ id: 
         sire={toCandidate(dog.sire_id)}
         dam={toCandidate(dog.dam_id)}
       />
+
+      <IdentifiersForm dogId={dog.id} identifiers={identifiers} />
 
       <section className="border-border flex flex-col gap-4 border-t pt-6">
         <div className="flex flex-col gap-1">
