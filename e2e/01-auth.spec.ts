@@ -36,7 +36,10 @@ test.describe("cadastro por e-mail e senha", () => {
     await page.goto("/cadastro");
     await page.getByLabel("Nome").fill("Criador de Teste");
     await page.getByLabel("E-mail").fill(email);
-    await page.getByLabel("Senha").fill(SENHA_PADRAO);
+    // `exact: true`: sem ele, "Senha" também casa com "Confirmar senha" e com
+    // o aria-label "Mostrar senha" do botão de olho — o locator vira ambíguo.
+    await page.getByLabel("Senha", { exact: true }).fill(SENHA_PADRAO);
+    await page.getByLabel("Confirmar senha").fill(SENHA_PADRAO);
     await page.getByRole("button", { name: "Criar conta" }).click();
 
     const confirmacao = page.getByRole("heading", { name: "Confirme seu e-mail" });
@@ -97,7 +100,8 @@ test.describe("cadastro por e-mail e senha", () => {
     // Domínio que o Supabase recusa. Sem tradução própria, isto caía em
     // "Não foi possível concluir" e a pessoa não sabia onde tinha errado.
     await page.getByLabel("E-mail").fill(emailDeTeste("invalido"));
-    await page.getByLabel("Senha").fill(SENHA_PADRAO);
+    await page.getByLabel("Senha", { exact: true }).fill(SENHA_PADRAO);
+    await page.getByLabel("Confirmar senha").fill(SENHA_PADRAO);
     await page.getByRole("button", { name: "Criar conta" }).click();
 
     const texto = (await alerta(page).textContent()) ?? "";
@@ -108,11 +112,80 @@ test.describe("cadastro por e-mail e senha", () => {
   test("recusa senha curta sem chegar no servidor de auth", async ({ page }) => {
     await page.goto("/cadastro");
     await page.getByLabel("E-mail").fill(emailDeTeste("curta"));
-    await page.getByLabel("Senha").fill("123");
+    await page.getByLabel("Senha", { exact: true }).fill("123");
+    await page.getByLabel("Confirmar senha").fill("123");
     await page.getByRole("button", { name: "Criar conta" }).click();
 
     // `minLength` no campo barra antes do POST. O formulário continua na tela.
-    await expect(page.getByLabel("Senha")).toBeVisible();
+    await expect(page.getByLabel("Senha", { exact: true })).toBeVisible();
+  });
+
+  test("confirmação de senha divergente bloqueia o cadastro sem chegar ao servidor", async ({
+    page,
+  }) => {
+    await page.goto("/cadastro");
+
+    // Registrado DEPOIS do goto, de propósito: o próprio carregamento da
+    // página já produz uma resposta cuja URL contém "/cadastro", e contá-la
+    // teria dado falso positivo — o navegador nunca chegou a POSTAR nada.
+    // Só POST importa aqui; é a marca de que o formulário foi de fato enviado.
+    const posts: number[] = [];
+    page.on("response", (r) => {
+      if (r.request().method() === "POST") posts.push(r.status());
+    });
+
+    await page.getByLabel("Nome").fill("Criador de Teste");
+    await page.getByLabel("E-mail").fill(emailDeTeste("divergente"));
+    await page.getByLabel("Senha", { exact: true }).fill(SENHA_PADRAO);
+    await page.getByLabel("Confirmar senha").fill(`${SENHA_PADRAO}-diferente`);
+    await page.getByRole("button", { name: "Criar conta" }).click();
+
+    await expect(alerta(page)).toHaveText("As senhas não coincidem.");
+
+    // "Antes de enviar", como pedido: nenhum POST chegou a sair. Sem isto, o
+    // teste provaria só que a MENSAGEM aparece, não que ela aparece SEM
+    // round-trip — a checagem de servidor já existia; a de cliente é o que
+    // este ajuste acrescentou.
+    //
+    // Espera um instante: se o preventDefault tivesse falhado, o POST sairia
+    // de qualquer forma, só que de forma assíncrona — sem esperar, o teste
+    // passaria mesmo com um bug que manda a requisição um instante depois.
+    await page.waitForTimeout(500);
+    expect(posts, `não deveria ter havido POST: ${posts}`).toHaveLength(0);
+
+    // O formulário continua preenchido — divergência não apaga o que a
+    // pessoa já digitou.
+    await expect(page.getByLabel("E-mail")).not.toHaveValue("");
+  });
+
+  test("botão de olho alterna a visibilidade da senha e é alcançável por teclado", async ({
+    page,
+  }) => {
+    await page.goto("/cadastro");
+
+    const senha = page.getByLabel("Senha", { exact: true });
+    await senha.fill(SENHA_PADRAO);
+    await expect(senha).toHaveAttribute("type", "password");
+
+    const olho = page.getByRole("button", { name: "Mostrar senha" }).first();
+    await olho.click();
+
+    await expect(senha).toHaveAttribute("type", "text");
+    await expect(senha).toHaveValue(SENHA_PADRAO);
+    // O rótulo do botão muda junto — é o que um leitor de tela anuncia; o
+    // ícone sozinho não diz nada.
+    await expect(page.getByRole("button", { name: "Ocultar senha" }).first()).toBeVisible();
+
+    // Alcançável por teclado: focar o campo e dar Tab tem que chegar no
+    // botão, sem precisar de mouse.
+    await senha.focus();
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("button", { name: "Ocultar senha" }).first()).toBeFocused();
+
+    // E o teclado também aciona — Enter/Space num <button type="button"> foca
+    // do jeito nativo do navegador, sem precisar de clique.
+    await page.keyboard.press("Enter");
+    await expect(senha).toHaveAttribute("type", "password");
   });
 });
 
@@ -122,7 +195,7 @@ test.describe("login por e-mail e senha", () => {
 
     await page.goto("/login");
     await page.getByLabel("E-mail").fill(user.email);
-    await page.getByLabel("Senha").fill(user.password);
+    await page.getByLabel("Senha", { exact: true }).fill(user.password);
     await page.getByRole("button", { name: "Entrar" }).click();
 
     await page.waitForURL("**/painel");
@@ -144,7 +217,7 @@ test.describe("login por e-mail e senha", () => {
 
     await page.goto("/login");
     await page.getByLabel("E-mail").fill(user.email);
-    await page.getByLabel("Senha").fill("senha-completamente-errada");
+    await page.getByLabel("Senha", { exact: true }).fill("senha-completamente-errada");
     await page.getByRole("button", { name: "Entrar" }).click();
 
     const erro = alerta(page);

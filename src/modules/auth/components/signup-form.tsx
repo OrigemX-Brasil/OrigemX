@@ -1,10 +1,10 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 
 import { signUp, type ActionState } from "@/modules/auth/actions";
 
-import { Field, FormMessage, SubmitButton } from "./form";
+import { Field, FormMessage, PasswordField, SubmitButton } from "./form";
 
 /**
  * `source` é a origem da campanha, resolvida no servidor pela página. Vai como
@@ -13,6 +13,11 @@ import { Field, FormMessage, SubmitButton } from "./form";
  */
 export function SignupForm({ source }: { source?: string }) {
   const [state, formAction] = useActionState<ActionState, FormData>(signUp, {});
+
+  // Confere ANTES de ir ao servidor — é o que "antes de enviar" pede. `signUp`
+  // não ganha um campo novo: `password_confirm` nunca sai daqui, é checagem
+  // de tela, não de negócio.
+  const [confirmError, setConfirmError] = useState<string | null>(null);
 
   // Confirmação de e-mail está ligada, então o cadastro NÃO entra direto.
   // Depois do sucesso o formulário some: deixá-lo na tela convidaria a pessoa a
@@ -30,9 +35,24 @@ export function SignupForm({ source }: { source?: string }) {
   }
 
   return (
-    <form action={formAction} className="flex flex-col gap-5">
+    <form
+      action={formAction}
+      onSubmit={(e) => {
+        const data = new FormData(e.currentTarget);
+        const password = String(data.get("password") ?? "");
+        const confirm = String(data.get("password_confirm") ?? "");
+
+        if (password !== confirm) {
+          setConfirmError("As senhas não coincidem.");
+          e.preventDefault();
+          return;
+        }
+        setConfirmError(null);
+      }}
+      className="flex flex-col gap-5"
+    >
       <input type="hidden" name="de" value={source ?? ""} />
-      <FormMessage error={state.error} />
+      <FormMessage error={confirmError ?? state.error} />
       <Field
         label="Nome"
         name="full_name"
@@ -40,14 +60,20 @@ export function SignupForm({ source }: { source?: string }) {
         hint="Como você aparece no perfil."
       />
       <Field label="E-mail" name="email" type="email" autoComplete="email" required />
-      <Field
+      <PasswordField
         label="Senha"
         name="password"
-        type="password"
         autoComplete="new-password"
         required
         minLength={8}
         hint="Ao menos 8 caracteres."
+      />
+      <PasswordField
+        label="Confirmar senha"
+        name="password_confirm"
+        autoComplete="new-password"
+        required
+        minLength={8}
       />
       <SubmitButton>Criar conta</SubmitButton>
     </form>

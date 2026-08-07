@@ -5,7 +5,7 @@ import { useActionState } from "react";
 
 import { signIn, type ActionState } from "@/modules/auth/actions";
 
-import { Field, FormMessage, SubmitButton } from "./form";
+import { Field, FormMessage, PasswordField, SubmitButton } from "./form";
 
 export function LoginForm({ next, initialError }: { next: string; initialError?: string }) {
   const [state, formAction] = useActionState<ActionState, FormData>(signIn, {
@@ -17,13 +17,7 @@ export function LoginForm({ next, initialError }: { next: string; initialError?:
       <input type="hidden" name="next" value={next} />
       <FormMessage error={state.error} />
       <Field label="E-mail" name="email" type="email" autoComplete="email" required />
-      <Field
-        label="Senha"
-        name="password"
-        type="password"
-        autoComplete="current-password"
-        required
-      />
+      <PasswordField label="Senha" name="password" autoComplete="current-password" required />
       <div className="flex flex-col gap-3">
         <SubmitButton>Entrar</SubmitButton>
         <Link
