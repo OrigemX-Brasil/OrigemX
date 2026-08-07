@@ -1,4 +1,4 @@
-import { criarCanil, criarCao, expect, publicar, test } from "./support/fixtures";
+import { alerta, criarCanil, criarCao, expect, publicar, test } from "./support/fixtures";
 
 /**
  * ============================================================================
@@ -171,4 +171,111 @@ test("ancestral não cadastrado vira lacuna, sem deslocar o resto", async ({
   await expect(arvore).toContainText(`Só o pai ${token}`);
   await expect(arvore).toContainText("Não informado");
   await expect(arvore).toContainText("1 de 2 ancestrais");
+});
+
+/**
+ * ============================================================================
+ * Data de nascimento digitável — dd/mm/aaaa, teclado numérico, sem obrigar o
+ * seletor mês a mês.
+ * ============================================================================
+ *
+ * A REGRA DE NEGÓCIO (data futura, anterior a 1900) não muda — continua em
+ * `validateBirthDate`. O que estes testes provam é que o valor DIGITADO chega
+ * até ela intacto, em yyyy-mm-dd, e que o formato malformado não trava o
+ * cadastro de um campo que é recomendado, não obrigatório.
+ */
+
+test("data de nascimento digitada em dd/mm/aaaa chega ao banco em yyyy-mm-dd", async ({
+  page,
+  criador,
+  admin,
+}) => {
+  const canil = await criarCanil(admin, criador.id);
+  const token = Date.now().toString(36);
+
+  await page.goto("/painel/caes/novo");
+  await page.getByLabel("Nome", { exact: false }).first().fill(`Data Digitada ${token}`);
+  await page.getByLabel("Sexo").selectOption("male");
+  await page.getByLabel("Canil").selectOption(canil.id);
+
+  // Digitação corrida, sem barra — a máscara insere sozinha. É o caminho
+  // rápido que este ajuste existe para viabilizar no teclado numérico do
+  // celular.
+  await page.getByLabel("Data de nascimento").pressSequentially("15062020");
+  await expect(page.getByLabel("Data de nascimento")).toHaveValue("15/06/2020");
+
+  await page.getByRole("button", { name: "Cadastrar cão" }).click();
+  await page.waitForURL(/\/painel\/caes\/[0-9a-f-]{36}/);
+
+  const { data: salvo } = await admin
+    .from("dogs")
+    .select("born_on")
+    .eq("name", `Data Digitada ${token}`)
+    .single();
+
+  expect(salvo?.born_on).toBe("2020-06-15");
+});
+
+test("data digitada no futuro é recusada pela MESMA regra de sempre, não uma nova", async ({
+  page,
+  criador,
+  admin,
+}) => {
+  const canil = await criarCanil(admin, criador.id);
+  const token = Date.now().toString(36);
+  const futuro = new Date();
+  futuro.setFullYear(futuro.getFullYear() + 1);
+  const digitado =
+    String(futuro.getDate()).padStart(2, "0") +
+    String(futuro.getMonth() + 1).padStart(2, "0") +
+    String(futuro.getFullYear());
+
+  await page.goto("/painel/caes/novo");
+  await page.getByLabel("Nome", { exact: false }).first().fill(`Data Futura ${token}`);
+  await page.getByLabel("Sexo").selectOption("male");
+  await page.getByLabel("Canil").selectOption(canil.id);
+  await page.getByLabel("Data de nascimento").pressSequentially(digitado);
+
+  await page.getByRole("button", { name: "Cadastrar cão" }).click();
+
+  // A REGRA continua em validateBirthDate — é ela, não este componente, quem
+  // recusa. A prova é o formulário NÃO navegar e mostrar a mensagem exata que
+  // já existia antes deste ajuste.
+  //
+  // `alerta(page)`, não `getByRole("alert", {name})`: role="alert" não deriva
+  // o nome acessível do próprio texto, então o filtro `name` nunca bateria —
+  // é por isso que o helper já existe, e confere o texto à parte.
+  await expect(alerta(page)).toContainText("não pode estar no futuro");
+  expect(page.url()).toContain("/painel/caes/novo");
+});
+
+test("data impossível (31/02) mostra aviso de formato e NÃO trava o cadastro", async ({
+  page,
+  criador,
+  admin,
+}) => {
+  const canil = await criarCanil(admin, criador.id);
+  const token = Date.now().toString(36);
+
+  await page.goto("/painel/caes/novo");
+  await page.getByLabel("Nome", { exact: false }).first().fill(`Data Impossível ${token}`);
+  await page.getByLabel("Sexo").selectOption("male");
+  await page.getByLabel("Canil").selectOption(canil.id);
+
+  await page.getByLabel("Data de nascimento").pressSequentially("31022020");
+
+  await expect(alerta(page)).toContainText("Data inválida");
+
+  // born_on é RECOMENDADO, não obrigatório: o cadastro segue, só sem a data —
+  // é a decisão registrada no plano, não um travamento silencioso de bug.
+  await page.getByRole("button", { name: "Cadastrar cão" }).click();
+  await page.waitForURL(/\/painel\/caes\/[0-9a-f-]{36}/);
+
+  const { data: salvo } = await admin
+    .from("dogs")
+    .select("born_on")
+    .eq("name", `Data Impossível ${token}`)
+    .single();
+
+  expect(salvo?.born_on).toBeNull();
 });

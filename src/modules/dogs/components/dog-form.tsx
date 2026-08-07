@@ -8,6 +8,7 @@ import type { AncestorCandidate } from "../ancestors";
 import { DOG_FORM_FIELDS, type DogField } from "../fields";
 import { slugifyDog, validateDog, type DogFieldErrors, type DogInput } from "../validation";
 
+import { DateField } from "./date-field";
 import { ParentPicker } from "./parent-picker";
 
 type KennelOption = { id: string; name: string };
@@ -27,7 +28,15 @@ function Control({
   onSlugChange?: (v: string) => void;
   onNameBlur?: (v: string) => void;
 }) {
-  const errorId = error ? `${field.name}-error` : undefined;
+  // O erro de FORMATO da data ("não existe 31/02") divide o mesmo slot visual
+  // que o erro de NEGÓCIO ("data no futuro", vindo de validateBirthDate) —
+  // são a mesma pergunta para quem preenche o formulário, então não podem
+  // aparecer em dois lugares diferentes na tela. `DateField` manda o dele
+  // subir por callback; aqui os dois se combinam num só.
+  const [dateFormatError, setDateFormatError] = useState<string | null>(null);
+  const effectiveError = field.input === "date" ? (dateFormatError ?? error) : error;
+
+  const errorId = effectiveError ? `${field.name}-error` : undefined;
   const helpId = field.help ? `${field.name}-help` : undefined;
   const describedBy = [errorId, helpId].filter(Boolean).join(" ") || undefined;
 
@@ -69,11 +78,19 @@ function Control({
           aria-describedby={describedBy}
           className={cls}
         />
+      ) : field.input === "date" ? (
+        <DateField
+          id={field.name}
+          name={field.name}
+          defaultValue={defaultValue}
+          ariaDescribedBy={describedBy}
+          onFormatError={setDateFormatError}
+        />
       ) : (
         <input
           id={field.name}
           name={field.name}
-          type={field.input === "date" ? "date" : "text"}
+          type="text"
           defaultValue={defaultValue}
           maxLength={field.maxLength}
           placeholder={field.placeholder}
@@ -88,9 +105,9 @@ function Control({
           {field.help}
         </p>
       ) : null}
-      {error ? (
+      {effectiveError ? (
         <p id={errorId} role="alert" className="text-danger text-xs">
-          {error}
+          {effectiveError}
         </p>
       ) : null}
     </div>
