@@ -7,18 +7,74 @@ import { requireUser } from "@/modules/auth/queries";
 
 import {
   BUCKET_PRIVATE,
+  BUCKET_PUBLIC,
   MAX_GALLERY_ITEMS,
   pathBelongsTo,
+  targetBucketFor,
   validateQuota,
   validateStoredFile,
   type MediaRole,
 } from "./constraints";
-import { countDogGallery, getUsedBytes, statStorageObject } from "./queries";
+import {
+  countDogGallery,
+  getUsedBytes,
+  statStorageObject,
+  type SupabaseClientLike,
+} from "./queries";
+import { reconcileMediaBucket } from "./sync";
 
 export type MediaActionState = {
   error?: string;
   mediaId?: string;
 };
+
+type ParentPublishState = {
+  isPublished: boolean;
+  /** Caminho da página pública da entidade, só quando publicada. */
+  publicPath: string | null;
+};
+
+/**
+ * A entidade dona já está publicada, e sob qual URL pública?
+ *
+ * Determina para onde a mídia RECÉM-REGISTRADA deveria ir. O upload em si
+ * sempre grava no bucket privado (`BUCKET_PRIVATE`, acima) — só a ação
+ * explícita de publicar move para o público, e ela move o que existe NAQUELE
+ * momento. Sem esta checagem, uma foto adicionada depois de o cão já estar
+ * publicado ficava presa no privado para sempre: a página pública usa o client
+ * anônimo, que não tem nenhuma permissão de leitura no bucket privado, então a
+ * foto some em silêncio — sem erro, sem log. Foi o bug relatado.
+ *
+ * `publicPath` sai da mesma consulta para não pagar um segundo round-trip só
+ * para saber o que revalidar depois do move.
+ */
+async function parentPublishState(
+  supabase: SupabaseClientLike,
+  role: MediaRole,
+  entityId: string,
+): Promise<ParentPublishState> {
+  if (role === "kennel_logo") {
+    const { data } = await supabase
+      .from("kennels")
+      .select("published_at, slug")
+      .eq("id", entityId)
+      .maybeSingle();
+    return {
+      isPublished: Boolean(data?.published_at),
+      publicPath: data?.slug ? `/c/${data.slug}` : null,
+    };
+  }
+
+  const { data } = await supabase
+    .from("dogs")
+    .select("published_at, public_id")
+    .eq("id", entityId)
+    .maybeSingle();
+  return {
+    isPublished: Boolean(data?.published_at),
+    publicPath: data?.public_id ? `/d/${data.public_id}` : null,
+  };
+}
 
 /**
  * Registra a metadata de um arquivo JÁ enviado ao Storage pelo client.
@@ -129,6 +185,40 @@ export async function registerMedia(
   if (error || !data) {
     await cleanup();
     return { error: "Não foi possível registrar a imagem." };
+  }
+
+  // Ver `parentPublishState`: sem isto, foto adicionada depois de a entidade
+  // já estar publicada ficava presa no bucket privado — o bug relatado.
+  const parent = await parentPublishState(supabase, role, entityId);
+  if (targetBucketFor(parent.isPublished) === BUCKET_PUBLIC) {
+    const outcome = await reconcileMediaBucket(
+      supabase,
+      [
+        {
+          id: data.id,
+          bucket_id: BUCKET_PRIVATE,
+          storage_path: storagePath,
+          thumb_path: thumbPath,
+        },
+      ],
+      BUCKET_PUBLIC,
+    );
+    if (outcome.failed.length > 0) {
+      // Não bloqueia o registro se a move falhar: a foto já está gravada e
+      // continua visível para o dono. Ficaria fora do perfil público até a
+      // próxima publicação/despublicação ou até `npm run media:reconcile
+      // -- --apply`, que existe exatamente para este caso. Bloquear o upload
+      // por um soluço do Storage seria pior do que a foto demorar a aparecer.
+      console.error(
+        `[media:registerMedia] falha ao mover ${data.id} para o bucket público:`,
+        outcome.failed.map((f) => f.reason).join("; "),
+      );
+    } else if (parent.publicPath) {
+      // A página pública é ISR (`revalidate = 300`): sem isto, o move acima
+      // acontece no Storage mas o HTML cacheado segue sem a foto por até 5
+      // minutos — o mesmo bug relatado, só que mais devagar.
+      revalidatePath(parent.publicPath);
+    }
   }
 
   if (role === "kennel_logo") {

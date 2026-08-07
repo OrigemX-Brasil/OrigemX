@@ -161,3 +161,68 @@ test("a foto publicada aparece no perfil público, servida sem token", async ({
 
   await semSessao.close();
 });
+
+/**
+ * A ORDEM INVERSA do teste anterior — e era exatamente aqui que quebrava.
+ *
+ * "Publicar" move para o bucket público o que existe NAQUELE momento. Uma
+ * foto adicionada DEPOIS não tinha gatilho nenhum que a movesse: ficava presa
+ * no privado, e a página pública usa o client anônimo, que não tem policy de
+ * leitura no bucket privado — a foto sumia em silêncio, sem erro. Era o bug
+ * relatado em produção.
+ *
+ * O cão nasce e é publicado DIRETO no banco (fixture, não fluxo de app) de
+ * propósito: o que se testa é o upload num cão que JÁ está publicado, não o
+ * clique em Publicar em si — esse já tem o teste acima.
+ */
+test("foto adicionada DEPOIS de publicar aparece no perfil público sem novo clique em Publicar", async ({
+  page,
+  criador,
+  admin,
+}) => {
+  const canil = await criarCanil(admin, criador.id);
+  const cao = await criarCao(admin, criador.id, { kennel_id: canil.id, published: true });
+  await publicar(admin, { kennelId: canil.id });
+
+  await page.goto(`/painel/caes/${cao.id}`);
+  // O botão já diz "Despublicar": não há como clicar em "Publicar" de novo sem
+  // antes tirar o cão do ar. É exatamente essa a situação que o bug explora.
+  await expect(page.getByRole("button", { name: "Despublicar", exact: true })).toBeVisible();
+
+  await page.getByLabel("Adicionar imagem").setInputFiles({
+    name: NOME_ARQUIVO,
+    mimeType: MIME,
+    buffer: await pngDeTeste("depois de publicar", 700),
+  });
+  await expect(page.locator("section", { hasText: "Galeria" }).locator("img").first()).toBeVisible({
+    timeout: 30_000,
+  });
+
+  // O registro em si já tem que ter movido a linha, sem publish/despublish
+  // adicional e sem rodar o script de reconciliação.
+  const { data: arquivo } = await admin
+    .from("media")
+    .select("bucket_id")
+    .eq("dog_id", cao.id)
+    .single();
+  expect(
+    arquivo?.bucket_id,
+    "mídia registrada com o cão já publicado tem que nascer no bucket público",
+  ).toBe("kennel-media-public");
+
+  const semSessao = await page.context().browser()!.newContext();
+  const publica = await semSessao.newPage();
+  const resp = await publica.goto(`/d/${cao.public_id}`);
+  expect(resp?.status()).toBe(200);
+
+  const img = publica.locator("main img").first();
+  await expect(img, "a foto adicionada depois de publicar tem que aparecer").toBeVisible({
+    timeout: 10_000,
+  });
+
+  const src = (await img.getAttribute("src")) ?? "";
+  expect(src.length).toBeGreaterThan(0);
+  expect(src).not.toContain("token=");
+
+  await semSessao.close();
+});
