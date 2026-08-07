@@ -32,7 +32,14 @@ type KennelRow = Database["public"]["Tables"]["kennels"]["Row"];
  */
 export type KennelFieldName = Extract<
   keyof KennelRow,
-  "name" | "slug" | "description" | "city" | "state" | "website_url" | "logo_url"
+  | "name"
+  | "slug"
+  | "description"
+  | "city"
+  | "state"
+  | "website_url"
+  | "instagram_handle"
+  | "logo_url"
 >;
 
 /**
@@ -54,7 +61,7 @@ export const WEIGHT_VALUE: Record<FieldWeight, number> = {
   optional: 0,
 };
 
-export type KennelFieldInput = "text" | "textarea" | "slug" | "url" | "uf" | "upload";
+export type KennelFieldInput = "text" | "textarea" | "slug" | "url" | "uf" | "upload" | "handle";
 
 export type KennelField = {
   name: KennelFieldName;
@@ -131,6 +138,18 @@ export const KENNEL_FIELDS: readonly KennelField[] = [
     publicProfile: true,
     maxLength: 200,
     placeholder: "https://",
+  },
+  {
+    name: "instagram_handle",
+    label: "Instagram",
+    weight: "recommended",
+    input: "handle",
+    publicProfile: true,
+    maxLength: 30,
+    help: "Só o usuário, com ou sem @. Ex.: canil.aurora",
+    placeholder: "@canilaurora",
+    pattern: /^[A-Za-z0-9._]+$/,
+    patternError: "Use letras, números, ponto e underscore — sem espaço, sem link completo.",
   },
   {
     name: "logo_url",

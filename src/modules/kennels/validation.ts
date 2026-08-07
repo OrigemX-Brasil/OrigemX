@@ -37,6 +37,9 @@ export function normalizeKennelInput(raw: KennelInput): KennelPatch {
     let normalized = value.trim();
     if (field.input === "uf") normalized = normalized.toUpperCase();
     if (field.input === "slug") normalized = normalized.toLowerCase();
+    // Aceita com ou sem "@" na frente; guarda sempre sem, para o perfil público
+    // montar o link (instagram.com/<handle>) sem duplicar o símbolo.
+    if (field.input === "handle") normalized = normalized.replace(/^@/, "");
 
     if (normalized.length > 0) {
       assign(out, field.name, normalized);

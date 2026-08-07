@@ -70,6 +70,15 @@ describe("normalizeKennelInput", () => {
     expect(normalizeKennelInput({ slug: "Canil-Aurora" }).slug).toBe("canil-aurora");
   });
 
+  it("tira o @ na frente do handle do Instagram, sem mexer no resto", () => {
+    expect(normalizeKennelInput({ instagram_handle: "@Canil.Aurora" }).instagram_handle).toBe(
+      "Canil.Aurora",
+    );
+    expect(normalizeKennelInput({ instagram_handle: "Canil.Aurora" }).instagram_handle).toBe(
+      "Canil.Aurora",
+    );
+  });
+
   it("vazio vira null, não string vazia", () => {
     // String vazia faria a completude contar o campo como preenchido e o
     // perfil público exibir rótulo sem conteúdo.
@@ -129,6 +138,35 @@ describe("validateKennel", () => {
     expect(
       validateKennel({ ...validBase(), website_url: "javascript:alert(1)" }).website_url,
     ).toBeDefined();
+  });
+
+  it("aceita handle do Instagram com ou sem @, e recusa formato inválido", () => {
+    expect(
+      validateKennel({ ...validBase(), instagram_handle: "canil.aurora" }).instagram_handle,
+    ).toBeUndefined();
+    expect(
+      validateKennel({ ...validBase(), instagram_handle: "@canil.aurora" }).instagram_handle,
+    ).toBeUndefined();
+    expect(
+      validateKennel({ ...validBase(), instagram_handle: "canil aurora" }).instagram_handle,
+    ).toBeDefined();
+    expect(
+      validateKennel({ ...validBase(), instagram_handle: "instagram.com/canilaurora" })
+        .instagram_handle,
+    ).toBeDefined();
+    expect(
+      validateKennel({ ...validBase(), instagram_handle: "https://instagram.com/canilaurora" })
+        .instagram_handle,
+    ).toBeDefined();
+  });
+
+  it("recusa handle do Instagram acima de 30 caracteres", () => {
+    expect(
+      validateKennel({ ...validBase(), instagram_handle: "a".repeat(31) }).instagram_handle,
+    ).toBeDefined();
+    expect(
+      validateKennel({ ...validBase(), instagram_handle: "a".repeat(30) }).instagram_handle,
+    ).toBeUndefined();
   });
 
   it("recusa campo acima do limite de tamanho", () => {

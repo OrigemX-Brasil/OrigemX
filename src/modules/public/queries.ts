@@ -25,7 +25,7 @@ import { resolveMediaUrls, type MediaItem, type ResolvedMedia } from "@/modules/
  */
 
 const KENNEL_PUBLIC_COLUMNS =
-  "id, name, slug, city, state, description, website_url, founder_number, published_at";
+  "id, name, slug, city, state, description, website_url, instagram_handle, founder_number, published_at";
 
 const DOG_PUBLIC_COLUMNS =
   "id, public_id, slug, name, sex, born_on, breed, color, coat, kennel_id, owner_id, sire_id, dam_id, published_at";
@@ -38,6 +38,7 @@ export type PublicKennel = {
   state: string | null;
   description: string | null;
   website_url: string | null;
+  instagram_handle: string | null;
   founder_number: number | null;
   published_at: string | null;
 };

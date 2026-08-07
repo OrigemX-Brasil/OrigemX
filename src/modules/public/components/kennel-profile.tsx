@@ -110,6 +110,17 @@ export async function KennelProfile({ slug, cursor }: { slug: string; cursor?: s
             </a>
           ) : null}
 
+          {kennel.instagram_handle ? (
+            <a
+              href={`https://instagram.com/${kennel.instagram_handle}`}
+              rel="noopener noreferrer nofollow"
+              target="_blank"
+              className="text-link hover:text-link-hover self-start text-sm underline underline-offset-4 transition-colors"
+            >
+              @{kennel.instagram_handle}
+            </a>
+          ) : null}
+
           <section className="border-border flex flex-col gap-4 border-t pt-8">
             <h2 className="font-display text-lg font-semibold tracking-tight">Cães</h2>
 
