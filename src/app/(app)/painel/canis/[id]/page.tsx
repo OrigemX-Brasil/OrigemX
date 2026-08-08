@@ -18,7 +18,7 @@ import { founderEligibility } from "@/modules/kennels/founder";
 import { countKennelDogs, getManageableKennelById } from "@/modules/kennels/queries";
 import { QrCard } from "@/modules/qr/components/qr-card";
 
-export const metadata: Metadata = { title: "Editar canil" };
+export const metadata: Metadata = { title: "Meu canil" };
 
 export default async function EditarCanilPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -51,11 +51,13 @@ export default async function EditarCanilPage({ params }: { params: Promise<{ id
   return (
     <div className="flex flex-col gap-8">
       <div className="flex flex-col gap-2">
+        {/* Aponta para `/painel`, não para `/painel/canis`: aquela rota
+            redireciona para cá quando existe canil, e o link viraria um laço. */}
         <Link
-          href="/painel/canis"
+          href="/painel"
           className="text-fg-muted hover:text-fg self-start text-sm transition-colors"
         >
-          ← Canis
+          ← Painel
         </Link>
         <h1 className="font-display text-2xl font-semibold tracking-tight">{kennel.name}</h1>
         <p className="text-fg-faint font-mono text-xs">/c/{kennel.slug}</p>
@@ -136,16 +138,16 @@ export default async function EditarCanilPage({ params }: { params: Promise<{ id
       />
 
       {/*
-        Exclusão LÓGICA. O botão diz o que realmente acontece: o endereço
-        público continua reservado, para um link já divulgado não passar a
-        resolver para outro canil.
+        Exclusão LÓGICA, e o texto diz as DUAS metades da regra. Omitir a
+        segunda seria esconder metade: a vaga volta (`kennels_owner_uk` é
+        parcial por `deleted_at`), o endereço não (`kennels_slug_key` é global).
       */}
       <section className="border-border flex flex-col gap-3 border-t pt-6">
         <h2 className="text-fg text-sm font-medium">Excluir canil</h2>
         <p className="text-fg-muted text-sm">
-          O canil sai do ar e dos seus painéis. O endereço{" "}
-          <code className="text-fg-faint font-mono">/c/{kennel.slug}</code> segue reservado e não
-          poderá ser usado por outra pessoa.
+          O canil sai do ar e dos seus painéis. Você poderá cadastrar outro canil depois — mas com
+          outro endereço: <code className="text-fg-faint font-mono">/c/{kennel.slug}</code> segue
+          reservado para sempre e não poderá ser usado por ninguém, nem por você.
         </p>
         <form action={softDeleteKennel}>
           <input type="hidden" name="id" value={kennel.id} />

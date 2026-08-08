@@ -79,25 +79,33 @@ test("preencher os recomendados sobe a completude", async ({ page, criador, admi
     "89",
   );
 
-  // E o canil aparece na listagem do dono.
+  // `/painel/canis` não é mais lista: com canil cadastrado, ela desvia para ele.
+  // Esperar a URL torna isso o que o teste afirma, em vez de tropeçar no fato de
+  // que o nome do canil também é o `<h1>` da tela de edição.
   await page.goto("/painel/canis");
-  await expect(page.getByText(`Canil Ipê ${token}`)).toBeVisible();
+  await page.waitForURL(/\/painel\/canis\/[0-9a-f-]{36}/);
+  await expect(page.getByRole("heading", { name: `Canil Ipê ${token}` })).toBeVisible();
 
   const { data } = await admin.from("kennels").select("slug").eq("owner_id", criador.id);
   expect(data?.map((k) => k.slug)).toContain(`ipe-${token}`);
 });
 
+/**
+ * O canil semeado é de OUTRA pessoa, e agora é obrigatório que seja: com um
+ * canil próprio, `/painel/canis/novo` desviaria e o formulário nem abriria.
+ * Também é o cenário verdadeiro — "esse endereço já é de alguém".
+ */
 test("endereço público duplicado dá mensagem legível, não 500", async ({
   page,
-  criador,
+  outroCriador,
   admin,
 }) => {
   const slug = `duplicado-${Date.now().toString(36)}`;
   await admin.from("kennels").insert({
     name: "Canil Que Já Existe",
     slug,
-    owner_id: criador.id,
-    created_by: criador.id,
+    owner_id: outroCriador.id,
+    created_by: outroCriador.id,
   });
 
   const respostas: number[] = [];
@@ -113,4 +121,51 @@ test("endereço público duplicado dá mensagem legível, não 500", async ({
     respostas.every((s) => s < 500),
     `houve 5xx: ${respostas.filter((s) => s >= 500)}`,
   ).toBe(true);
+});
+
+test("quem já tem canil não vê o formulário de criação", async ({ page, criador, admin }) => {
+  const { data } = await admin
+    .from("kennels")
+    .insert({
+      name: "Canil Único",
+      slug: `unico-${Date.now().toString(36)}`,
+      owner_id: criador.id,
+      created_by: criador.id,
+    })
+    .select("id")
+    .single();
+
+  await page.goto("/painel/canis/novo");
+  await page.waitForURL(new RegExp(`/painel/canis/${data!.id}`));
+  await expect(page.getByRole("button", { name: "Criar canil" })).toHaveCount(0);
+});
+
+/**
+ * As duas metades da regra numa tela só. Testar apenas a primeira deixaria
+ * passar uma implementação que liberasse o endereço junto com a vaga — e um QR
+ * já impresso passaria a resolver para outro canil.
+ */
+test("excluir o canil libera a vaga, mas não o endereço", async ({ page, criador, admin }) => {
+  const slug = `reciclado-${Date.now().toString(36)}`;
+  const { data } = await admin
+    .from("kennels")
+    .insert({ name: "Canil A Fechar", slug, owner_id: criador.id, created_by: criador.id })
+    .select("id")
+    .single();
+
+  await page.goto(`/painel/canis/${data!.id}`);
+  await page.getByRole("button", { name: "Excluir canil" }).click();
+
+  // A vaga voltou: o painel mostra o estado vazio e o formulário abre de novo.
+  await page.waitForURL(/\/painel\/canis$/);
+  await expect(page.getByText("Você ainda não cadastrou seu canil.")).toBeVisible();
+
+  await page.goto("/painel/canis/novo");
+  await page.getByLabel("Nome do canil").fill("Canil Novo");
+  await definirSlug(page, slug);
+  await page.getByRole("button", { name: "Criar canil" }).click();
+
+  // O endereço não voltou.
+  await expect(alerta(page).first()).toBeVisible();
+  await expect(page.locator("body")).toContainText(/endereço/i);
 });

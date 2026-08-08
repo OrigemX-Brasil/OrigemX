@@ -41,7 +41,7 @@ function cao(over: Partial<DogFacts> = {}): DogFacts {
 }
 
 function conta(over: Partial<AccountFacts> = {}): AccountFacts {
-  return { kennelCount: 1, dogCount: 1, ...over };
+  return { hasKennel: true, dogCount: 1, ...over };
 }
 
 /** Quais regras disparam para um único sujeito. */
@@ -88,11 +88,11 @@ describe("catálogo — sanidade estrutural", () => {
 
 describe("regras da conta", () => {
   it("conta sem canil é atenção — sem canil o produto não faz nada", () => {
-    expect(disparadas(ACCOUNT_RULES, conta({ kennelCount: 0 }))).toEqual(["conta-sem-canil"]);
+    expect(disparadas(ACCOUNT_RULES, conta({ hasKennel: false }))).toEqual(["conta-sem-canil"]);
   });
 
   it("com canil, cala a boca", () => {
-    expect(disparadas(ACCOUNT_RULES, conta({ kennelCount: 2 }))).toEqual([]);
+    expect(disparadas(ACCOUNT_RULES, conta({ hasKennel: true }))).toEqual([]);
   });
 });
 
@@ -282,7 +282,18 @@ describe("agrupamento entre sujeitos reais", () => {
     expect(alerts[0]?.targets).toHaveLength(12);
   });
 
-  it("dois canis com pendências DIFERENTES não se fundem", () => {
+  /**
+   * Dois SUJEITOS arbitrários, não dois canis de um mesmo dono — a invariante de
+   * um canil por criador vive no banco, e o motor não sabe nem quer saber
+   * quantos sujeitos recebe.
+   *
+   * Tentação errada: reescrever com cães. Não dá. As quatro DOG_RULES têm
+   * `detail` estático, então dois cães com problemas diferentes produzem REGRAS
+   * diferentes, não dois alertas da mesma regra. O caso "mesmo ruleId, detail
+   * diferente, não funde" só existe com `canil-sem-campo-obrigatorio`, que é a
+   * única com detail dinâmico.
+   */
+  it("dois sujeitos com pendências DIFERENTES não se fundem", () => {
     const subjects: AlertSubject<KennelFacts>[] = [
       {
         id: "k1",

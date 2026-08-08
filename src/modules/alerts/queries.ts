@@ -3,7 +3,7 @@ import { isGhostAncestor } from "@/modules/dogs/ancestors";
 import { listMyDogs, type DogListItem } from "@/modules/dogs/queries";
 import { calculateCompleteness } from "@/modules/kennels/completeness";
 import { founderEligibility } from "@/modules/kennels/founder";
-import { countKennelDogs, listMyKennels, type KennelListItem } from "@/modules/kennels/queries";
+import { countKennelDogs, getMyKennel, type KennelListItem } from "@/modules/kennels/queries";
 import { MAX_GALLERY_ITEMS } from "@/modules/media/constraints";
 
 import { evaluateRules, mergeAlerts, type Alert, type AlertSubject } from "./engine";
@@ -42,12 +42,14 @@ import {
  * Teto do levantamento.
  *
  * A invariante de performance não abre exceção para alerta: nenhuma listagem
- * sem limite. Estes números cobrem com folga o criador real — o cliente falou
- * em canis com dezenas de cães, não milhares —, e quando não cobrem a tela DIZ
- * que analisou uma parte, em vez de omitir em silêncio.
+ * sem limite. Este número cobre com folga o criador real — o cliente falou em
+ * canis com dezenas de cães, não milhares —, e quando não cobre a tela DIZ que
+ * analisou uma parte, em vez de omitir em silêncio.
+ *
+ * Não há teto de canis porque não há listagem de canis: o criador tem no máximo
+ * um (`kennels_owner_uk`). Uma linha ou nenhuma não tem truncamento a declarar.
  */
 export const ALERT_SCAN = {
-  kennels: 20,
   dogs: 60,
 } as const;
 
@@ -58,16 +60,14 @@ export type AlertsResult = {
   alerts: Alert[];
   /** O que foi efetivamente analisado — a tela precisa poder ser honesta. */
   scan: {
-    kennels: number;
     dogs: number;
-    kennelsTruncated: boolean;
     dogsTruncated: boolean;
   };
 };
 
 const EMPTY: AlertsResult = {
   alerts: [],
-  scan: { kennels: 0, dogs: 0, kennelsTruncated: false, dogsTruncated: false },
+  scan: { dogs: 0, dogsTruncated: false },
 };
 
 /**
@@ -138,12 +138,15 @@ async function loadKennelsWithDogs(
 
 export async function getAlertsForUser(userId: string): Promise<AlertsResult> {
   try {
-    const [kennelPage, dogPage] = await Promise.all([
-      listMyKennels(userId, { limit: ALERT_SCAN.kennels }),
+    const [kennel, dogPage] = await Promise.all([
+      getMyKennel(userId),
       listMyDogs(userId, {}, { limit: ALERT_SCAN.dogs }),
     ]);
 
-    const kennels = kennelPage.items;
+    // Zero ou um. As funções abaixo e o motor de regras aceitam os dois casos
+    // sem tratamento especial — `engine.ts` não conhece regra nenhuma, e ensiná-lo
+    // que canil é singular seria o acoplamento que o src/modules/README.md proíbe.
+    const kennels = kennel ? [kennel] : [];
 
     // Fantasma fora, e fora AQUI: ele é registro mínimo por definição, e cobrar
     // foto ou raça dele seria cobrar algo que não deveria existir. Excluindo na
@@ -164,7 +167,7 @@ export async function getAlertsForUser(userId: string): Promise<AlertsResult> {
         id: userId,
         label: "Sua conta",
         href: "/painel/canis/novo",
-        facts: { kennelCount: kennels.length, dogCount: dogs.length },
+        facts: { hasKennel: kennel !== null, dogCount: dogs.length },
       },
     ];
 
@@ -210,7 +213,7 @@ export async function getAlertsForUser(userId: string): Promise<AlertsResult> {
       };
     });
 
-    const userHasKennel = kennels.length > 0;
+    const userHasKennel = kennel !== null;
 
     const dogSubjects: AlertSubject<DogFacts>[] = dogs.map((dog) => ({
       id: dog.id,
@@ -234,9 +237,7 @@ export async function getAlertsForUser(userId: string): Promise<AlertsResult> {
         evaluateRules(DOG_RULES, dogSubjects),
       ),
       scan: {
-        kennels: kennels.length,
         dogs: dogs.length,
-        kennelsTruncated: kennelPage.nextCursor !== null,
         dogsTruncated: dogPage.nextCursor !== null,
       },
     };

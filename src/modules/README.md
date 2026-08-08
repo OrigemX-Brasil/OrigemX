@@ -102,6 +102,12 @@ encheria o banco de cães de teste visíveis para qualquer visitante. Ver
 Não existe `select()` de lista sem `.limit()` — é invariante do projeto, e
 concentrar o acesso aqui é o que torna a regra verificável por leitura.
 
+**`kennels/` não tem função de lista, e isso é invariante e não esquecimento.**
+Um criador tem no máximo um canil vivo, garantido pelo índice `kennels_owner_uk`,
+e `getMyKennel(ownerId)` devolve **o** canil. Um `listMyKennels` que volte a
+aparecer é sinal de que alguém reintroduziu o 1:N na cabeça antes de
+reintroduzir no banco.
+
 **Autorização não mora aqui.** Quem decide o que o usuário vê é a RLS, em
 `supabase/migrations/`. Filtro em `queries.ts` é para a _consulta_ estar certa,
 nunca para _proteger_ dado.

@@ -35,12 +35,19 @@ $$;
 -- u1 e u2 são criadores distintos. O trigger on_auth_user_created deve criar o
 -- profile de cada um automaticamente — se não criar, todo o resto quebra e isso
 -- já é o primeiro sinal.
+--
+-- u3, u4 e u5 existem porque um criador tem no máximo UM canil vivo
+-- (`kennels_owner_uk`): os canis de cenário do grupo 5 e do grupo 7 não cabem
+-- mais em u1, e cada um precisa de dono próprio.
 -- -----------------------------------------------------------------------------
 
 do $$
 declare
   u1 constant uuid := 'b1000000-0000-4000-8000-000000000001';
   u2 constant uuid := 'b1000000-0000-4000-8000-000000000002';
+  u3 constant uuid := 'b1000000-0000-4000-8000-000000000003';
+  u4 constant uuid := 'b1000000-0000-4000-8000-000000000004';
+  u5 constant uuid := 'b1000000-0000-4000-8000-000000000005';
 begin
   insert into auth.users (
     id, instance_id, aud, role, email, encrypted_password,
@@ -53,7 +60,16 @@ begin
      '{"full_name":"Battery Um"}'::jsonb),
     (u2, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
      'battery-u2@example.test', '', now(), now(), now(), '{}'::jsonb,
-     '{"full_name":"Battery Dois"}'::jsonb);
+     '{"full_name":"Battery Dois"}'::jsonb),
+    (u3, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+     'battery-u3@example.test', '', now(), now(), now(), '{}'::jsonb,
+     '{"full_name":"Battery Tres"}'::jsonb),
+    (u4, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+     'battery-u4@example.test', '', now(), now(), now(), '{}'::jsonb,
+     '{"full_name":"Battery Quatro"}'::jsonb),
+    (u5, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+     'battery-u5@example.test', '', now(), now(), now(), '{}'::jsonb,
+     '{"full_name":"Battery Cinco"}'::jsonb);
 end $$;
 
 do $$
@@ -488,10 +504,13 @@ create temp table founder_seq_backup as
   select last_value, is_called from public.kennel_founder_seq;
 
 -- Canil incompleto: nome e cidade, sem estado, sem logo, sem cão.
+--
+-- Dono é u3, não u1: `kennels_owner_uk` já não deixa u1 ter um segundo canil
+-- vivo além de `battery-canil-um`.
 insert into public.kennels (id, owner_id, name, slug, city, created_by)
-values ('c1000000-0000-4000-8000-00000000000f', 'b1000000-0000-4000-8000-000000000001',
+values ('c1000000-0000-4000-8000-00000000000f', 'b1000000-0000-4000-8000-000000000003',
         'Battery Incompleto', 'battery-incompleto', 'Campinas',
-        'b1000000-0000-4000-8000-000000000001');
+        'b1000000-0000-4000-8000-000000000003');
 
 -- 21. Cadastro incompleto não recebe número E NÃO CONSOME da sequence.
 do $$
@@ -524,12 +543,12 @@ begin
   insert into public.media (bucket_id, storage_path, kennel_id, role, mime, size_bytes, owner_id, created_by)
   values ('kennel-media', 'battery/logo-' || gen_random_uuid() || '.webp',
           'c1000000-0000-4000-8000-00000000000f', 'kennel_logo', 'image/webp', 1000,
-          'b1000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000001');
+          'b1000000-0000-4000-8000-000000000003', 'b1000000-0000-4000-8000-000000000003');
 
   insert into public.dogs (id, name, sex, kennel_id, owner_id, created_by)
   values ('d1000000-0000-4000-8000-000000000021', 'Battery Selo', 'male',
           'c1000000-0000-4000-8000-00000000000f',
-          'b1000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000001');
+          'b1000000-0000-4000-8000-000000000003', 'b1000000-0000-4000-8000-000000000003');
 end $$;
 
 -- 22. Ao completar, o trigger atribui.
@@ -606,21 +625,23 @@ begin
   -- Leva a sequence ao teto. `is_called = true` faz o próximo nextval estourar.
   perform setval('public.kennel_founder_seq', 100, true);
 
+  -- Dono é u4: `kennels_owner_uk` impede que este canil de cenário pertença a
+  -- u1, que já tem `battery-canil-um` vivo.
   insert into public.kennels (id, owner_id, name, slug, city, state, created_by)
-  values ('c1000000-0000-4000-8000-000000000010', 'b1000000-0000-4000-8000-000000000001',
+  values ('c1000000-0000-4000-8000-000000000010', 'b1000000-0000-4000-8000-000000000004',
           'Battery Centro E Um', 'battery-101', 'Campinas', 'SP',
-          'b1000000-0000-4000-8000-000000000001');
+          'b1000000-0000-4000-8000-000000000004');
 
   insert into public.media (bucket_id, storage_path, kennel_id, role, mime, size_bytes, owner_id, created_by)
   values ('kennel-media', 'battery/logo101-' || gen_random_uuid() || '.webp',
           'c1000000-0000-4000-8000-000000000010', 'kennel_logo', 'image/webp', 1000,
-          'b1000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000001');
+          'b1000000-0000-4000-8000-000000000004', 'b1000000-0000-4000-8000-000000000004');
 
   -- Este INSERT dispara o trigger com a sequence esgotada. Precisa PASSAR.
   insert into public.dogs (id, name, sex, kennel_id, owner_id, created_by)
   values ('d1000000-0000-4000-8000-000000000022', 'Battery Cão 101', 'male',
           'c1000000-0000-4000-8000-000000000010',
-          'b1000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000001');
+          'b1000000-0000-4000-8000-000000000004', 'b1000000-0000-4000-8000-000000000004');
 
   select founder_number into v_number from public.kennels
    where id = 'c1000000-0000-4000-8000-000000000010';
@@ -641,6 +662,96 @@ declare b record;
 begin
   select * into b from founder_seq_backup;
   perform setval('public.kennel_founder_seq', b.last_value, b.is_called);
+end $$;
+
+-- =============================================================================
+-- Grupo 6 — um canil por criador (casos 27 a 29)
+--
+-- Esta bateria roda como SUPERUSUÁRIO, então a RLS é ignorada. O índice único
+-- NÃO é — e é exatamente por isso que estes casos medem o mecanismo real. Se a
+-- garantia fosse uma policy, os três passariam aqui e falhariam em produção.
+--
+-- A assimetria com o slug é o que está sob teste: a VAGA volta quando a relação
+-- acaba (índice parcial por `deleted_at`), o ENDEREÇO nunca volta
+-- (`kennels_slug_key` é global).
+-- =============================================================================
+
+-- Fixture do grupo, FORA de qualquer bloco com EXCEPTION.
+--
+-- Um `do $$ ... exception ... $$` é uma SUBTRANSAÇÃO: se o segundo INSERT
+-- falhasse dentro do mesmo bloco do primeiro, o Postgres desfaria os DOIS, e o
+-- caso 27 mediria uma tabela vazia em vez da duplicata recusada. Cada bloco
+-- abaixo tem exatamente UMA operação sob teste.
+insert into public.kennels (id, owner_id, name, slug, created_by)
+values ('c1000000-0000-4000-8000-000000000011', 'b1000000-0000-4000-8000-000000000005',
+        'Battery Unico Um', 'battery-unico-1', 'b1000000-0000-4000-8000-000000000005');
+
+-- 27. Segundo canil vivo para o mesmo dono.
+do $$
+declare v_erro text := 'NENHUM ERRO — DUPLICATA ACEITA';
+begin
+  -- Slug NOVO: com slug repetido, a violação poderia ser a do endereço, e o
+  -- caso passaria pelo motivo errado.
+  insert into public.kennels (id, owner_id, name, slug, created_by)
+  values ('c1000000-0000-4000-8000-000000000012', 'b1000000-0000-4000-8000-000000000005',
+          'Battery Unico Dois', 'battery-unico-2', 'b1000000-0000-4000-8000-000000000005');
+exception when others then
+  v_erro := sqlstate || ' ' || sqlerrm;
+end $$;
+
+do $$
+declare v_n int;
+begin
+  select count(*) into v_n from public.kennels
+   where owner_id = 'b1000000-0000-4000-8000-000000000005' and deleted_at is null;
+  perform pg_temp.rec(27, 'segundo canil vivo para o mesmo dono é recusado',
+                      '1 canil vivo', v_n || ' canis vivos', v_n = 1);
+end $$;
+
+-- 28. A exclusão lógica DEVOLVE a vaga.
+update public.kennels set deleted_at = now()
+ where id = 'c1000000-0000-4000-8000-000000000011';
+
+do $$
+declare v_erro text := 'sem erro';
+begin
+  insert into public.kennels (id, owner_id, name, slug, created_by)
+  values ('c1000000-0000-4000-8000-000000000013', 'b1000000-0000-4000-8000-000000000005',
+          'Battery Unico Tres', 'battery-unico-3', 'b1000000-0000-4000-8000-000000000005');
+exception when others then
+  v_erro := sqlstate || ' ' || sqlerrm;
+end $$;
+
+do $$
+declare v_n int;
+begin
+  select count(*) into v_n from public.kennels
+   where id = 'c1000000-0000-4000-8000-000000000013' and deleted_at is null;
+  perform pg_temp.rec(28, 'exclusão lógica libera a vaga para um canil novo',
+                      '1 canil novo vivo', v_n || ' criado', v_n = 1);
+end $$;
+
+-- 29. Reverter a exclusão tendo outro canil vivo.
+--
+-- É o caso que distingue o índice de uma policy: `deleted_at` é coluna com
+-- GRANT de UPDATE, então "desexcluir" é um caminho que nenhum WITH CHECK de
+-- INSERT enxergaria.
+do $$
+declare v_erro text := 'NENHUM ERRO — DOIS CANIS VIVOS';
+begin
+  update public.kennels set deleted_at = null
+   where id = 'c1000000-0000-4000-8000-000000000011';
+exception when others then
+  v_erro := sqlstate;
+end $$;
+
+do $$
+declare v_n int;
+begin
+  select count(*) into v_n from public.kennels
+   where owner_id = 'b1000000-0000-4000-8000-000000000005' and deleted_at is null;
+  perform pg_temp.rec(29, 'reverter a exclusão com outro canil vivo é recusado',
+                      '1 canil vivo', v_n || ' canis vivos', v_n = 1);
 end $$;
 
 -- -----------------------------------------------------------------------------

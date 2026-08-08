@@ -65,7 +65,12 @@ const rotulos = (campos: readonly CampoPendente[]) => listar(campos.map((c) => c
 // ============================================================================
 
 export type AccountFacts = {
-  kennelCount: number;
+  /**
+   * Booleano, e não contagem, de propósito: o criador tem no máximo UM canil
+   * vivo (`kennels_owner_uk`). Uma contagem convida a regras `> 1` que não podem
+   * mais acontecer, e permitiria escrever teste com entrada impossível.
+   */
+  hasKennel: boolean;
   dogCount: number;
 };
 
@@ -73,11 +78,11 @@ export const ACCOUNT_RULES: readonly AlertRule<AccountFacts>[] = [
   {
     id: "conta-sem-canil",
     severity: "atencao",
-    title: "Você ainda não cadastrou um canil",
+    title: "Você ainda não cadastrou seu canil",
     detail:
       "O canil é o que dá endereço público ao seu trabalho. Sem ele, seus cães não aparecem no perfil de lugar nenhum e o QR Code não tem para onde apontar.",
     actionLabel: "Cadastrar canil",
-    when: (f) => f.kennelCount === 0,
+    when: (f) => !f.hasKennel,
   },
 ];
 

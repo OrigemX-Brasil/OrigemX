@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/modules/auth/queries";
+import { getMyKennel } from "@/modules/kennels/queries";
 
 import {
   ineligibilityOf,
@@ -71,7 +72,12 @@ export async function createDog(_prev: DogFormState, formData: FormData): Promis
   const errors = validateDog(input);
   if (Object.keys(errors).length > 0) return { errors, values: input };
 
-  const kennelId = String(formData.get("kennel_id") ?? "") || null;
+  // O canil vem do SERVIDOR, não do formulário: o cliente não nomeia mais id de
+  // canil nenhum. Ele só diz se quer o vínculo — e a resposta vale só se o
+  // usuário tiver canil.
+  const kennelId = formData.get("vincular_canil")
+    ? ((await getMyKennel(user.id))?.id ?? null)
+    : null;
   const sireId = readParent(formData, "sire");
   const damId = readParent(formData, "dam");
 
@@ -79,6 +85,11 @@ export async function createDog(_prev: DogFormState, formData: FormData): Promis
   const name = values.name;
   const sex = values.sex;
   if (!name || !sex) return { formError: "Nome e sexo são obrigatórios.", values: input };
+
+  // `dogs_slug_requires_kennel` recusa slug sem canil. O formulário já esconde o
+  // campo nesse caso; isto é a garantia do servidor, e sai barato porque o
+  // `kennelId` acabou de ser resolvido aqui.
+  if (!kennelId) values.slug = null;
 
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -106,13 +117,29 @@ export async function updateDog(_prev: DogFormState, formData: FormData): Promis
   const id = String(formData.get("id") ?? "");
   if (!id) return { formError: "Cão não identificado." };
 
-  await requireUser(`/painel/caes/${id}`);
+  const user = await requireUser(`/painel/caes/${id}`);
 
   const input = readForm(formData, DOG_FIELDS);
   const errors = validateDog(input);
   if (Object.keys(errors).length > 0) return { errors, values: input };
 
-  const kennelId = String(formData.get("kennel_id") ?? "") || null;
+  // `kennel_id` só entra no patch se o CONTROLE FOI RENDERIZADO. Quando não
+  // foi, a coluna não é tocada — e isto não é preciosismo.
+  //
+  // `getManageableDogById` devolve também o ANCESTRAL FANTASMA que o usuário
+  // cadastrou: `owner_id` e `kennel_id` nulos, `created_by` dele. A policy
+  // `dogs_select` só o trata como nó público de árvore ENQUANTO os dois forem
+  // nulos. Gravar `kennel_id` cegamente o transformaria em rascunho, e ele
+  // sumiria — em silêncio — de todo pedigree publicado que o referencia.
+  const vinculoNaTela = formData.has("vinculo_canil_presente");
+  const kennelPatch = vinculoNaTela
+    ? {
+        kennel_id: formData.get("vincular_canil")
+          ? ((await getMyKennel(user.id))?.id ?? null)
+          : null,
+      }
+    : {};
+
   const sireId = readParent(formData, "sire");
   const damId = readParent(formData, "dam");
 
@@ -121,7 +148,7 @@ export async function updateDog(_prev: DogFormState, formData: FormData): Promis
     .from("dogs")
     .update({
       ...normalizeDogInput(input),
-      kennel_id: kennelId,
+      ...kennelPatch,
       sire_id: sireId,
       dam_id: damId,
     })

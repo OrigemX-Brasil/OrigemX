@@ -51,7 +51,8 @@ function resumo(total: Record<AlertSeverity, number>): string {
 export function AlertPanel({ result }: { result: AlertsResult }) {
   const { alerts, scan } = result;
   const total = countBySeverity(alerts);
-  const truncado = scan.kennelsTruncated || scan.dogsTruncated;
+  // Só cães podem truncar: o criador tem no máximo um canil.
+  const truncado = scan.dogsTruncated;
 
   return (
     <section className="flex flex-col gap-3" aria-labelledby="alertas-titulo">
@@ -66,7 +67,7 @@ export function AlertPanel({ result }: { result: AlertsResult }) {
         // Estado vazio é resposta, não ausência de resposta. Sem isto o criador
         // não sabe se está tudo certo ou se a checagem não rodou.
         <p className="border-border bg-surface rounded-card text-fg-muted border px-5 py-4 text-sm">
-          <span className="text-success">✓</span> Nada pendente nos seus canis e cães.
+          <span className="text-success">✓</span> Nada pendente no seu canil e nos seus cães.
         </p>
       ) : (
         <ul className="flex flex-col gap-3">
@@ -78,8 +79,8 @@ export function AlertPanel({ result }: { result: AlertsResult }) {
 
       {truncado ? (
         <p className="text-fg-faint text-xs">
-          Analisando os {scan.dogs} cães e {scan.kennels} canis mais recentes. Você tem mais
-          registros do que isso — o que ficou de fora não foi verificado.
+          Analisando os {scan.dogs} cães mais recentes. Você tem mais registros do que isso — o que
+          ficou de fora não foi verificado.
         </p>
       ) : null}
     </section>

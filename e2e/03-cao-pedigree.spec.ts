@@ -44,9 +44,9 @@ test("vincula pai e mãe pela BUSCA e o pedigree aparece no perfil público", as
   await page.getByLabel("Nome", { exact: false }).first().fill(`Xavante ${token}`);
   await page.getByLabel("Sexo").selectOption("male");
   await page.getByLabel("Raça").fill("Fila Brasileiro");
-  // Precisa do canil: o formulário sugere o endereço público a partir do nome,
-  // e endereço público sem canil é inválido por CHECK no banco.
-  await page.getByLabel("Canil").selectOption(canil.id);
+  // Não há mais seletor de canil: o criador tem no máximo um, e o vínculo vem
+  // marcado por padrão. O `criarCanil` acima é o que faz existir um para
+  // vincular — sem ele o campo de endereço público nem apareceria.
 
   // Pai e mãe por BUSCA, nunca por digitação livre: é o que impede a base de
   // encher de homônimos desconectados.
@@ -66,12 +66,15 @@ test("vincula pai e mãe pela BUSCA e o pedigree aparece no perfil público", as
   // O vínculo chegou no banco, por REFERÊNCIA — nada copiado.
   const { data: salvo } = await admin
     .from("dogs")
-    .select("id, public_id, sire_id, dam_id")
+    .select("id, public_id, sire_id, dam_id, kennel_id")
     .eq("name", `Xavante ${token}`)
     .single();
 
   expect(salvo?.sire_id).toBe(pai.id);
   expect(salvo?.dam_id).toBe(mae.id);
+  // O canil foi resolvido pelo SERVIDOR, sem o formulário mandar id nenhum.
+  // Sem esta asserção o vínculo implícito ficaria só suposto.
+  expect(salvo?.kennel_id).toBe(canil.id);
 
   // --- o pedigree na página pública ---
   await publicar(admin, {
@@ -190,13 +193,14 @@ test("data de nascimento digitada em dd/mm/aaaa chega ao banco em yyyy-mm-dd", a
   criador,
   admin,
 }) => {
-  const canil = await criarCanil(admin, criador.id);
+  // O id não é mais usado — o formulário não escolhe canil. A chamada fica
+  // porque o cão precisa de um para se vincular.
+  await criarCanil(admin, criador.id);
   const token = Date.now().toString(36);
 
   await page.goto("/painel/caes/novo");
   await page.getByLabel("Nome", { exact: false }).first().fill(`Data Digitada ${token}`);
   await page.getByLabel("Sexo").selectOption("male");
-  await page.getByLabel("Canil").selectOption(canil.id);
 
   // Digitação corrida, sem barra — a máscara insere sozinha. É o caminho
   // rápido que este ajuste existe para viabilizar no teclado numérico do
@@ -221,7 +225,9 @@ test("data digitada no futuro é recusada pela MESMA regra de sempre, não uma n
   criador,
   admin,
 }) => {
-  const canil = await criarCanil(admin, criador.id);
+  // O id não é mais usado — o formulário não escolhe canil. A chamada fica
+  // porque o cão precisa de um para se vincular.
+  await criarCanil(admin, criador.id);
   const token = Date.now().toString(36);
   const futuro = new Date();
   futuro.setFullYear(futuro.getFullYear() + 1);
@@ -233,7 +239,6 @@ test("data digitada no futuro é recusada pela MESMA regra de sempre, não uma n
   await page.goto("/painel/caes/novo");
   await page.getByLabel("Nome", { exact: false }).first().fill(`Data Futura ${token}`);
   await page.getByLabel("Sexo").selectOption("male");
-  await page.getByLabel("Canil").selectOption(canil.id);
   await page.getByLabel("Data de nascimento").pressSequentially(digitado);
 
   await page.getByRole("button", { name: "Cadastrar cão" }).click();
@@ -254,13 +259,14 @@ test("data impossível (31/02) mostra aviso de formato e NÃO trava o cadastro",
   criador,
   admin,
 }) => {
-  const canil = await criarCanil(admin, criador.id);
+  // O id não é mais usado — o formulário não escolhe canil. A chamada fica
+  // porque o cão precisa de um para se vincular.
+  await criarCanil(admin, criador.id);
   const token = Date.now().toString(36);
 
   await page.goto("/painel/caes/novo");
   await page.getByLabel("Nome", { exact: false }).first().fill(`Data Impossível ${token}`);
   await page.getByLabel("Sexo").selectOption("male");
-  await page.getByLabel("Canil").selectOption(canil.id);
 
   await page.getByLabel("Data de nascimento").pressSequentially("31022020");
 

@@ -176,8 +176,20 @@ async function main() {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
+  // Um canil VIVO por dono (`kennels_owner_uk`), então cada canil que o roteiro
+  // precisa manter simultaneamente exige um ator próprio. Não é inflação de
+  // fixture: é o roteiro passando a refletir a invariante.
+  //
+  //   A — cenários 1-3, 8, 9, 10 (canis serializados por exclusão)
+  //   B — o "outro": escrita cruzada, storage, admin
+  //   C — SEM canil, dedicado ao reuso de slug do cenário 8
+  //   S — dono do canil do selo (11a)
+  //   U — cenário 13, um canil por dono
   const A = await createActor("a");
   const B = await createActor("b");
+  const C = await createActor("c");
+  const S = await createActor("s");
+  const U = await createActor("u");
 
   // ---------------------------------------------------------------------------
   // Cenário 1 — A e B criam os próprios dados
@@ -680,21 +692,26 @@ async function main() {
 
   // O endereço não volta ao mercado: um link já divulgado não pode passar a
   // resolver para outro canil.
-  const reuse = await B.client
+  //
+  // Quem tenta é C, que NÃO tem canil, e a asserção cobra o NOME da constraint.
+  // Se fosse B — que já tem o dele — a inserção violaria duas constraints
+  // (`kennels_slug_key` e `kennels_owner_uk`), o Postgres reportaria a que
+  // encontrasse primeiro, e um "houve erro" passaria pelo motivo errado.
+  const reuse = await C.client
     .from("kennels")
     .insert({
-      owner_id: B.id,
-      created_by: B.id,
+      owner_id: C.id,
+      created_by: C.id,
       name: "Tentando reusar slug",
       slug: `rls-${RUN}-canil-a`,
     })
     .select();
   record(
     "8. CRUD de canil",
-    "B tenta reusar o endereço de um canil excluído de A",
-    "erro — slug fica reservado para sempre",
+    "C (sem canil) tenta reusar o endereço de um canil excluído de A",
+    "erro em kennels_slug_key — slug fica reservado para sempre",
     describe(reuse.error, reuse.data ?? []),
-    !!reuse.error,
+    Boolean(reuse.error?.message.includes("kennels_slug_key")),
   );
 
   // ---------------------------------------------------------------------------
@@ -804,6 +821,11 @@ async function main() {
   // Canil próprio para este cenário. O de A foi excluído logicamente no
   // cenário 8, e `owns_kennel` exige deleted_at nulo — reaproveitá-lo mediria
   // a exclusão, não a política de mídia.
+  //
+  // E é justamente aquela exclusão que LIBERA A VAGA de `kennels_owner_uk`:
+  // sem ela este INSERT falharia por dono, não por mídia. A dependência entre
+  // os cenários 8 e 10 passou a ser real — está dita aqui para não ser
+  // descoberta por quem reordenar o roteiro.
   const { data: kennelMedia } = await A.client
     .from("kennels")
     .insert({
@@ -948,14 +970,24 @@ async function main() {
 
   const CONCURRENT = 5;
 
+  // Declarado aqui fora porque a LIMPEZA precisa deles. Fica vazio quando 11b é
+  // pulado, e limpar lista vazia é no-op.
+  let founders: Actor[] = [];
+
   // Canil sem cão e, portanto, SEM selo — o suficiente para 11a. Fica fora do
   // `if` de propósito: é o que permite provar a proteção de escrita mesmo
   // quando a parte que consome o pool não roda.
-  const { data: kennelSelo } = await A.client
+  //
+  // Dono é S, não A. Com `kennels_owner_uk` este canil só caberia em A porque os
+  // cenários 8 e 10 esvaziaram a vaga dele — dependência invisível que quebraria
+  // na primeira reordenação do roteiro. Um ator próprio torna o cenário
+  // independente, e 11a continua provando o que precisa: GRANT de coluna e
+  // policy, com S tentando gravar no próprio canil e B no alheio.
+  const { data: kennelSelo } = await S.client
     .from("kennels")
     .insert({
-      owner_id: A.id,
-      created_by: A.id,
+      owner_id: S.id,
+      created_by: S.id,
       name: "Canil Selo",
       slug: `rls-${RUN}-selo`,
       city: "Campinas",
@@ -984,14 +1016,26 @@ async function main() {
       motivo,
     );
   } else {
+    // Um DONO por canil: `kennels_owner_uk` impede que um único usuário abra os
+    // N canis desta corrida.
+    //
+    // A prova NÃO enfraqueceu — ficou mais forte. Continuam sendo CONCURRENT
+    // chamadas simultâneas de `try_assign_founder_number` pelo trigger, e agora
+    // a contenção de `nextval` acontece entre sessões de usuários DIFERENTES,
+    // que é o modelo real de produção. Um usuário martelando a própria conta era
+    // a aproximação, não o alvo.
+    founders = await Promise.all(
+      Array.from({ length: CONCURRENT }, (_unused, i) => createActor(`f${i}`)),
+    );
+
     // Cria N canis completos exceto pelo cão.
     const founderKennels = await Promise.all(
-      Array.from({ length: CONCURRENT }, async (_unused, i) => {
-        const { data: k } = await A.client
+      founders.map(async (F, i) => {
+        const { data: k } = await F.client
           .from("kennels")
           .insert({
-            owner_id: A.id,
-            created_by: A.id,
+            owner_id: F.id,
+            created_by: F.id,
             name: `Canil Fundador ${i}`,
             slug: `rls-${RUN}-fundador-${i}`,
             city: "Campinas",
@@ -1001,22 +1045,29 @@ async function main() {
           .single();
 
         if (k) {
-          await A.client.from("media").insert({
+          await F.client.from("media").insert({
             bucket_id: BUCKET,
-            storage_path: `${A.id}/canis/${k.id}/logo-${RUN}-${i}.webp`,
+            storage_path: `${F.id}/canis/${k.id}/logo-${RUN}-${i}.webp`,
             kennel_id: k.id,
             role: "kennel_logo",
             mime: "image/webp",
             size_bytes: 1000,
-            owner_id: A.id,
-            created_by: A.id,
+            owner_id: F.id,
+            created_by: F.id,
           });
         }
         return k?.id ?? null;
       }),
     );
 
-    const kennelIds = founderKennels.filter((id): id is string => Boolean(id));
+    // Par ator↔canil, e não duas listas: filtrar só os ids desalinharia os
+    // índices se uma criação falhasse, e o cão iria para o canil de outro dono —
+    // que a RLS recusaria, transformando falha de fixture em falha de teste.
+    const founderPairs = founderKennels
+      .map((id, i) => ({ actor: founders[i]!, kennelId: id }))
+      .filter((p): p is { actor: Actor; kennelId: string } => Boolean(p.kennelId));
+
+    const kennelIds = founderPairs.map((p) => p.kennelId);
 
     // Nenhum tem selo ainda: falta o cão.
     const { data: beforeDogs } = await admin
@@ -1031,15 +1082,16 @@ async function main() {
       (beforeDogs ?? []).every((k) => k.founder_number === null),
     );
 
-    // AQUI é a corrida: N inserções simultâneas, cada uma disparando o trigger.
+    // AQUI é a corrida: N inserções simultâneas, cada uma disparando o trigger,
+    // agora vindas de N sessões de usuários distintos.
     await Promise.all(
-      kennelIds.map((kennelId, i) =>
-        A.client.from("dogs").insert({
+      founderPairs.map(({ actor, kennelId }, i) =>
+        actor.client.from("dogs").insert({
           name: `Cão Fundador ${i}`,
           sex: "male",
           kennel_id: kennelId,
-          owner_id: A.id,
-          created_by: A.id,
+          owner_id: actor.id,
+          created_by: actor.id,
         }),
       ),
     );
@@ -1071,9 +1123,10 @@ async function main() {
     );
 
     // Exclusão lógica não devolve o número. Precisa de um canil COM selo, então
-    // só faz sentido aqui dentro.
-    const deletedKennel = kennelIds[0]!;
-    await A.client
+    // só faz sentido aqui dentro. Quem exclui é o DONO dele.
+    const primeiro = founderPairs[0]!;
+    const deletedKennel = primeiro.kennelId;
+    await primeiro.actor.client
       .from("kennels")
       .update({ deleted_at: new Date().toISOString() })
       .eq("id", deletedKennel);
@@ -1255,21 +1308,194 @@ async function main() {
   }
 
   // ---------------------------------------------------------------------------
-  // Limpeza
+  // Cenário 13 — um canil por dono
+  //
+  // O mecanismo é o índice único PARCIAL `kennels_owner_uk`, e a assimetria com
+  // o slug é o ponto: a VAGA volta quando a relação acaba, o ENDEREÇO nunca
+  // volta. As duas metades precisam de prova, senão metade da regra vive só no
+  // comentário da migration.
   // ---------------------------------------------------------------------------
+
+  const { error: u1Error } = await U.client.from("kennels").insert({
+    owner_id: U.id,
+    created_by: U.id,
+    name: "Canil de U",
+    slug: `rls-${RUN}-u-1`,
+  });
+  record(
+    "13. Um canil por dono",
+    "U cria o primeiro canil",
+    "sucesso",
+    u1Error ? `erro: ${u1Error.message}` : "sucesso",
+    !u1Error,
+  );
+
+  // Slug NOVO de propósito: com slug repetido, um erro qualquer passaria por
+  // certo. Por isso a asserção cobra o nome da constraint, não só "houve erro".
+  const u2 = await U.client
+    .from("kennels")
+    .insert({
+      owner_id: U.id,
+      created_by: U.id,
+      name: "Segundo canil de U",
+      slug: `rls-${RUN}-u-2`,
+    })
+    .select();
+  record(
+    "13. Um canil por dono",
+    "U cria um SEGUNDO canil, com endereço novo",
+    "erro em kennels_owner_uk",
+    describe(u2.error, u2.data ?? []),
+    Boolean(u2.error?.message.includes("kennels_owner_uk")),
+  );
+
+  const b2 = await B.client
+    .from("kennels")
+    .insert({
+      owner_id: B.id,
+      created_by: B.id,
+      name: "Outro canil de B",
+      slug: `rls-${RUN}-b-2`,
+    })
+    .select();
+  record(
+    "13. Um canil por dono",
+    "B, que já tem canil, também é barrado — o limite é por dono, não global",
+    "erro em kennels_owner_uk",
+    describe(b2.error, b2.data ?? []),
+    Boolean(b2.error?.message.includes("kennels_owner_uk")),
+  );
+
+  await U.client
+    .from("kennels")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("slug", `rls-${RUN}-u-1`);
+
+  const u3 = await U.client
+    .from("kennels")
+    .insert({
+      owner_id: U.id,
+      created_by: U.id,
+      name: "Canil novo de U",
+      slug: `rls-${RUN}-u-3`,
+    })
+    .select();
+  record(
+    "13. Um canil por dono",
+    "depois de excluir logicamente, U cadastra outro canil",
+    "sucesso — a exclusão libera a vaga",
+    describe(u3.error, u3.data ?? []),
+    !u3.error && (u3.data?.length ?? 0) === 1,
+  );
+
+  const u4 = await C.client
+    .from("kennels")
+    .insert({
+      owner_id: C.id,
+      created_by: C.id,
+      name: "Tentando o endereço de U",
+      slug: `rls-${RUN}-u-1`,
+    })
+    .select();
+  record(
+    "13. Um canil por dono",
+    "o endereço do canil excluído de U continua reservado",
+    "erro em kennels_slug_key — a vaga volta, o endereço não",
+    describe(u4.error, u4.data ?? []),
+    Boolean(u4.error?.message.includes("kennels_slug_key")),
+  );
+
+  // ESTA é a que prova que o mecanismo é o índice e não uma policy de INSERT:
+  // `deleted_at` é coluna com GRANT de UPDATE, então "desexcluir" é um caminho
+  // que nenhum WITH CHECK de inserção enxergaria.
+  const u5 = await U.client
+    .from("kennels")
+    .update({ deleted_at: null })
+    .eq("slug", `rls-${RUN}-u-1`)
+    .select();
+  record(
+    "13. Um canil por dono",
+    "U tenta REVERTER a exclusão tendo outro canil vivo",
+    "erro em kennels_owner_uk — o índice cobre o UPDATE, não só o INSERT",
+    describe(u5.error, u5.data ?? []),
+    Boolean(u5.error?.message.includes("kennels_owner_uk")),
+  );
+
+  // ---------------------------------------------------------------------------
+  // Limpeza
+  //
+  // POR POSSE, não por padrão de slug — e esta distinção não é estilo.
+  //
+  // A versão anterior apagava cães por `slug like 'rls-<RUN>-%'`. Os cães do
+  // cenário 11b são inseridos SEM slug, então sobreviviam; o delete de canis
+  // apanhava de `dogs.kennel_id ON DELETE RESTRICT`, o `deleteUser` apanhava de
+  // `kennels.owner_id RESTRICT`, e NADA disso era conferido — nenhum daqueles
+  // `.delete()` olhava o `error`. A execução terminava verde deixando até 5
+  // canis vivos do mesmo dono por trás, e foi assim que o projeto de dev
+  // acumulou 14 donos com canil duplicado.
+  //
+  // Agora cada passo é verificado e a falha aparece. Ordem obrigatória, igual à
+  // que `e2e/support/admin.ts` já documenta.
+  // ---------------------------------------------------------------------------
+
+  const atores = [A, B, C, S, U, ...founders];
+  const ids = atores.map((a) => a.id);
 
   await admin.storage
     .from(BUCKET)
     .remove([`${A.id}/de-a-${RUN}.png`, `${B.id}/proprio-${RUN}.png`]);
+
+  /**
+   * Roda um passo da limpeza e AVISA quando ele falha, em vez de engolir.
+   *
+   * `PromiseLike` e não `Promise`: o builder do PostgREST é thenable, mas não
+   * implementa `catch`/`finally`.
+   */
+  async function limpar(rotulo: string, run: () => PromiseLike<{ error: unknown }>): Promise<void> {
+    const { error } = await run();
+    if (error) {
+      const msg = error instanceof Error ? error.message : JSON.stringify(error);
+      console.warn(`  ⚠ limpeza incompleta em "${rotulo}": ${msg}`);
+    }
+  }
+
   // Metadata de mídia criada pelos cenários. Sem isto, cada execução deixa
   // linhas órfãs — a linha existe e o arquivo nunca foi enviado — e o
   // `media:reconcile` passa a relatar resíduo de teste como problema.
-  await admin.from("media").delete().like("storage_path", `%${RUN}%`);
-  await admin.from("dog_identifiers").delete().like("value", `RLS-${RUN}-%`);
-  await admin.from("dogs").delete().like("slug", `rls-${RUN}-%`);
-  await admin.from("kennels").delete().like("slug", `rls-${RUN}-%`);
-  await admin.auth.admin.deleteUser(A.id);
-  await admin.auth.admin.deleteUser(B.id);
+  await limpar("media", () =>
+    admin
+      .from("media")
+      .delete()
+      .or(`storage_path.like.%${RUN}%,owner_id.in.(${ids.join(",")})`),
+  );
+  await limpar("dog_identifiers", () =>
+    admin.from("dog_identifiers").delete().like("value", `RLS-${RUN}-%`),
+  );
+
+  // Zera o parentesco antes de apagar: cão que é pai de outro cão do lote
+  // bloquearia o próprio DELETE.
+  await limpar("dogs (parentesco)", () =>
+    admin
+      .from("dogs")
+      .update({ sire_id: null, dam_id: null })
+      .or(`owner_id.in.(${ids.join(",")}),created_by.in.(${ids.join(",")})`),
+  );
+  await limpar("dogs", () =>
+    admin
+      .from("dogs")
+      .delete()
+      .or(`owner_id.in.(${ids.join(",")}),created_by.in.(${ids.join(",")})`),
+  );
+  // Cinto: cão de slug do lote que não tenha caído nos filtros acima.
+  await limpar("dogs (slug)", () => admin.from("dogs").delete().like("slug", `rls-${RUN}-%`));
+
+  await limpar("kennels", () => admin.from("kennels").delete().in("owner_id", ids));
+
+  // `profiles` some por CASCADE de auth.users. Os canis já saíram, então o
+  // RESTRICT de `kennels.owner_id` não bloqueia mais.
+  for (const ator of atores) {
+    await limpar(`usuário ${ator.email}`, () => admin.auth.admin.deleteUser(ator.id));
+  }
   if (hostile?.user) await admin.auth.admin.deleteUser(hostile.user.id);
   if (oauthUser?.user) await admin.auth.admin.deleteUser(oauthUser.user.id);
 }
@@ -1309,10 +1535,16 @@ function writeReport(fatal?: string) {
       : []),
     `## Método`,
     ``,
-    `Dois usuários reais (A e B) e um cliente anônimo, falando com a API REST do`,
-    `Supabase pela chave publishable — a mesma porta que um atacante usaria. Nada`,
-    `passa pela interface. A chave secreta é usada apenas para criar e destruir as`,
-    `fixtures, nunca para provar acesso.`,
+    `Usuários reais e um cliente anônimo, falando com a API REST do Supabase pela`,
+    `chave publishable — a mesma porta que um atacante usaria. Nada passa pela`,
+    `interface. A chave secreta é usada apenas para criar e destruir as fixtures,`,
+    `nunca para provar acesso.`,
+    ``,
+    `São vários atores porque a invariante exige: um criador tem no máximo **um`,
+    `canil vivo** (\`kennels_owner_uk\`), então cada canil que o roteiro precisa`,
+    `manter ao mesmo tempo tem dono próprio. A corrida do selo Fundador, em`,
+    `particular, roda com um usuário por canil — contenção entre sessões`,
+    `distintas, que é o modelo real de produção.`,
     ``,
     `## Escopo do isolamento`,
     ``,

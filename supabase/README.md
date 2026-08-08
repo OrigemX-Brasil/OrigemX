@@ -91,6 +91,15 @@ E o selo Criador Fundador, que tem seção própria mais abaixo:
 | 25  | exclusão lógica de canil com selo           | número permanece na linha             |
 | 26  | pool esgotado: 101º canil elegível          | sem selo, e o cadastro **não quebra** |
 
+E a posse do canil. A bateria roda como superusuário, então a RLS é ignorada —
+o índice único **não** é, e é por isso que estes casos medem o mecanismo real:
+
+| #   | Caso                                              | Esperado                                        |
+| --- | ------------------------------------------------- | ----------------------------------------------- |
+| 27  | segundo canil vivo para o mesmo dono, slug novo   | erro — `kennels_owner_uk`                       |
+| 28  | novo canil depois de excluir logicamente o antigo | sucesso — a exclusão libera a vaga              |
+| 29  | reverter a exclusão tendo outro canil vivo        | erro — o índice cobre o UPDATE, não só o INSERT |
+
 Por fim, `supabase db advisors --linked` deve sair apenas com os sete WARN
 listados em "Advisors de segurança" — qualquer alerta além desses é regressão.
 
@@ -529,29 +538,6 @@ Não foi alterado porque a correção óbvia — `ON DELETE RESTRICT`, como em
 conflita com pedido de exclusão de dados. A decisão é de produto: o que acontece
 com os cães quando o criador apaga a conta.
 
-## Pendente para a próxima migration
-
-### Número do fundador
-
-Vai em **`kennels.founder_number int unique null`**, alimentado por uma
-`SEQUENCE` dedicada (`kennels_founder_number_seq`).
-
-Mora em `kennels` e não em `profiles` porque o número é distintivo do **canil**
-— é ele que tem página pública, e é nela que o selo aparece. Um criador com dois
-canis teria dois números, o que é o comportamento correto.
-
-Três detalhes que precisam estar certos quando entrar:
-
-- **`null`, não `not null`**: o número é dos primeiros N canis. Quem chegar
-  depois fica sem, e sem não é zero.
-- **Nunca `identity` nem `serial`**: os dois atribuem valor a toda linha, o que
-  daria número de fundador a todo mundo. A sequence é chamada explicitamente,
-  só quando a regra de corte permitir.
-- **`unique`**: dois canis com o mesmo número destroem o sentido do selo.
-
-A regra de corte (quantos fundadores, até quando) é decisão de produto e ainda
-não foi definida.
-
 ## Pontos que merecem atenção na revisão
 
 - **`extensions` schema** — `pg_trgm` é instalada em `extensions`, convenção do
@@ -564,3 +550,16 @@ não foi definida.
   Nenhum dos dois é parcial por `deleted_at`, de propósito: slug reaproveitado
   faria uma URL já compartilhada resolver para outro registro. O QR não depende
   de slug — ele aponta para `dogs.public_id`, que é imutável.
+- **Posse do canil, e a assimetria com o slug** — `kennels.owner_id` é único
+  **entre as linhas vivas** (`kennels_owner_uk`, parcial por `deleted_at`): um
+  criador tem no máximo um canil. Note que o predicado é o OPOSTO do escopo do
+  slug logo acima, e é decisão, não descuido:
+
+  |            | identifica               | ao excluir                                           |
+  | ---------- | ------------------------ | ---------------------------------------------------- |
+  | `slug`     | uma **URL já divulgada** | nunca recicla — o QR impresso não pode mudar de dono |
+  | `owner_id` | uma **relação viva**     | recicla — quem fechou o canil pode abrir outro       |
+
+  O índice cobre o INSERT e também o `update ... set deleted_at = null`, que
+  nenhuma policy de INSERT enxergaria — `deleted_at` está na lista de
+  `grant update` por coluna. Ver a migration `canil_unico_por_dono`.

@@ -59,6 +59,9 @@ Deploy Vercel.
   por nó.
 - Ciclo genealógico é proibido e bloqueado no banco.
 - `dogs.owner_id` e `kennel_id` são NULLABLE (ancestral sem dono cadastrado).
+- Um criador tem **no máximo UM canil vivo**. Excluir logicamente libera a vaga; o
+  endereço (`slug`) fica queimado para sempre. A assimetria é deliberada: slug identifica
+  uma URL já divulgada, posse identifica uma relação viva.
 - Exclusão é sempre lógica (`deleted_at`). Nunca DELETE físico.
 - Toda tabela tem `created_at`, `updated_at` e autoria quando aplicável.
 
@@ -103,17 +106,18 @@ duplicados, cache distribuído, filas.
 
 Referência rápida — o banco é quem garante, não a aplicação.
 
-| Invariante                 | Onde vive                                                                  |
-| -------------------------- | -------------------------------------------------------------------------- |
-| UUID permanente do cão     | `dogs.id uuid PK`                                                          |
-| Parentesco por referência  | `dogs.sire_id` / `dogs.dam_id` → `dogs.id`                                 |
-| Ciclo genealógico proibido | trigger `dogs_check_ancestry()` (CTE recursiva)                            |
-| Linebreeding é legítimo    | mesma CTE usa `UNION`, então ancestral repetido não vira ciclo             |
-| Exclusão lógica            | `deleted_at` em todas as tabelas + policies filtram                        |
-| QR não quebra              | `dogs.public_id` imutável, protegido por trigger                           |
-| RLS em tudo                | migration `0002_rls_policies.sql`                                          |
-| Listagem com limite        | todo acesso a dados em `src/modules/*/queries.ts`, com `limit` obrigatório |
-| Tokens de cor              | `src/styles/tokens.css` — nenhuma cor literal em componente                |
+| Invariante                 | Onde vive                                                                       |
+| -------------------------- | ------------------------------------------------------------------------------- |
+| UUID permanente do cão     | `dogs.id uuid PK`                                                               |
+| Parentesco por referência  | `dogs.sire_id` / `dogs.dam_id` → `dogs.id`                                      |
+| Ciclo genealógico proibido | trigger `dogs_check_ancestry()` (CTE recursiva)                                 |
+| Linebreeding é legítimo    | mesma CTE usa `UNION`, então ancestral repetido não vira ciclo                  |
+| Exclusão lógica            | `deleted_at` em todas as tabelas + policies filtram                             |
+| Um canil por criador       | índice único parcial `kennels_owner_uk` — `(owner_id) where deleted_at is null` |
+| QR não quebra              | `dogs.public_id` imutável, protegido por trigger                                |
+| RLS em tudo                | migration `20260731194105_rls_policies.sql`                                     |
+| Listagem com limite        | todo acesso a dados em `src/modules/*/queries.ts`, com `limit` obrigatório      |
+| Tokens de cor              | `src/styles/tokens.css` — nenhuma cor literal em componente                     |
 
 ### Schema
 

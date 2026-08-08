@@ -8,8 +8,9 @@ import { notificarEvento } from "@/lib/notify";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/modules/auth/queries";
 
+import { translateKennelError, type DbError } from "./errors";
 import { KENNEL_FORM_FIELDS } from "./fields";
-import { isSlugTaken } from "./queries";
+import { getMyKennel, isSlugTaken } from "./queries";
 import {
   normalizeKennelInput,
   validateKennel,
@@ -22,6 +23,21 @@ export type KennelFormState = {
   formError?: string;
   values?: KennelInput;
 };
+
+/** Mensagem de "você já tem um canil" quando a checagem prévia pega o caso. */
+const JA_TEM_CANIL =
+  "Você já tem um canil. Cada conta tem um único canil — para começar outro, exclua o atual primeiro.";
+
+/**
+ * Erro do banco → estado do formulário, no molde de `toFormState` em
+ * `src/modules/dogs/actions.ts`. O campo decide onde a mensagem aparece: no
+ * endereço, quando é dele o problema; acima do formulário, quando é do canil
+ * inteiro.
+ */
+function toFormState(error: DbError, values: KennelInput): KennelFormState {
+  const { field, message } = translateKennelError(error);
+  return field === "slug" ? { errors: { slug: message }, values } : { formError: message, values };
+}
 
 /** Lê do FormData só o que a configuração declara. Campo extra é ignorado. */
 function readForm(formData: FormData): KennelInput {
@@ -59,6 +75,17 @@ export async function createKennel(
   const user = await requireUser("/painel/canis/novo");
   const input = readForm(formData);
 
+  // Consulta antes de gravar só para dar mensagem decente — quem GARANTE é o
+  // índice `kennels_owner_uk`, e é ele que cobre a corrida entre duas gravações
+  // simultâneas que esta checagem não cobre. Mesmo papel de `isSlugTaken`.
+  //
+  // Retorna erro em vez de redirecionar: a página já redireciona quem tem canil
+  // (ver /painel/canis/novo), então quem chega aqui mandou POST direto, e um
+  // redirect silencioso apagaria o que a pessoa digitou sem explicar nada.
+  if (await getMyKennel(user.id)) {
+    return { formError: JA_TEM_CANIL, values: input };
+  }
+
   const errors = await validateOrFail(input);
   if (errors) return { errors, values: input };
 
@@ -87,17 +114,10 @@ export async function createKennel(
     .select("id")
     .single();
 
-  if (error || !data) {
-    // O índice único é a última linha e pode disparar mesmo depois da checagem
-    // acima, se duas gravações correrem juntas.
-    if (error?.code === "23505") {
-      return {
-        errors: { slug: "Esse endereço acabou de ser tomado. Escolha outro." },
-        values: input,
-      };
-    }
-    return { formError: "Não foi possível salvar o canil. Tente novamente.", values: input };
-  }
+  // Os índices únicos são a última linha e podem disparar mesmo depois das
+  // checagens acima, se duas gravações correrem juntas — `kennels_slug_key` e
+  // `kennels_owner_uk` chegam os dois como 23505, e só o nome os distingue.
+  if (error || !data) return toFormState(error, input);
 
   // Aviso interno. Precisa vir ANTES do `redirect`, que lança por dentro — mas
   // o `after` executa mesmo assim: a documentação do Next é explícita em que ele
@@ -144,15 +164,11 @@ export async function updateKennel(
     .is("deleted_at", null)
     .select("id");
 
-  if (error) {
-    if (error.code === "23505") {
-      return {
-        errors: { slug: "Esse endereço acabou de ser tomado. Escolha outro." },
-        values: input,
-      };
-    }
-    return { formError: "Não foi possível salvar as alterações.", values: input };
-  }
+  // Hoje o payload vem só de `KENNEL_FORM_FIELDS`, sem `owner_id` nem
+  // `deleted_at`, então este UPDATE não tem como violar `kennels_owner_uk`.
+  // Usa o mesmo tradutor mesmo assim: é uma linha, e impede que acrescentar um
+  // campo ao `fields.ts` volte a rotular o erro errado.
+  if (error) return toFormState(error, input);
 
   // Zero linhas sem erro é a assinatura de RLS negando: a policy filtrou a
   // linha e o UPDATE não achou nada. Não confundir com "nada mudou".
@@ -169,8 +185,11 @@ export async function updateKennel(
  * Exclusão LÓGICA. Nunca DELETE físico — é invariante do projeto, e o banco
  * nem concede o privilégio de DELETE a `authenticated`.
  *
- * O slug NÃO é liberado: continua reservado para que um endereço já divulgado
- * não passe a resolver para outro canil.
+ * LIBERA A VAGA, mas NÃO o endereço. `kennels_owner_uk` é parcial por
+ * `deleted_at`, então o criador pode cadastrar outro canil depois; já
+ * `kennels_slug_key` é global, então o slug antigo fica reservado para sempre,
+ * para que uma URL já divulgada não passe a resolver para outro canil. A
+ * assimetria é deliberada — ver a migration `canil_unico_por_dono`.
  */
 export async function softDeleteKennel(formData: FormData): Promise<void> {
   const id = String(formData.get("id") ?? "");

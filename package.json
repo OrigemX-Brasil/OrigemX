@@ -14,6 +14,7 @@
     "db:push": "supabase db push --linked",
     "db:types": "supabase gen types typescript --linked > src/lib/types/database.ts",
     "db:founder-reset": "supabase db query --linked --file supabase/tests/reset-founder-seq.sql",
+    "db:limpar-rls": "supabase db query --linked --file supabase/tests/limpar-residuo-rls.sql",
     "seed:pedigree": "supabase db query --linked --file supabase/tests/seed-pedigree-demo.sql",
     "seed:load": "supabase db query --linked --file supabase/tests/seed-load.sql",
     "seed:load-clean": "supabase db query --linked --file supabase/tests/seed-load-clean.sql",

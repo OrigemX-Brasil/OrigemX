@@ -3,7 +3,7 @@ import Link from "next/link";
 
 import { getAuthUser } from "@/modules/auth/queries";
 import { DogForm } from "@/modules/dogs/components/dog-form";
-import { listMyKennels } from "@/modules/kennels/queries";
+import { getMyKennel } from "@/modules/kennels/queries";
 
 export const metadata: Metadata = { title: "Novo cão" };
 
@@ -11,7 +11,7 @@ export default async function NovoCaoPage() {
   const user = await getAuthUser();
   if (!user) return null;
 
-  const kennels = await listMyKennels(user.id, { limit: 100 });
+  const kennel = await getMyKennel(user.id);
 
   return (
     <div className="flex flex-col gap-8">
@@ -25,7 +25,7 @@ export default async function NovoCaoPage() {
         <h1 className="font-display text-2xl font-semibold tracking-tight">Novo cão</h1>
       </div>
 
-      <DogForm kennels={kennels.items.map((k) => ({ id: k.id, name: k.name }))} />
+      <DogForm kennel={kennel && { id: kennel.id, name: kennel.name }} />
     </div>
   );
 }

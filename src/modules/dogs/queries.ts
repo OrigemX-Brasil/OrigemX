@@ -44,12 +44,14 @@ export type DogListItem = {
 };
 
 export type DogListFilters = {
-  kennelId?: string | null;
   search?: string | null;
 };
 
 /**
- * Cães do usuário, paginados, com busca por nome e filtro por canil.
+ * Cães do usuário, paginados, com busca por nome.
+ *
+ * Não há filtro por canil, e não é omissão: um criador tem no máximo um canil
+ * (`kennels_owner_uk`), então filtrar por ele nunca mudaria o resultado.
  *
  * `created_by` além de `owner_id`: o criador precisa reencontrar o ancestral
  * fantasma que cadastrou, e fantasma não tem dono por definição. Sem isso ele
@@ -73,8 +75,6 @@ export async function listMyDogs(
     .order("created_at", { ascending: false })
     .order("id", { ascending: false })
     .limit(limit + 1);
-
-  if (filters.kennelId) query = query.eq("kennel_id", filters.kennelId);
 
   // Busca por nome usa o índice GIN trigram criado na migration do núcleo.
   if (filters.search && isSearchable(filters.search)) {

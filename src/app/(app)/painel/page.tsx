@@ -47,8 +47,8 @@ export default async function PainelPage() {
         className="border-border bg-surface hover:bg-surface-hover rounded-card flex items-center justify-between gap-4 border p-5 transition-colors"
       >
         <span className="flex flex-col gap-1">
-          <span className="text-fg font-medium">Canis</span>
-          <span className="text-fg-muted text-sm">Cadastre e edite seus canis.</span>
+          <span className="text-fg font-medium">Meu canil</span>
+          <span className="text-fg-muted text-sm">Cadastre e edite seu canil.</span>
         </span>
         <span className="text-fg-faint" aria-hidden="true">
           →

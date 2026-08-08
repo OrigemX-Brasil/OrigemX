@@ -8,7 +8,7 @@ import { isGhostAncestor, type AncestorCandidate } from "@/modules/dogs/ancestor
 import { DogForm } from "@/modules/dogs/components/dog-form";
 import { IdentifiersForm } from "@/modules/dogs/components/identifiers-form";
 import { getDogIdentifiers, getDogsByIds, getManageableDogById } from "@/modules/dogs/queries";
-import { listMyKennels } from "@/modules/kennels/queries";
+import { getMyKennel } from "@/modules/kennels/queries";
 import { GalleryUploader } from "@/modules/media/components/gallery-uploader";
 import { MediaGallery } from "@/modules/media/components/media-gallery";
 import { PublishToggle } from "@/modules/media/components/publish-toggle";
@@ -29,8 +29,8 @@ export default async function EditarCaoPage({ params }: { params: Promise<{ id: 
   const dog = await getManageableDogById(id, user.id);
   if (!dog) notFound();
 
-  const [kennels, parents, gallery, usedBytes, identifiers] = await Promise.all([
-    listMyKennels(user.id, { limit: 100 }),
+  const [kennel, parents, gallery, usedBytes, identifiers] = await Promise.all([
+    getMyKennel(user.id),
     getDogsByIds([dog.sire_id, dog.dam_id].filter((v): v is string => Boolean(v))),
     getDogGallery(dog.id),
     getUsedBytes(user.id),
@@ -86,7 +86,7 @@ export default async function EditarCaoPage({ params }: { params: Promise<{ id: 
 
       <DogForm
         dog={dog}
-        kennels={kennels.items.map((k) => ({ id: k.id, name: k.name }))}
+        kennel={kennel && { id: kennel.id, name: kennel.name }}
         sire={toCandidate(dog.sire_id)}
         dam={toCandidate(dog.dam_id)}
       />

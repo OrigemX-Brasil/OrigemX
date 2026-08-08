@@ -11,6 +11,10 @@ import { slugifyDog, validateDog, type DogFieldErrors, type DogInput } from "../
 import { DateField } from "./date-field";
 import { ParentPicker } from "./parent-picker";
 
+/**
+ * O canil do usuário, ou `null` se ele ainda não cadastrou nenhum. Não é lista:
+ * um criador tem no máximo um (`kennels_owner_uk`).
+ */
 type KennelOption = { id: string; name: string };
 
 function Control({
@@ -129,12 +133,12 @@ function Submit({ label }: { label: string }) {
 
 export function DogForm({
   dog,
-  kennels,
+  kennel,
   sire,
   dam,
 }: {
   dog?: (Partial<Record<string, string | null>> & { id?: string }) | null;
-  kennels: KennelOption[];
+  kennel: KennelOption | null;
   sire?: AncestorCandidate | null;
   dam?: AncestorCandidate | null;
 }) {
@@ -151,6 +155,15 @@ export function DogForm({
   const [selectedDam, setSelectedDam] = useState<AncestorCandidate | null>(dam ?? null);
 
   const errors: DogFieldErrors = { ...clientErrors, ...state.errors };
+
+  // Sem canil não há endereço público: o CHECK `dogs_slug_requires_kennel`
+  // recusa slug com `kennel_id` nulo. Antes o criador escolhia "Sem canil" de
+  // propósito e sabia o que estava fazendo; agora o vínculo é implícito, então
+  // quem não tem canil cairia no erro sem entender. Some o campo, e a
+  // explicação fica abaixo.
+  const camposVisiveis = kennel
+    ? DOG_FORM_FIELDS
+    : DOG_FORM_FIELDS.filter((f) => f.name !== "slug");
 
   return (
     <form
@@ -181,7 +194,7 @@ export function DogForm({
       ) : null}
 
       <div className="flex flex-col gap-6">
-        {DOG_FORM_FIELDS.map((field) => (
+        {camposVisiveis.map((field) => (
           <Control
             key={field.name}
             field={field}
@@ -206,26 +219,41 @@ export function DogForm({
           />
         ))}
 
-        <div className="flex flex-col gap-2">
-          <label htmlFor="kennel_id" className="text-fg text-sm font-medium">
-            Canil
-          </label>
-          <select
-            id="kennel_id"
-            name="kennel_id"
-            defaultValue={String(dog?.kennel_id ?? "")}
-            className="border-border-strong bg-bg text-fg rounded-control border px-3 py-2.5 text-base outline-none"
-          >
-            {/* Só os canis do próprio usuário: a RLS recusaria o cão num canil
-                alheio, e oferecer a opção seria prometer o que não se cumpre. */}
-            <option value="">Sem canil</option>
-            {kennels.map((k) => (
-              <option key={k.id} value={k.id}>
-                {k.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        {/*
+          O canil deixou de ser escolha. Não há mais um `<select>` com ids de
+          canil: o cliente nunca nomeia um id, e o servidor resolve o único
+          canil do usuário. Sobra a decisão que ainda é dele — exibir ou não
+          este cão no perfil público do canil.
+
+          O campo oculto marca que o CONTROLE FOI RENDERIZADO. Sem ele,
+          `updateDog` não teria como distinguir "desmarcado" de "nem apareceu na
+          tela", e sobrescreveria `kennel_id` em cão que não deveria tocar.
+        */}
+        {kennel ? (
+          <div className="flex flex-col gap-2">
+            <input type="hidden" name="vinculo_canil_presente" value="1" />
+            <label htmlFor="vincular_canil" className="flex items-start gap-3 text-sm">
+              <input
+                type="checkbox"
+                id="vincular_canil"
+                name="vincular_canil"
+                defaultChecked={isEdit ? Boolean(dog?.kennel_id) : true}
+                className="accent-accent mt-0.5 size-4"
+              />
+              <span className="flex flex-col gap-1">
+                <span className="text-fg font-medium">Exibir no {kennel.name}</span>
+                <span className="text-fg-muted">
+                  Cão vinculado aparece no perfil público do canil e pode ter endereço próprio.
+                </span>
+              </span>
+            </label>
+          </div>
+        ) : (
+          <p className="border-border bg-surface rounded-card text-fg-muted border p-4 text-sm">
+            Você ainda não cadastrou um canil, então este cão fica sem endereço público. Ele
+            continua valendo como registro e como nó de pedigree.
+          </p>
+        )}
       </div>
 
       <section className="border-border flex flex-col gap-6 border-t pt-6">

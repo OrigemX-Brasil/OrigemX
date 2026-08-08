@@ -4,30 +4,30 @@ import Link from "next/link";
 import { getAuthUser } from "@/modules/auth/queries";
 import { isGhostAncestor } from "@/modules/dogs/ancestors";
 import { listMyDogs } from "@/modules/dogs/queries";
-import { listMyKennels } from "@/modules/kennels/queries";
 
 export const metadata: Metadata = { title: "Cães" };
 
 const SEX_LABEL: Record<string, string> = { male: "Macho", female: "Fêmea" };
 
+/**
+ * O filtro por canil saiu junto com o 1:N: um criador tem no máximo um canil
+ * (`kennels_owner_uk`), então o seletor só poderia oferecer "Todos" e a única
+ * opção possível — controle que nunca muda o resultado é ruído.
+ */
 export default async function CaesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; canil?: string; cursor?: string }>;
+  searchParams: Promise<{ q?: string; cursor?: string }>;
 }) {
-  const { q, canil, cursor } = await searchParams;
+  const { q, cursor } = await searchParams;
   const user = await getAuthUser();
   if (!user) return null;
 
-  const [{ items, nextCursor }, kennels] = await Promise.all([
-    listMyDogs(user.id, { search: q ?? null, kennelId: canil ?? null }, { cursor }),
-    listMyKennels(user.id, { limit: 100 }),
-  ]);
+  const { items, nextCursor } = await listMyDogs(user.id, { search: q ?? null }, { cursor });
 
   const queryFor = (extra: Record<string, string | undefined>) => {
     const sp = new URLSearchParams();
     if (q) sp.set("q", q);
-    if (canil) sp.set("canil", canil);
     for (const [k, v] of Object.entries(extra)) {
       if (v) sp.set(k, v);
       else sp.delete(k);
@@ -65,22 +65,6 @@ export default async function CaesPage({
           />
         </label>
 
-        <label className="flex flex-col gap-1.5">
-          <span className="text-fg-muted text-xs">Canil</span>
-          <select
-            name="canil"
-            defaultValue={canil ?? ""}
-            className="border-border-strong bg-bg text-fg rounded-control border px-3 py-2 text-sm outline-none"
-          >
-            <option value="">Todos</option>
-            {kennels.items.map((k) => (
-              <option key={k.id} value={k.id}>
-                {k.name}
-              </option>
-            ))}
-          </select>
-        </label>
-
         <button
           type="submit"
           className="border-border-strong text-fg hover:bg-surface-hover rounded-control border px-4 py-2 text-sm transition-colors"
@@ -88,7 +72,7 @@ export default async function CaesPage({
           Filtrar
         </button>
 
-        {q || canil ? (
+        {q ? (
           <Link
             href="/painel/caes"
             className="text-fg-muted hover:text-fg py-2 text-sm transition-colors"
@@ -101,11 +85,9 @@ export default async function CaesPage({
       {items.length === 0 ? (
         <div className="border-border bg-surface rounded-card flex flex-col items-start gap-3 border p-6">
           <p className="text-fg text-sm font-medium">
-            {q || canil
-              ? "Nenhum cão encontrado com esses filtros."
-              : "Você ainda não cadastrou cães."}
+            {q ? "Nenhum cão encontrado com essa busca." : "Você ainda não cadastrou cães."}
           </p>
-          {!q && !canil ? (
+          {!q ? (
             <Link
               href="/painel/caes/novo"
               className="text-link hover:text-link-hover text-sm underline underline-offset-4 transition-colors"
