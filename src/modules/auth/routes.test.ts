@@ -1,41 +1,45 @@
 import { describe, expect, it } from "vitest";
 
-import { isGuestOnlyRoute, isPublicRoute } from "./routes";
+import { isGuestOnlyRoute, isProtectedRoute } from "./routes";
 
-describe("isPublicRoute", () => {
-  it("abre as telas de entrada", () => {
-    for (const rota of ["/", "/login", "/cadastro", "/esqueci-senha", "/nova-senha"]) {
-      expect(isPublicRoute(rota), rota).toBe(true);
-    }
-  });
-
-  it("abre a política de privacidade — o rodapé da captura linka pra ela sem sessão", () => {
-    expect(isPublicRoute("/privacidade")).toBe(true);
-  });
-
-  it("abre o perfil público — é o destino do QR impresso", () => {
-    expect(isPublicRoute("/d/k7m2x9qp4a3b")).toBe(true);
-    expect(isPublicRoute("/c/canil-aurora")).toBe(true);
-    expect(isPublicRoute("/c/canil-aurora/rex-de-aurora")).toBe(true);
-  });
-
-  it("abre o retorno de autenticação, que roda sem sessão", () => {
-    expect(isPublicRoute("/auth/callback")).toBe(true);
-    expect(isPublicRoute("/auth/confirm")).toBe(true);
-  });
-
+describe("isProtectedRoute", () => {
   it("fecha a área autenticada", () => {
-    for (const rota of ["/painel", "/painel/canis", "/configuracoes"]) {
-      expect(isPublicRoute(rota), rota).toBe(false);
+    expect(isProtectedRoute("/painel")).toBe(true);
+    expect(isProtectedRoute("/painel/canis")).toBe(true);
+    expect(isProtectedRoute("/painel/canis/abc")).toBe(true);
+    expect(isProtectedRoute("/painel/caes/novo")).toBe(true);
+  });
+
+  it("não fecha rota que só COMEÇA com o nome protegido", () => {
+    // Sem correspondência de segmento, `/painel` como prefixo cru casaria
+    // `/painel-privado` também.
+    expect(isProtectedRoute("/painel-privado")).toBe(false);
+  });
+
+  it("deixa passar as telas de entrada e o perfil público", () => {
+    for (const rota of [
+      "/",
+      "/login",
+      "/cadastro",
+      "/esqueci-senha",
+      "/nova-senha",
+      "/privacidade",
+      "/d/k7m2x9qp4a3b",
+      "/c/canil-aurora",
+      "/c/canil-aurora/rex-de-aurora",
+      "/auth/callback",
+      "/auth/confirm",
+    ]) {
+      expect(isProtectedRoute(rota), rota).toBe(false);
     }
   });
 
-  it("não abre rota que só COMEÇA com nome público", () => {
-    // Sem correspondência exata, `/login` como prefixo deixaria estas passarem.
-    expect(isPublicRoute("/login-interno")).toBe(false);
-    expect(isPublicRoute("/cadastro-admin")).toBe(false);
-    expect(isPublicRoute("/dados-sigilosos")).toBe(false);
-    expect(isPublicRoute("/canil-privado")).toBe(false);
+  it("deixa passar URL desconhecida — é o /not-found que decide, não o login", () => {
+    // Antes do denylist, qualquer rota fora do allowlist virava redirect pro
+    // login — inclusive link quebrado ou digitado errado, que deveria cair
+    // na página 404, não numa tela pedindo sessão.
+    expect(isProtectedRoute("/isso-nao-existe")).toBe(false);
+    expect(isProtectedRoute("/dados-sigilosos")).toBe(false);
   });
 });
 

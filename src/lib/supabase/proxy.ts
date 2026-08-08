@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 import type { Database } from "@/lib/types/database";
-import { isGuestOnlyRoute, isPublicRoute } from "@/modules/auth/routes";
+import { isGuestOnlyRoute, isProtectedRoute } from "@/modules/auth/routes";
 
 /**
  * Renova a sessão do Supabase a cada request e faz o desvio de rota.
@@ -59,7 +59,7 @@ export async function updateSession(request: NextRequest) {
     return response;
   };
 
-  if (!hasSession && !isPublicRoute(pathname)) {
+  if (!hasSession && isProtectedRoute(pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.search = `?next=${encodeURIComponent(pathname + search)}`;

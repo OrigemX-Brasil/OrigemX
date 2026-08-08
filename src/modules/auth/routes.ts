@@ -1,52 +1,28 @@
 /**
- * Quais rotas abrem sem sessão.
+ * Quais rotas exigem sessão.
  *
  * Isto é UX, não autorização — quem decide o que cada um vê é a RLS, no banco.
- * Ainda assim é uma lista que merece teste: um prefixo largo demais manda o
- * usuário para o login em cima de uma página que deveria ser pública, e o
- * perfil público é o produto.
- */
-
-/**
- * Correspondência EXATA. Não usar prefixo aqui: `/login` como prefixo casaria
- * `/login-secreto` também.
- */
-const PUBLIC_EXACT = new Set([
-  "/",
-  "/login",
-  "/cadastro",
-  "/esqueci-senha",
-  "/nova-senha",
-  "/privacidade",
-  /**
-   * Pixel de medição da página de captura. Aberto porque a página de captura é
-   * aberta — exigir sessão para contar um acesso anônimo seria contraditório.
-   *
-   * O matcher do proxy já pula esta rota, então na prática esta linha não é
-   * consultada. Ela existe como rede: se alguém simplificar o matcher um dia, o
-   * pixel continua respondendo em vez de virar redirect silencioso para o login
-   * — e a métrica morreria sem ninguém perceber.
-   */
-  "/api/e",
-]);
-
-/**
- * Prefixos, sempre terminados em `/` para casar segmento inteiro.
  *
- * `/d/` — perfil do cão por public_id. É o destino do QR Code impresso e
- *         precisa abrir sem sessão, para sempre.
- * `/c/` — canil e cão por slug legível.
- * `/auth/` — callback do OAuth e confirmação por e-mail, que rodam justamente
- *            enquanto ainda não existe sessão.
+ * DENYLIST de prefixo protegido, não allowlist de rota pública. Antes era o
+ * contrário — uma lista do que É público, e qualquer coisa fora dela virava
+ * redirect pro login. Isso incluía URL digitada errado: em vez de cair no
+ * `not-found`, o visitante anônimo caía no login, porque "rota desconhecida"
+ * e "rota que ainda não entrou na lista" eram a mesma coisa para o allowlist.
+ * Denylist de UM prefixo é mais fácil de manter certo que allowlist de N
+ * rotas — página pública nova nunca precisa tocar aqui.
  */
-const PUBLIC_PREFIXES = ["/auth/", "/d/", "/c/"];
+
+/** Único prefixo autenticado do app hoje. */
+const PROTECTED_PREFIXES = ["/painel"];
 
 /** Rotas que quem já tem sessão não precisa ver. */
 const GUEST_ONLY = new Set(["/login", "/cadastro"]);
 
-export function isPublicRoute(pathname: string): boolean {
-  if (PUBLIC_EXACT.has(pathname)) return true;
-  return PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+/** Casa o prefixo inteiro (segmento), não `/painel-privado`. */
+export function isProtectedRoute(pathname: string): boolean {
+  return PROTECTED_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
 }
 
 export function isGuestOnlyRoute(pathname: string): boolean {
