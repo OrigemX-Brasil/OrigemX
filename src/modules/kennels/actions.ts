@@ -156,10 +156,12 @@ export async function updateKennel(
   const errors = await validateOrFail(input, id);
   if (errors) return { errors, values: input };
 
+  const values = normalizeKennelInput(input);
+
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("kennels")
-    .update(normalizeKennelInput(input))
+    .update(values)
     .eq("id", id)
     .is("deleted_at", null)
     .select("id");
@@ -178,6 +180,12 @@ export async function updateKennel(
 
   revalidatePath("/painel/canis");
   revalidatePath(`/painel/canis/${id}`);
+  // O perfil público tem ISR de 300s (ver revalidate em app/(public)/c/[slug]) e
+  // ninguém revalidava esta rota ao editar o canil — só o fluxo de publicar/
+  // despublicar mídia fazia isso (`revalidateKennel` em modules/media/publish.ts).
+  // Sem isto, instagram/RG salvos ficavam invisíveis na página pública por até
+  // 5 minutos.
+  if (values.slug) revalidatePath(`/c/${values.slug}`);
   return { values: input };
 }
 
