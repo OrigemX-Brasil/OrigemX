@@ -30,6 +30,12 @@ export default async function CanisPage() {
   return (
     <div className="flex flex-col gap-8">
       <div className="flex flex-col gap-2">
+        <Link
+          href="/painel"
+          className="text-fg-muted hover:text-fg self-start text-sm transition-colors"
+        >
+          ← Painel
+        </Link>
         <span className="text-fg-faint font-mono text-xs tracking-[0.2em] uppercase">Canil</span>
         <h1 className="font-display text-2xl font-semibold tracking-tight">Meu canil</h1>
       </div>

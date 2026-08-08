@@ -38,6 +38,12 @@ export default async function CadastroPage({
   return (
     <div className="flex flex-col gap-8">
       <div className="flex flex-col gap-2">
+        <Link
+          href="/"
+          className="text-link hover:text-link-hover self-start text-sm underline underline-offset-4 transition-colors"
+        >
+          ← Início
+        </Link>
         <h1 className="font-display text-2xl font-semibold tracking-tight">Criar conta</h1>
         <p className="text-fg-muted text-sm">
           Já tem conta?{" "}

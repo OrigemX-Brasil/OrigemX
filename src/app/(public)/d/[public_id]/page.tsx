@@ -181,7 +181,7 @@ export default async function CaoPublicoPage({
                     prefetch={false}
                     className="text-link hover:text-link-hover self-start text-sm underline underline-offset-4 transition-colors"
                   >
-                    {kennel.name}
+                    ← {kennel.name}
                   </Link>
                 ) : null}
               </div>

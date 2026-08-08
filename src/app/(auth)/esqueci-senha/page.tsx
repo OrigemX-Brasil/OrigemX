@@ -15,7 +15,7 @@ export default function EsqueciSenhaPage() {
             href="/login"
             className="text-link hover:text-link-hover underline underline-offset-4 transition-colors"
           >
-            Voltar para o login
+            ← Voltar para o login
           </Link>
         </p>
       </div>

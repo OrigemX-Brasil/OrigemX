@@ -38,6 +38,13 @@ export default async function CaesPage({
 
   return (
     <div className="flex flex-col gap-8">
+      <Link
+        href="/painel"
+        className="text-fg-muted hover:text-fg self-start text-sm transition-colors"
+      >
+        ← Painel
+      </Link>
+
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-2">
           <span className="text-fg-faint font-mono text-xs tracking-[0.2em] uppercase">Cães</span>
