@@ -655,6 +655,33 @@ async function main() {
   // Cenário 8 — CRUD de canil: exclusão lógica e reserva de endereço
   // ---------------------------------------------------------------------------
 
+  // Espelha o payload REAL de updateKennel: TODOS os KENNEL_FORM_FIELDS de uma
+  // vez, não um subconjunto. É o único jeito de pegar um GRANT de coluna
+  // faltando — um update estreito, como os demais deste arquivo, não teria
+  // acusado o bug real (instagram_handle/registration_number sem GRANT, que
+  // derrubava TODA gravação de perfil em produção, não só a desses campos).
+  const fullUpdate = await A.client
+    .from("kennels")
+    .update({
+      name: "Canil A Atualizado",
+      slug: `rls-${RUN}-canil-a`,
+      description: "Descrição de teste",
+      city: "Campinas",
+      state: "SP",
+      website_url: "https://example.test",
+      instagram_handle: "canil.teste",
+      registration_number: "REG-123",
+    })
+    .eq("id", kennelA.id)
+    .select();
+  record(
+    "8. CRUD de canil",
+    "A atualiza TODOS os campos editáveis de uma vez (payload real de updateKennel)",
+    "1 linha — nenhuma coluna sem GRANT",
+    describe(fullUpdate.error, fullUpdate.data ?? []),
+    !fullUpdate.error && (fullUpdate.data?.length ?? 0) === 1,
+  );
+
   const softDeleted = await A.client
     .from("kennels")
     .update({ deleted_at: new Date().toISOString() })

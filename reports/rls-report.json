@@ -1,7 +1,7 @@
 {
-  "when": "2026-08-06T23:45:22.725Z",
+  "when": "2026-08-08T03:26:17.830Z",
   "project": "https://lcqhnfdsrioufwvnrqnt.supabase.co",
-  "run": "msi5y0qw",
+  "run": "msjta0qu",
   "fatal": null,
   "checks": [
     {
@@ -230,6 +230,13 @@
     },
     {
       "cenario": "8. CRUD de canil",
+      "verificacao": "A atualiza TODOS os campos editáveis de uma vez (payload real de updateKennel)",
+      "esperado": "1 linha — nenhuma coluna sem GRANT",
+      "obtido": "1 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "8. CRUD de canil",
       "verificacao": "A exclui o próprio canil (lógico)",
       "esperado": "1 linha marcada",
       "obtido": "1 linha(s)",
@@ -251,8 +258,8 @@
     },
     {
       "cenario": "8. CRUD de canil",
-      "verificacao": "B tenta reusar o endereço de um canil excluído de A",
-      "esperado": "erro — slug fica reservado para sempre",
+      "verificacao": "C (sem canil) tenta reusar o endereço de um canil excluído de A",
+      "esperado": "erro em kennels_slug_key — slug fica reservado para sempre",
       "obtido": "erro 23505: duplicate key value violates unique constraint \"kennels_slug_key\"",
       "status": "PASS"
     },
@@ -329,30 +336,30 @@
     {
       "cenario": "11b. Selo Fundador (concorrência)",
       "verificacao": "canil sem cão não recebe selo",
-      "esperado": "todos sem número",
-      "obtido": "0 com número",
-      "status": "PASS"
+      "esperado": "—",
+      "obtido": "pulado por RLS_PULAR_SELO_FUNDADOR=1 — consumiria 5 dos 100 selos, sem como devolvê-los sem setval",
+      "status": "PULADO"
     },
     {
       "cenario": "11b. Selo Fundador (concorrência)",
       "verificacao": "5 atribuições CONCORRENTES não geram número duplicado",
-      "esperado": "5 números distintos",
-      "obtido": "5 atribuídos, 5 distintos",
-      "status": "PASS"
+      "esperado": "—",
+      "obtido": "pulado por RLS_PULAR_SELO_FUNDADOR=1 — consumiria 5 dos 100 selos, sem como devolvê-los sem setval",
+      "status": "PULADO"
     },
     {
       "cenario": "11b. Selo Fundador (concorrência)",
       "verificacao": "nenhum número emitido abaixo de 100",
-      "esperado": "todos >= 100",
-      "obtido": "min 105, max 109",
-      "status": "PASS"
+      "esperado": "—",
+      "obtido": "pulado por RLS_PULAR_SELO_FUNDADOR=1 — consumiria 5 dos 100 selos, sem como devolvê-los sem setval",
+      "status": "PULADO"
     },
     {
       "cenario": "11b. Selo Fundador (concorrência)",
       "verificacao": "exclusão lógica não devolve o número ao pool",
-      "esperado": "número permanece",
-      "obtido": "nº 108",
-      "status": "PASS"
+      "esperado": "—",
+      "obtido": "pulado por RLS_PULAR_SELO_FUNDADOR=1 — consumiria 5 dos 100 selos, sem como devolvê-los sem setval",
+      "status": "PULADO"
     },
     {
       "cenario": "11a. Selo Fundador (autorização)",
@@ -400,7 +407,7 @@
       "cenario": "12. Bucket público",
       "verificacao": "URL pública não carrega token nem expiração",
       "esperado": "sem ?token= e sem expires",
-      "obtido": "/storage/v1/object/public/kennel-media-public/4eea869f-0f74-4d75-b762-19a9a5e37f19/canis/publico-msi5y0qw.png",
+      "obtido": "/storage/v1/object/public/kennel-media-public/7efce8fa-29b3-4d2c-a16d-54e2d938a990/canis/publico-msjta0qu.png",
       "status": "PASS"
     },
     {
@@ -422,6 +429,48 @@
       "verificacao": "objeto sai do bucket público ao despublicar (fonte: Storage)",
       "esperado": "não está mais lá",
       "obtido": "removido",
+      "status": "PASS"
+    },
+    {
+      "cenario": "13. Um canil por dono",
+      "verificacao": "U cria o primeiro canil",
+      "esperado": "sucesso",
+      "obtido": "sucesso",
+      "status": "PASS"
+    },
+    {
+      "cenario": "13. Um canil por dono",
+      "verificacao": "U cria um SEGUNDO canil, com endereço novo",
+      "esperado": "erro em kennels_owner_uk",
+      "obtido": "erro 23505: duplicate key value violates unique constraint \"kennels_owner_uk\"",
+      "status": "PASS"
+    },
+    {
+      "cenario": "13. Um canil por dono",
+      "verificacao": "B, que já tem canil, também é barrado — o limite é por dono, não global",
+      "esperado": "erro em kennels_owner_uk",
+      "obtido": "erro 23505: duplicate key value violates unique constraint \"kennels_owner_uk\"",
+      "status": "PASS"
+    },
+    {
+      "cenario": "13. Um canil por dono",
+      "verificacao": "depois de excluir logicamente, U cadastra outro canil",
+      "esperado": "sucesso — a exclusão libera a vaga",
+      "obtido": "1 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "13. Um canil por dono",
+      "verificacao": "o endereço do canil excluído de U continua reservado",
+      "esperado": "erro em kennels_slug_key — a vaga volta, o endereço não",
+      "obtido": "erro 23505: duplicate key value violates unique constraint \"kennels_slug_key\"",
+      "status": "PASS"
+    },
+    {
+      "cenario": "13. Um canil por dono",
+      "verificacao": "U tenta REVERTER a exclusão tendo outro canil vivo",
+      "esperado": "erro em kennels_owner_uk — o índice cobre o UPDATE, não só o INSERT",
+      "obtido": "erro 23505: duplicate key value violates unique constraint \"kennels_owner_uk\"",
       "status": "PASS"
     }
   ]
