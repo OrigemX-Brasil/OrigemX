@@ -48,7 +48,7 @@ export default function PrivacidadePage() {
         </div>
 
         <p className="border-accent bg-accent-subtle text-fg rounded-card border px-4 py-3 text-sm">
-          Isto é um resumo do que o OrigemX realmente faz com dado, para ler em menos de dois minutos
+          Isto é um resumo do que o OrigemX realmente faz com dados, para ler em menos de dois minutos
           — não é uma peça jurídica fechada. Estamos revisando com jurídico antes de tratar este
           texto como definitivo.
         </p>

@@ -1,23 +1,27 @@
+import Link from "next/link";
+
+import { EXAMPLE_DOG_AVATAR_URL, EXAMPLE_DOG_PATH } from "@/modules/capture/example-dog";
 import { PedigreeTree } from "@/modules/pedigree/components/pedigree-tree";
 import { buildPedigree, type PedigreeRow } from "@/modules/pedigree/tree";
 import { PublicImage } from "@/modules/public/components/public-image";
 
 /**
- * Prévia de EXEMPLO do perfil público — a página de captura promete "pedigree
- * de cinco gerações" e "endereço que não muda" em texto; isto mostra.
+ * Prévia do perfil público REAL do Thor (ver `example-dog.ts`) — a página de
+ * captura promete "pedigree de várias gerações" e "endereço que não muda" em
+ * texto; isto mostra, com o mesmo cão que o card abre ao clicar.
  *
  * `PedigreeTree` é o componente REAL do perfil (sem fetch, sem client JS —
- * ver o próprio arquivo), só alimentado com um fixture em vez de dado do
- * banco. Fica sempre em sincronia com o visual verdadeiro do produto, ao
- * contrário de um screenshot que envelhece na primeira mudança de layout.
+ * ver o próprio arquivo). Os pais aqui são fixture — os MESMOS nomes/datas
+ * das linhas reais no banco — só pra caber num card compacto sem ir buscar
+ * dado em build/request time numa página que precisa continuar 100%
+ * estática. `is_public: false` em toda linha: o nome do ancestral não vira
+ * link aqui dentro (a árvore de verdade, na página real, é que decide isso).
  *
- * `is_public: false` / `public_id: null` em toda linha: sem isso o nome do
- * ancestral viraria link para `/d/<id-de-mentira>`, que daria 404 — um perfil
- * de exemplo não pode fingir profundidade que não tem.
- *
- * Duas gerações (pais + avós paternos), não cinco: é PRÉVIA, cabe num card,
- * e o texto abaixo da árvore diz isso — não deixa a promessa maior sem dizer
- * que aqui é só um recorte.
+ * SÓ PAIS, sem avós: um nó com pai/mãe conhecidos vira `<details>` — um
+ * elemento clicável de verdade — e o card inteiro já é um `<Link>` (ver
+ * abaixo). `<details>` dentro de `<a>` navega E expande no mesmo clique, uma
+ * briga de interação real, não teórica. Parar nos pais mantém todo nó como
+ * folha (sem `<details>`), então não existe elemento clicável aninhado.
  */
 const FIXTURE_ROWS: PedigreeRow[] = [
   {
@@ -28,57 +32,33 @@ const FIXTURE_ROWS: PedigreeRow[] = [
     is_public: false,
     public_id: null,
     sex: "male",
-    breed: "Golden Retriever",
-    born_on: "2022-03-15",
+    breed: "Rottweiler",
+    born_on: "2025-11-02",
     kennel_name: null,
   },
   {
     pos: 2,
     generation: 1,
-    dog_id: "exemplo-apollo",
-    name: "Apollo",
+    dog_id: "exemplo-rex",
+    name: "Rex von Thalheim",
     is_public: false,
     public_id: null,
     sex: "male",
-    breed: "Golden Retriever",
-    born_on: "2019-06-01",
-    kennel_name: "Canil Estrela",
+    breed: "Rottweiler",
+    born_on: "2021-03-15",
+    kennel_name: null,
   },
   {
     pos: 3,
     generation: 1,
-    dog_id: "exemplo-bella",
-    name: "Bella",
+    dog_id: "exemplo-bela",
+    name: "Bela do Vale Negro",
     is_public: false,
     public_id: null,
     sex: "female",
-    breed: "Golden Retriever",
-    born_on: "2018-11-20",
-    kennel_name: "Canil Aurora",
-  },
-  {
-    pos: 4,
-    generation: 2,
-    dog_id: "exemplo-zeus",
-    name: "Zeus",
-    is_public: false,
-    public_id: null,
-    sex: "male",
-    breed: "Golden Retriever",
-    born_on: "2016-02-10",
-    kennel_name: "Canil Nobre",
-  },
-  {
-    pos: 5,
-    generation: 2,
-    dog_id: "exemplo-luna",
-    name: "Luna",
-    is_public: false,
-    public_id: null,
-    sex: "female",
-    breed: "Golden Retriever",
-    born_on: "2016-05-18",
-    kennel_name: "Canil Nobre",
+    breed: "Rottweiler",
+    born_on: "2021-07-22",
+    kennel_name: null,
   },
 ];
 
@@ -86,7 +66,10 @@ const FIXTURE_PEDIGREE = buildPedigree(FIXTURE_ROWS);
 
 export function ExampleProfileCard() {
   return (
-    <div className="border-border bg-surface rounded-card flex flex-col overflow-hidden border">
+    <Link
+      href={EXAMPLE_DOG_PATH}
+      className="border-border bg-surface hover:bg-surface-hover rounded-card focus-visible:outline-ring flex flex-col overflow-hidden border transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
+    >
       {/* Barra de "navegador", decorativa — deixa claro que isto é a TELA de um
           endereço, não um cartão solto. */}
       <div className="border-border bg-surface-raised flex items-center gap-3 border-b px-4 py-2.5">
@@ -96,7 +79,7 @@ export function ExampleProfileCard() {
           <span className="bg-fg-faint/40 size-2 rounded-full" />
         </span>
         <span className="bg-surface text-fg-faint rounded-control flex-1 truncate px-2 py-1 font-mono text-[0.65rem]">
-          origemxbr.com/d/exemplo01ab
+          origemxbr.com{EXAMPLE_DOG_PATH}
         </span>
       </div>
 
@@ -110,25 +93,25 @@ export function ExampleProfileCard() {
 
         <div className="flex items-center gap-4">
           <PublicImage
-            src={null}
+            src={EXAMPLE_DOG_AVATAR_URL}
             alt="Thor"
             fallbackText="Thor"
             width={96}
             height={96}
-            className="rounded-card size-16 shrink-0"
+            className="rounded-card size-16 shrink-0 object-cover"
           />
           <div className="flex flex-col gap-0.5">
             <h3 className="font-display text-lg font-semibold tracking-tight">Thor</h3>
-            <p className="text-fg-muted text-sm">Macho · Golden Retriever · nascido em 2022</p>
+            <p className="text-fg-muted text-sm">Macho · Rottweiler · nascido em 2025</p>
           </div>
         </div>
 
         <PedigreeTree pedigree={FIXTURE_PEDIGREE} />
 
-        <p className="text-fg-faint text-xs">
-          Prévia de duas gerações — o perfil completo vai até cinco.
-        </p>
+        <p className="text-fg-faint text-xs">Prévia dos pais — o perfil completo vai até quatro gerações.</p>
+
+        <span className="text-link text-sm font-medium">Ver perfil completo →</span>
       </div>
-    </div>
+    </Link>
   );
 }

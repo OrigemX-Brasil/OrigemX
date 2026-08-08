@@ -23,13 +23,12 @@ import { publicMetadata } from "@/modules/public/metadata";
  * qualquer um dos três a tornaria dinâmica e jogaria fora o cache de borda.
  * A medição acontece por `<img>`, no fim do documento — ver `MeasurePixel`.
  *
- * PESO: nenhum ícone de biblioteca, nenhum componente de cliente, nenhuma foto
- * (uma foto de cão custaria mais que a página inteira). As duas exceções
- * deliberadas são a logo do cabeçalho (~38 KB) e a seção de exemplo abaixo —
- * `ExampleQrCard`/`ExampleProfileCard` — que é SVG e HTML puro (o mesmo
- * `qrShape()` e a mesma `PedigreeTree` do produto real, alimentados com dado
- * fixo), não imagem: pedido explícito do cliente para MOSTRAR o QR Code e o
- * perfil público, não só prometer em texto.
+ * PESO: nenhum ícone de biblioteca, nenhum componente de cliente. As exceções
+ * deliberadas são a logo do cabeçalho (~38 KB), o QR de exemplo (SVG puro,
+ * poucos KB) e — a única foto de verdade da página — o avatar do cão de
+ * exemplo em `ExampleProfileCard` (~44 KB, `loading="lazy"` por não ser o
+ * LCP): pedido explícito do cliente para MOSTRAR o QR Code e o perfil
+ * público de um cão real, não só prometer em texto.
  *
  * A CHAMADA PARA CADASTRO É O CONTEÚDO, não um enfeite no rodapé: quem chega
  * aqui veio de um papel impresso e tem trinta segundos de paciência.
@@ -100,8 +99,10 @@ export default function CapturaPage() {
       {/*
         Prova visual do que o texto promete. Antes disto a página só dizia "QR
         Code" e "endereço que não muda" sem mostrar nenhum dos dois — pedido
-        direto do cliente. Os dois cards usam dado de EXEMPLO, nunca um cão ou
-        canil real, e dizem isso na própria etiqueta "Exemplo".
+        direto do cliente. Os dois cards levam pro perfil de um cão REAL
+        (Thor, ver src/modules/capture/example-dog.ts) — clicar não cai num
+        link morto — e dizem "Exemplo" na etiqueta porque não é o cão de um
+        cliente, é o do próprio OrigemX.
       */}
       <section className="flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">

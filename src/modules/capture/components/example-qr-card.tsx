@@ -1,23 +1,27 @@
+import Link from "next/link";
+
+import { EXAMPLE_DOG_PATH, EXAMPLE_DOG_URL } from "@/modules/capture/example-dog";
 import { QR_DARK, QR_LIGHT, qrShape } from "@/modules/qr/render";
 
 /**
- * QR de EXEMPLO para a página de captura — mostra o mecanismo, não um cão real.
+ * QR de EXEMPLO para a página de captura — mostra o mecanismo com um cão
+ * real por trás (ver `example-dog.ts`), não um endereço de mentira.
  *
  * Mesma técnica de `QrCard` (matriz virando um único `<path>`, sem
  * `dangerouslySetInnerHTML`), mas sem os links de download nem o aviso de
- * host: aqui não existe entidade real por trás para baixar ou avisar.
+ * host: aqui a entidade é fixa, não escolhida pelo dono de um canil.
  *
- * A URL codificada é a mesma que aparece no texto — se alguém realmente
- * escanear, cai numa página coerente (`/d/exemplo01ab` não existe de
- * verdade), nunca num endereço que diverge do que promete.
+ * O card inteiro é o link — clicar leva pro mesmo endereço que o QR codifica,
+ * então não existe divergência entre "o que promete" e "pra onde vai".
  */
-const EXEMPLO_URL = "https://www.origemxbr.com/d/exemplo01ab";
-
 export function ExampleQrCard() {
-  const { size, path } = qrShape(EXEMPLO_URL);
+  const { size, path } = qrShape(EXAMPLE_DOG_URL);
 
   return (
-    <div className="border-border bg-surface rounded-card flex flex-col gap-4 border p-5">
+    <Link
+      href={EXAMPLE_DOG_PATH}
+      className="border-border bg-surface hover:bg-surface-hover rounded-card focus-visible:outline-ring flex flex-col gap-4 border p-5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
+    >
       <div className="flex items-center justify-between gap-2">
         <h3 className="text-fg text-sm font-medium">QR Code do perfil</h3>
         <span className="text-fg-faint bg-surface-hover rounded-control px-2 py-0.5 font-mono text-[0.65rem] tracking-wide uppercase">
@@ -43,6 +47,8 @@ export function ExampleQrCard() {
         Vai no crachá, no folder, na placa. Aponta pro mesmo endereço pra sempre — trocar o nome do
         cão não quebra o código já impresso.
       </p>
-    </div>
+
+      <span className="text-link text-sm font-medium">Ver perfil completo →</span>
+    </Link>
   );
 }
