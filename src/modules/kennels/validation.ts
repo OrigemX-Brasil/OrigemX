@@ -98,7 +98,7 @@ export function validateKennel(raw: KennelInput): FieldErrors {
   // canis excluídos logicamente. Comprimento mínimo evita queimar "a" e "ab".
   const slug = values.slug;
   if (slug && slug.length < 3) {
-    errors.slug = "O endereço público precisa de ao menos 3 caracteres.";
+    errors.slug = "A URL precisa de ao menos 3 caracteres.";
   }
 
   return errors;

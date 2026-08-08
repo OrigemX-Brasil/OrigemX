@@ -93,7 +93,7 @@ export const KENNEL_FIELDS: readonly KennelField[] = [
   },
   {
     name: "slug",
-    label: "Endereço público",
+    label: "URL",
     weight: "required",
     input: "slug",
     publicProfile: true,
@@ -101,7 +101,7 @@ export const KENNEL_FIELDS: readonly KennelField[] = [
     help: "Vira origemx.app/c/seu-canil. Escolha com cuidado: muda o link que você divulga.",
     placeholder: "canil-aurora",
     pattern: /^[a-z0-9]+(-[a-z0-9]+)*$/,
-    patternError: "Use apenas letras minúsculas, números e hífen.",
+    patternError: "Não use espaço, apenas letras minúsculas, números e hífens.",
   },
   {
     name: "description",

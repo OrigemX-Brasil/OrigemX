@@ -120,14 +120,14 @@ export const DOG_FIELDS: readonly DogField[] = [
   },
   {
     name: "slug",
-    label: "Endereço público",
+    label: "URL",
     weight: "optional",
     input: "slug",
     publicProfile: false,
     maxLength: 80,
     help: "Opcional. Compõe origemx.app/c/canil/cao. O QR Code não depende disto — ele aponta para o identificador permanente.",
     pattern: /^[a-z0-9]+(-[a-z0-9]+)*$/,
-    patternError: "Use apenas letras minúsculas, números e hífen.",
+    patternError: "Não use espaço, apenas letras minúsculas, números e hífens.",
   },
 ] as const;
 
