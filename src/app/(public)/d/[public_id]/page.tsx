@@ -7,6 +7,7 @@ import { SignupInvite } from "@/modules/capture/components/signup-invite";
 import { aspectOf } from "@/modules/media/constraints";
 import { PedigreeTree } from "@/modules/pedigree/components/pedigree-tree";
 import { getPedigree } from "@/modules/pedigree/queries";
+import { PhotoTrigger, PublicGallery } from "@/modules/public/components/photo-lightbox";
 import { PublicImage } from "@/modules/public/components/public-image";
 import { excerpt, publicMetadata } from "@/modules/public/metadata";
 import {
@@ -100,6 +101,32 @@ export default async function CaoPublicoPage({
 
   const [principal, ...restante] = media;
 
+  // Só entram fotos com URL resolvida — clicar num placeholder sem imagem não
+  // abriria nada. `photoIndex` liga cada item de mídia (pelo id) à posição dele
+  // nesta lista, porque um item sem URL no meio do caminho deslocaria os
+  // índices se a lista de mídia bruta fosse usada direto.
+  const photos = media
+    .filter((item): item is typeof item & { url: string } => Boolean(item.url))
+    .map((item) => ({ url: item.url, alt: item.alt ?? dog.name }));
+  const photoIndex = new Map(
+    media.filter((item) => item.url).map((item, i) => [item.id, i] as const),
+  );
+
+  const avatarImage = (
+    // Recorte quadrado é intencional aqui: é o avatar do cão. A foto em
+    // proporção original aparece no mosaico abaixo.
+    <PublicImage
+      src={principal?.thumbUrl ?? principal?.url}
+      alt={principal?.alt ?? dog.name}
+      fallbackText={dog.name}
+      width={128}
+      height={128}
+      priority
+      sizes="128px"
+      className="border-border rounded-card size-20 shrink-0 border object-cover sm:size-32"
+    />
+  );
+
   return (
     <div className="flex min-h-dvh flex-col">
       <header className="border-border border-b px-5 py-4 lg:px-8">
@@ -121,60 +148,60 @@ export default async function CaoPublicoPage({
       </header>
 
       <main className="mx-auto w-full max-w-2xl flex-1 px-5 py-8 lg:px-8">
-        <div className="flex flex-col gap-8">
-          {/* Lado a lado em TODA largura — ver o mesmo bloco em
+        <PublicGallery photos={photos}>
+          <div className="flex flex-col gap-8">
+            {/* Lado a lado em TODA largura — ver o mesmo bloco em
               `kennel-profile.tsx`. */}
-          <div className="flex items-start gap-4 sm:gap-6">
-            {/* Recorte quadrado é intencional aqui: é o avatar do cão. A foto
-                em proporção original aparece no mosaico abaixo. */}
-            <PublicImage
-              src={principal?.thumbUrl ?? principal?.url}
-              alt={principal?.alt ?? dog.name}
-              fallbackText={dog.name}
-              width={128}
-              height={128}
-              priority
-              sizes="128px"
-              className="border-border rounded-card size-20 shrink-0 border object-cover sm:size-32"
-            />
-
-            <div className="flex min-w-0 flex-col gap-2">
-              <span className="text-fg-faint font-mono text-xs tracking-[0.2em] uppercase">
-                Registro
-              </span>
-              <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">
-                {dog.name}
-              </h1>
-              <p className="text-fg-muted text-sm">{describeDog(dog)}</p>
-              {kennel ? (
-                <Link
-                  href={`/c/${kennel.slug}`}
-                  // Mesma razão dos links da árvore: página de leitura, saída
-                  // improvável, 4G disputado. Ver pedigree-tree.tsx.
-                  prefetch={false}
-                  className="text-link hover:text-link-hover self-start text-sm underline underline-offset-4 transition-colors"
+            <div className="flex items-start gap-4 sm:gap-6">
+              {principal && photoIndex.has(principal.id) ? (
+                <PhotoTrigger
+                  index={photoIndex.get(principal.id)!}
+                  label={`Ampliar foto ${photoIndex.get(principal.id)! + 1} de ${photos.length} de ${dog.name}`}
+                  className="focus-visible:outline-ring rounded-card focus-visible:outline-2 focus-visible:outline-offset-2"
                 >
-                  {kennel.name}
-                </Link>
-              ) : null}
+                  {avatarImage}
+                </PhotoTrigger>
+              ) : (
+                avatarImage
+              )}
+
+              <div className="flex min-w-0 flex-col gap-2">
+                <span className="text-fg-faint font-mono text-xs tracking-[0.2em] uppercase">
+                  Registro
+                </span>
+                <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">
+                  {dog.name}
+                </h1>
+                <p className="text-fg-muted text-sm">{describeDog(dog)}</p>
+                {kennel ? (
+                  <Link
+                    href={`/c/${kennel.slug}`}
+                    // Mesma razão dos links da árvore: página de leitura, saída
+                    // improvável, 4G disputado. Ver pedigree-tree.tsx.
+                    prefetch={false}
+                    className="text-link hover:text-link-hover self-start text-sm underline underline-offset-4 transition-colors"
+                  >
+                    {kennel.name}
+                  </Link>
+                ) : null}
+              </div>
             </div>
-          </div>
 
-          <dl className="border-border bg-surface rounded-card divide-border divide-y border">
-            <Row label="Sexo" value={SEX_LABEL[dog.sex]} />
-            <Row label="Raça" value={dog.breed} />
-            <Row label="Nascimento" value={dog.born_on} />
-            <Row label="Cor" value={dog.color} />
-            <Row label="Pelagem" value={dog.coat} />
-            <Row label="Identificador" value={dog.public_id} mono />
-          </dl>
+            <dl className="border-border bg-surface rounded-card divide-border divide-y border">
+              <Row label="Sexo" value={SEX_LABEL[dog.sex]} />
+              <Row label="Raça" value={dog.breed} />
+              <Row label="Nascimento" value={dog.born_on} />
+              <Row label="Cor" value={dog.color} />
+              <Row label="Pelagem" value={dog.coat} />
+              <Row label="Identificador" value={dog.public_id} mono />
+            </dl>
 
-          <PedigreeTree pedigree={pedigree} />
+            <PedigreeTree pedigree={pedigree} />
 
-          {restante.length > 0 ? (
-            <section className="flex flex-col gap-3">
-              <h2 className="font-display text-lg font-semibold tracking-tight">Fotos</h2>
-              {/*
+            {restante.length > 0 ? (
+              <section className="flex flex-col gap-3">
+                <h2 className="font-display text-lg font-semibold tracking-tight">Fotos</h2>
+                {/*
                 Mosaico em COLUNAS (CSS multi-coluna), não grid.
                 Com `grid`, toda linha cresce até a foto mais alta dela e o
                 resto da linha vira faixa preta — uma foto em pé ao lado de uma
@@ -185,14 +212,10 @@ export default async function CaoPublicoPage({
                 vertical sai de `mb-3` nos itens, porque `gap` em multi-coluna
                 só vale entre colunas.
               */}
-              <ul className="columns-2 gap-3 sm:columns-3">
-                {restante.map((item) => {
-                  const proporcao = aspectOf(item);
-                  return (
-                    <li
-                      key={item.id}
-                      className="border-border rounded-card mb-3 break-inside-avoid overflow-hidden border"
-                    >
+                <ul className="columns-2 gap-3 sm:columns-3">
+                  {restante.map((item) => {
+                    const proporcao = aspectOf(item);
+                    const image = (
                       <PublicImage
                         src={item.thumbUrl ?? item.url}
                         alt={item.alt ?? dog.name}
@@ -204,15 +227,33 @@ export default async function CaoPublicoPage({
                         sizes="(max-width: 640px) 50vw, 33vw"
                         className="h-auto w-full"
                       />
-                    </li>
-                  );
-                })}
-              </ul>
-            </section>
-          ) : null}
+                    );
+                    return (
+                      <li
+                        key={item.id}
+                        className="border-border rounded-card mb-3 break-inside-avoid overflow-hidden border"
+                      >
+                        {photoIndex.has(item.id) ? (
+                          <PhotoTrigger
+                            index={photoIndex.get(item.id)!}
+                            label={`Ampliar foto ${photoIndex.get(item.id)! + 1} de ${photos.length} de ${dog.name}`}
+                            className="focus-visible:outline-ring block w-full focus-visible:outline-2 focus-visible:-outline-offset-2"
+                          >
+                            {image}
+                          </PhotoTrigger>
+                        ) : (
+                          image
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            ) : null}
 
-          <SignupInvite source="perfil-cao" />
-        </div>
+            <SignupInvite source="perfil-cao" />
+          </div>
+        </PublicGallery>
       </main>
     </div>
   );
