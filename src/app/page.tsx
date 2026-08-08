@@ -3,6 +3,8 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { PedigreeMark } from "@/modules/auth/components/pedigree-mark";
+import { ExampleProfileCard } from "@/modules/capture/components/example-profile-card";
+import { ExampleQrCard } from "@/modules/capture/components/example-qr-card";
 import { MeasurePixel } from "@/modules/capture/components/measure-pixel";
 import { publicMetadata } from "@/modules/public/metadata";
 
@@ -21,10 +23,13 @@ import { publicMetadata } from "@/modules/public/metadata";
  * qualquer um dos três a tornaria dinâmica e jogaria fora o cache de borda.
  * A medição acontece por `<img>`, no fim do documento — ver `MeasurePixel`.
  *
- * PESO: nenhum ícone de biblioteca, nenhum componente de cliente. A única
- * exceção deliberada é a logo do cabeçalho, ~38 KB — pedido explícito para
- * substituir o wordmark de texto aqui também. Fora dela, nenhuma foto: uma
- * foto de cão custaria mais que a página inteira.
+ * PESO: nenhum ícone de biblioteca, nenhum componente de cliente, nenhuma foto
+ * (uma foto de cão custaria mais que a página inteira). As duas exceções
+ * deliberadas são a logo do cabeçalho (~38 KB) e a seção de exemplo abaixo —
+ * `ExampleQrCard`/`ExampleProfileCard` — que é SVG e HTML puro (o mesmo
+ * `qrShape()` e a mesma `PedigreeTree` do produto real, alimentados com dado
+ * fixo), não imagem: pedido explícito do cliente para MOSTRAR o QR Code e o
+ * perfil público, não só prometer em texto.
  *
  * A CHAMADA PARA CADASTRO É O CONTEÚDO, não um enfeite no rodapé: quem chega
  * aqui veio de um papel impresso e tem trinta segundos de paciência.
@@ -37,24 +42,9 @@ export const metadata: Metadata = publicMetadata({
   path: "/",
 });
 
-const DESTAQUES = [
-  {
-    titulo: "Pedigree de cinco gerações",
-    texto: "A linhagem inteira numa página, com cada ancestral no seu caminho.",
-  },
-  {
-    titulo: "Endereço que não muda",
-    texto: "O identificador do cão é permanente. Trocar o nome não quebra o QR já impresso.",
-  },
-  {
-    titulo: "Perfil público do canil",
-    texto: "Seus cães num endereço só, que você divulga no crachá, no folder e na placa.",
-  },
-];
-
 export default function CapturaPage() {
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col justify-center gap-10 px-5 py-16">
+    <main className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col gap-10 px-5 py-16">
       <Image
         src="/brand/logo-header.png"
         alt="OrigemX"
@@ -69,19 +59,19 @@ export default function CapturaPage() {
 
       <div className="flex flex-col gap-5">
         <span className="text-fg-faint font-mono text-xs tracking-[0.2em] uppercase">
-          Registro de origem
+          A inteligência por trás das linhagens de excelência
         </span>
         <h1 className="font-display text-3xl leading-tight font-semibold tracking-tight text-balance sm:text-5xl">
-          A linhagem de cada cão em cinco gerações, num endereço que não muda.
+          A história do seu cão não deveria terminar em um pedigree.
         </h1>
         <p className="text-fg-muted max-w-xl text-base">
-          Cadastre seu canil, registre a origem dos seus cães e entregue a quem compra um filhote a
-          prova de procedência — num QR Code que continua funcionando depois de impresso.
+          Origem, linhagem e história. Tudo em uma identidade digital que acompanha seu cão por toda
+          a vida.
         </p>
       </div>
 
-      {/* A chamada vem ANTES da lista de destaques: quem já se convenceu no
-          papel impresso não precisa ler mais nada para agir. */}
+      {/* A chamada vem ANTES da prova visual: quem já se convenceu no papel
+          impresso não precisa rolar para agir. */}
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center gap-3">
           {/*
@@ -95,7 +85,7 @@ export default function CapturaPage() {
             href="/cadastro"
             className="bg-accent text-fg-on-accent hover:bg-accent-hover rounded-control focus-visible:outline-ring px-6 py-3 text-base font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
           >
-            Criar conta de criador
+            Criar meu perfil no OrigemX
           </Link>
           <Link
             href="/login"
@@ -104,21 +94,58 @@ export default function CapturaPage() {
             Já tenho conta
           </Link>
         </div>
-        <p className="text-fg-faint text-xs">Leva menos de um minuto.</p>
+        <p className="text-fg-faint text-xs">Grátis para começar · leva menos de 1 minuto.</p>
       </div>
 
-      <ul className="border-border divide-border grid gap-px overflow-hidden border-y sm:grid-cols-3 sm:border-x sm:rounded-card sm:border">
-        {DESTAQUES.map((item) => (
-          <li key={item.titulo} className="bg-surface flex flex-col gap-1.5 px-5 py-4">
-            <h2 className="text-fg text-sm font-medium">{item.titulo}</h2>
-            <p className="text-fg-muted text-sm">{item.texto}</p>
-          </li>
-        ))}
-      </ul>
+      {/*
+        Prova visual do que o texto promete. Antes disto a página só dizia "QR
+        Code" e "endereço que não muda" sem mostrar nenhum dos dois — pedido
+        direto do cliente. Os dois cards usam dado de EXEMPLO, nunca um cão ou
+        canil real, e dizem isso na própria etiqueta "Exemplo".
+      */}
+      <section className="flex flex-col gap-4">
+        <div className="flex flex-col gap-1.5">
+          <h2 className="font-display text-lg font-semibold tracking-tight">Veja como fica</h2>
+          <p className="text-fg-muted text-sm">
+            O QR que vai no crachá, e o perfil que ele abre — os dois são o produto de verdade, só o
+            cão é de exemplo.
+          </p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <ExampleQrCard />
+          <ExampleProfileCard />
+        </div>
+      </section>
 
       <span className="text-border-strong" aria-hidden="true">
         <PedigreeMark generations={3} />
       </span>
+
+      {/*
+        Rodapé mínimo — não é site institucional de várias colunas, é
+        transparência exigida pela LGPD: o site coleta dado de canil/cão, então
+        precisa dizer quem responde por isso e onde está a política. Pedido
+        direto do cliente.
+      */}
+      <footer className="border-border flex flex-col gap-3 border-t pt-6 text-xs sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-fg-faint">© {new Date().getFullYear()} OrigemX. Todos os direitos reservados.</p>
+        <div className="text-fg-faint flex flex-wrap gap-x-4 gap-y-2">
+          <a href="mailto:contato@origemxbr.com" className="hover:text-fg-muted transition-colors">
+            contato@origemxbr.com
+          </a>
+          <a
+            href="https://instagram.com/origemxbr"
+            target="_blank"
+            rel="noreferrer noopener"
+            className="hover:text-fg-muted transition-colors"
+          >
+            @origemxbr
+          </a>
+          <Link href="/privacidade" className="hover:text-fg-muted transition-colors">
+            Política de privacidade
+          </Link>
+        </div>
+      </footer>
 
       {/* Último elemento do documento, de propósito: não atrapalha nada acima. */}
       <MeasurePixel />

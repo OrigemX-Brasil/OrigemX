@@ -17,6 +17,7 @@ const PUBLIC_EXACT = new Set([
   "/cadastro",
   "/esqueci-senha",
   "/nova-senha",
+  "/privacidade",
   /**
    * Pixel de medição da página de captura. Aberto porque a página de captura é
    * aberta — exigir sessão para contar um acesso anônimo seria contraditório.

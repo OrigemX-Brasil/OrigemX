@@ -9,6 +9,10 @@ describe("isPublicRoute", () => {
     }
   });
 
+  it("abre a política de privacidade — o rodapé da captura linka pra ela sem sessão", () => {
+    expect(isPublicRoute("/privacidade")).toBe(true);
+  });
+
   it("abre o perfil público — é o destino do QR impresso", () => {
     expect(isPublicRoute("/d/k7m2x9qp4a3b")).toBe(true);
     expect(isPublicRoute("/c/canil-aurora")).toBe(true);
