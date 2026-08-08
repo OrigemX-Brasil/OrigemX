@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { excerpt, publicMetadata, siteUrl } from "./metadata";
+import { DEFAULT_OG_IMAGE, excerpt, publicMetadata, siteUrl } from "./metadata";
 
 const ORIGINAL = process.env.NEXT_PUBLIC_SITE_URL;
 
@@ -90,10 +90,11 @@ describe("publicMetadata", () => {
     expect(m.openGraph?.images).toBeDefined();
   });
 
-  it("sem imagem, cai para card simples em vez de anunciar imagem quebrada", () => {
+  it("sem imagem, cai para a imagem de marca em vez de anunciar imagem quebrada", () => {
     const m = publicMetadata(base);
-    expect(twitterCard(m)).toBe("summary");
-    expect(m.openGraph?.images).toBeUndefined();
+    expect(twitterCard(m)).toBe("summary_large_image");
+    const images = m.openGraph?.images as Array<{ url: string }> | undefined;
+    expect(images?.[0]?.url).toBe(DEFAULT_OG_IMAGE.url);
   });
 
   it("metadataBase acompanha a env var", () => {

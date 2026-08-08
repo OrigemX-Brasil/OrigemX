@@ -17,6 +17,13 @@ export function siteUrl(): URL {
 }
 
 /**
+ * Imagem de card quando não há foto real (canil/cão sem foto, ou página sem
+ * `imageUrl` — home, por exemplo). Arquivo estático do build: nunca quebra,
+ * ao contrário de uma foto que dependeria do Storage estar de pé.
+ */
+export const DEFAULT_OG_IMAGE = { url: "/brand/preview.jpg", width: 1536, height: 864 };
+
+/**
  * Monta title, description, canonical, Open Graph e Twitter card de uma vez.
  *
  * O CANONICAL importa mais do que parece: o cão é alcançável por
@@ -43,11 +50,18 @@ export function publicMetadata({
   const base = siteUrl();
   const url = new URL(path, base).toString();
 
-  // Imagem só entra se existir de verdade. Card sem imagem é melhor que card
-  // com imagem quebrada.
+  // Foto real quando existe; senão a imagem de marca — nunca sem imagem
+  // nenhuma, `DEFAULT_OG_IMAGE` é estática e não tem como quebrar.
   const images = imageUrl
     ? [{ url: imageUrl, alt: imageAlt ?? title, width: 1200, height: 1200 }]
-    : undefined;
+    : [
+        {
+          url: DEFAULT_OG_IMAGE.url,
+          alt: imageAlt ?? title,
+          width: DEFAULT_OG_IMAGE.width,
+          height: DEFAULT_OG_IMAGE.height,
+        },
+      ];
 
   return {
     metadataBase: base,
@@ -64,10 +78,10 @@ export function publicMetadata({
       images,
     },
     twitter: {
-      card: images ? "summary_large_image" : "summary",
+      card: "summary_large_image",
       title,
       description,
-      images: images?.map((i) => i.url),
+      images: images.map((i) => i.url),
     },
   };
 }

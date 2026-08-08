@@ -3,6 +3,8 @@ import { Inter, Sora } from "next/font/google";
 
 import "./globals.css";
 
+import { DEFAULT_OG_IMAGE, siteUrl } from "@/modules/public/metadata";
+
 /**
  * Sora para display, Inter para corpo.
  *
@@ -43,11 +45,26 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
+  metadataBase: siteUrl(),
   title: {
     default: "OrigemX",
     template: "%s · OrigemX",
   },
   description: "Perfis de canis, pedigree e identidade canina.",
+  // Fallback para páginas sem `publicMetadata()` próprio (login, cadastro,
+  // /painel/*) — o merge de metadata do Next é raso, então uma página que
+  // declara seu próprio `openGraph` (toda página pública) substitui este por
+  // inteiro em vez de mesclar; ver DEFAULT_OG_IMAGE em modules/public/metadata.
+  openGraph: {
+    type: "website",
+    siteName: "OrigemX",
+    locale: "pt_BR",
+    images: [{ ...DEFAULT_OG_IMAGE, alt: "OrigemX" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    images: [DEFAULT_OG_IMAGE.url],
+  },
 };
 
 export default function RootLayout({
