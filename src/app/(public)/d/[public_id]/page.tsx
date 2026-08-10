@@ -6,16 +6,20 @@ import { notFound } from "next/navigation";
 import { SignupInvite } from "@/modules/capture/components/signup-invite";
 import { aspectOf } from "@/modules/media/constraints";
 import { PedigreeTree } from "@/modules/pedigree/components/pedigree-tree";
+import { MAX_PHOTO_GENERATION } from "@/modules/pedigree/layout";
 import { getPedigree } from "@/modules/pedigree/queries";
+import { thumbnailTargets } from "@/modules/pedigree/tree";
 import { PhotoTrigger, PublicGallery } from "@/modules/public/components/photo-lightbox";
 import { PublicImage } from "@/modules/public/components/public-image";
 import { excerpt, publicMetadata } from "@/modules/public/metadata";
 import {
   getPublicDogByPublicId,
+  getPublicDogThumbs,
   getPublicKennelById,
   getPublicMedia,
   type PublicDog,
 } from "@/modules/public/queries";
+import { KennelSearch } from "@/modules/search/components/kennel-search";
 
 /**
  * Perfil público do cão — o alvo do QR Code impresso.
@@ -99,6 +103,14 @@ export default async function CaoPublicoPage({
     getPedigree(dog.id),
   ]);
 
+  // Segunda onda, e é inerente: não dá para saber os `dog_id` dos ancestrais
+  // antes da RPC do pedigree voltar. Uma consulta a mais, não N+1 — e roda
+  // uma vez por regeneração de ISR (300s), não por acesso. Ver o comentário
+  // completo em `getPublicDogThumbs`.
+  const thumbs = await getPublicDogThumbs(
+    pedigree ? thumbnailTargets(pedigree, MAX_PHOTO_GENERATION) : [],
+  );
+
   const [principal, ...restante] = media;
 
   // Só entram fotos com URL resolvida — clicar num placeholder sem imagem não
@@ -129,7 +141,7 @@ export default async function CaoPublicoPage({
 
   return (
     <div className="flex min-h-dvh flex-col">
-      <header className="border-border border-b px-5 py-4 lg:px-8">
+      <header className="border-border flex items-center justify-between gap-4 border-b px-5 py-4 lg:px-8">
         {/*
           Sem prefetch como todo link desta página — e este em especial: por ser
           o wordmark do cabeçalho, entra na viewport SEMPRE. Era ele que ainda=
@@ -145,6 +157,7 @@ export default async function CaoPublicoPage({
             className="h-8 w-auto"
           />
         </Link>
+        <KennelSearch />
       </header>
 
       <main className="mx-auto w-full max-w-2xl flex-1 px-5 py-8 lg:px-8">
@@ -196,7 +209,11 @@ export default async function CaoPublicoPage({
               <Row label="Identificador" value={dog.public_id} mono />
             </dl>
 
-            <PedigreeTree pedigree={pedigree} />
+            <PedigreeTree
+              pedigree={pedigree}
+              thumbs={thumbs}
+              subjectPhotoUrl={principal?.thumbUrl ?? principal?.url ?? undefined}
+            />
 
             {restante.length > 0 ? (
               <section className="flex flex-col gap-3">

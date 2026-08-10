@@ -7,6 +7,8 @@ import {
   parentPositions,
   pathLabel,
   relationOf,
+  shortSupport,
+  thumbnailTargets,
   type PedigreeRow,
 } from "./tree";
 
@@ -235,5 +237,61 @@ describe("buildPedigree — defesas", () => {
     expect(pai?.name).toBe("Cão 2");
     expect(pai?.is_public).toBe(false);
     expect(pai?.public_id).toBeNull();
+  });
+});
+
+describe("shortSupport — apoio do card com foto", () => {
+  it("é só a raça, sem ano nem canil", () => {
+    const node = buildPedigree([
+      row(1),
+      row(2, { breed: "Rottweiler", born_on: "2018-01-01", kennel_name: "Canil X" }),
+    ]).byPosition.get(2)!;
+
+    expect(shortSupport(node)).toBe("Rottweiler");
+  });
+
+  it("sem raça cadastrada, string vazia — não 'null'", () => {
+    const node = buildPedigree([row(1), row(2, { breed: null })]).byPosition.get(2)!;
+    expect(shortSupport(node)).toBe("");
+  });
+});
+
+describe("thumbnailTargets — quem entra na consulta de miniatura", () => {
+  it("nunca o sujeito: a foto dele já vem de outra consulta", () => {
+    const ped = buildPedigree([row(1), row(2), row(3)]);
+    expect(thumbnailTargets(ped, 5)).not.toContain("dog-1");
+  });
+
+  it("respeita o teto de geração", () => {
+    // 4..7 são geração 2; 8..15 são geração 3.
+    const ped = buildPedigree(
+      [1, 2, 3, 4, 5, 6, 7, 8, 9].map((pos) => row(pos)),
+    );
+    const alvos = thumbnailTargets(ped, 2);
+
+    expect(alvos).toEqual(expect.arrayContaining(["dog-2", "dog-3", "dog-4", "dog-5", "dog-6", "dog-7"]));
+    expect(alvos).not.toContain("dog-8");
+    expect(alvos).not.toContain("dog-9");
+  });
+
+  it("exclui ancestral não público, mesmo dentro do teto de geração", () => {
+    const ped = buildPedigree([row(1), row(2, { is_public: false })]);
+    expect(thumbnailTargets(ped, 5)).not.toContain("dog-2");
+  });
+
+  it("linebreeding: o mesmo cão em duas posições entra uma vez só", () => {
+    const ped = buildPedigree([
+      row(1),
+      row(2, { dog_id: "ouro" }),
+      row(3),
+      row(6, { dog_id: "ouro" }),
+    ]);
+    const alvos = thumbnailTargets(ped, 5);
+
+    expect(alvos.filter((id) => id === "ouro")).toHaveLength(1);
+  });
+
+  it("árvore vazia devolve lista vazia, não lança", () => {
+    expect(thumbnailTargets(buildPedigree([]), 3)).toEqual([]);
   });
 });

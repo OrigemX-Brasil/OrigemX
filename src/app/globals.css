@@ -26,8 +26,11 @@
     outline-offset: 2px;
   }
 
-  /* O pedigree de 5 gerações é largo por natureza e rola na horizontal.
-     Sem isto, o toque no mobile fica travado. */
+  /* Suaviza rolagem PROGRAMÁTICA/por âncora (`#id`, `scrollIntoView`) — não
+     afeta o toque, que o navegador já trata como gesto direto do usuário.
+     Por isso NÃO é o que faz o pan horizontal do pedigree (`pedigree-tree.tsx`)
+     funcionar no mobile; aquilo é `overflow-x: auto` comum, sem depender de
+     nada aqui. */
   @media (prefers-reduced-motion: no-preference) {
     html {
       scroll-behavior: smooth;

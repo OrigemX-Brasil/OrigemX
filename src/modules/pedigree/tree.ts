@@ -201,3 +201,47 @@ export function describeNode(node: PedigreeNode): string {
   const parts = [node.breed, node.born_on?.slice(0, 4), node.kennel_name].filter(Boolean);
   return parts.join(" · ");
 }
+
+/**
+ * Raça, e só ela — apoio do card COM FOTO (geração 0 até `MAX_PHOTO_GENERATION`
+ * em `layout.ts`). `describeNode` (raça + ano + canil) cabia no `<details>` de
+ * texto antigo; num card de ~150px de largura, ano e canil junto do nome
+ * estourariam a linha. O card compacto (geração 4+) não chama nem esta função:
+ * lá só cabe o nome.
+ */
+export function shortSupport(node: PedigreeNode): string {
+  return node.breed ?? "";
+}
+
+/**
+ * Quais `dog_id` merecem uma consulta de miniatura.
+ *
+ * Três filtros, nesta ordem:
+ *   1. nunca o sujeito (posição 1) — a página do cão já busca a foto dele por
+ *      outra consulta; pedir de nono aqui seria a mesma imagem, uma vez a mais.
+ *   2. nunca além de `maxGeneration` — ver `MAX_PHOTO_GENERATION`: da quarta
+ *      geração em diante o card é só texto, então a foto nunca apareceria.
+ *   3. só ancestral que o BANCO já classificou como público (`is_public`,
+ *      calculado por `dog_is_public()` dentro de `dog_pedigree`). Não é
+ *      re-derivado aqui.
+ *
+ * ⚠️ `is_public: true` não é sinônimo de "publicado" — o ancestral FANTASMA
+ * (sem dono, sem canil) também satisfaz `dog_is_public()` mesmo que
+ * `published_at` seja nulo. Ele passa por este filtro e entra na consulta de
+ * `getPublicDogThumbs`; é o filtro de bucket lá (mídia pública mora só em
+ * `kennel-media-public`) que garante que isso não vaza nem gasta uma
+ * assinatura de URL à toa. Ver o comentário completo naquela função.
+ *
+ * Dedup por `dog_id`: linebreeding faz o mesmo cão ocupar várias posições — a
+ * mesma foto não precisa ser pedida duas vezes.
+ */
+export function thumbnailTargets(pedigree: Pedigree, maxGeneration: number): string[] {
+  const ids = new Set<string>();
+  for (const node of pedigree.byPosition.values()) {
+    if (node.pos === 1) continue;
+    if (node.generation > maxGeneration) continue;
+    if (!node.is_public) continue;
+    ids.add(node.dog_id);
+  }
+  return [...ids];
+}

@@ -144,7 +144,15 @@ test("linebreeding: o mesmo ancestral aparece nos dois caminhos", async ({
 
   await expect(ocorrencias).toHaveCount(2);
   // E o selo diz quantas vezes, para o criador reconhecer o linebreeding.
-  await expect(arvore.getByTitle(/ocupa 2 posições/)).toHaveCount(2);
+  //
+  // `filter({ visible: true })` porque o pedigree tem DUAS apresentações no
+  // DOM — lista por geração abaixo de `sm`, colunas a partir dele — e o CSS
+  // escolhe qual aparece (o servidor não sabe a largura da tela; ler
+  // `headers()` mataria o ISR da rota). Sem o filtro, o selo do layout
+  // escondido também contaria, porque `getByTitle` casa por atributo e não
+  // olha visibilidade. A asserção por `role` acima não precisa disso: locator
+  // de role já ignora o que está fora da árvore de acessibilidade.
+  await expect(arvore.getByTitle(/ocupa 2 posições/).filter({ visible: true })).toHaveCount(2);
 });
 
 test("ancestral não cadastrado vira lacuna, sem deslocar o resto", async ({

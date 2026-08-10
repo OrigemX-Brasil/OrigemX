@@ -11,17 +11,19 @@ import { PublicImage } from "@/modules/public/components/public-image";
  * texto; isto mostra, com o mesmo cão que o card abre ao clicar.
  *
  * `PedigreeTree` é o componente REAL do perfil (sem fetch, sem client JS —
- * ver o próprio arquivo). Os pais aqui são fixture — os MESMOS nomes/datas
- * das linhas reais no banco — só pra caber num card compacto sem ir buscar
- * dado em build/request time numa página que precisa continuar 100%
- * estática. `is_public: false` em toda linha: o nome do ancestral não vira
- * link aqui dentro (a árvore de verdade, na página real, é que decide isso).
+ * ver o próprio arquivo), com `variant="preview"`. Os pais aqui são fixture —
+ * os MESMOS nomes/datas das linhas reais no banco — só pra caber num card
+ * compacto sem ir buscar dado em build/request time numa página que precisa
+ * continuar 100% estática. `is_public: false` em toda linha: o nome do
+ * ancestral não vira link aqui dentro (a árvore de verdade, na página real, é
+ * que decide isso) — mas quem garante isso é o `variant="preview"`, não o
+ * dado: ele NUNCA emite `<Link>`, então nada aqui depende de toda linha
+ * manter `is_public: false` para o card inteiro (que já é um `<Link>`, ver
+ * abaixo) continuar sem `<a>` aninhado.
  *
- * SÓ PAIS, sem avós: um nó com pai/mãe conhecidos vira `<details>` — um
- * elemento clicável de verdade — e o card inteiro já é um `<Link>` (ver
- * abaixo). `<details>` dentro de `<a>` navega E expande no mesmo clique, uma
- * briga de interação real, não teórica. Parar nos pais mantém todo nó como
- * folha (sem `<details>`), então não existe elemento clicável aninhado.
+ * SÓ PAIS, sem avós: a fixture não tem por que crescer só porque o risco de
+ * elemento aninhado sumiu — o card de exemplo é uma prévia, "Ver perfil
+ * completo →" é onde a árvore de verdade (com avós, bisavós…) aparece.
  */
 const FIXTURE_ROWS: PedigreeRow[] = [
   {
@@ -106,9 +108,9 @@ export function ExampleProfileCard() {
           </div>
         </div>
 
-        <PedigreeTree pedigree={FIXTURE_PEDIGREE} />
+        <PedigreeTree pedigree={FIXTURE_PEDIGREE} variant="preview" />
 
-        <p className="text-fg-faint text-xs">Prévia dos pais — o perfil completo vai até quatro gerações.</p>
+        <p className="text-fg-faint text-xs">Prévia dos pais — o perfil completo vai até cinco gerações.</p>
 
         <span className="text-link text-sm font-medium">Ver perfil completo →</span>
       </div>

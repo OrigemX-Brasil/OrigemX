@@ -1,46 +1,114 @@
-import Link from "next/link";
-
 import {
-  describeNode,
-  generationOf,
-  parentPositions,
-  pathLabel,
-  relationOf,
-  type Pedigree,
-  type PedigreeNode,
-} from "../tree";
+  ELBOW,
+  GENERATIONS,
+  PREVIEW_ELBOW,
+  PREVIEW_GENERATIONS,
+  treeWidth,
+  type GenerationSpec,
+} from "../layout";
+import { generationOf, parentPositions, type Pedigree } from "../tree";
+import { AncestorCard, CompactCard, UnknownSlot } from "./pedigree-card";
+import { PedigreeGenerations } from "./pedigree-generations";
 
 /**
  * ============================================================================
- * Árvore de pedigree — aninhada, sem uma linha de JavaScript de cliente.
+ * Árvore de pedigree — colunas por geração a partir de `sm`, sem JavaScript.
  * ============================================================================
  *
- * POR QUE ANINHADA E NÃO EM COLUNAS: a tabela clássica de pedigree tem 32
- * colunas na quinta geração. Em 380px, isso é rolagem horizontal — o gesto que
- * as pessoas menos esperam numa página que abriram escaneando um QR, e o que
- * mais esconde conteúdo. A árvore aninhada usa a única dimensão que sobra no
- * celular, que é a vertical, e recolhe o que não cabe.
+ * DUAS APRESENTAÇÕES, UMA ÁRVORE. Este componente decide qual desenhar:
  *
- * POR QUE `<details>` NATIVO: abre e fecha antes de qualquer hidratação,
- * funciona com JavaScript desligado, já vem com semântica de disclosure para
- * leitor de tela, é operável por teclado sem `tabindex` e o triângulo gira
- * sozinho. Um acordeão em React seria mais código para entregar menos.
+ *   < sm (640px)  `PedigreeGenerations` — lista por geração, cards empilhados
+ *   >= sm         as colunas com cotovelo que este arquivo desenha
  *
- * ABERTURA PADRÃO: gerações 1 e 2 abertas — pais e avós são o que quase todo
- * mundo veio ver. Da terceira em diante, recolhidas: abrir tudo daria uma
- * página de 62 linhas onde ninguém acha nada.
+ * A mesma `Pedigree` (uma consulta, um `buildPedigree`) alimenta as duas, e
+ * os cards são os mesmos componentes. O que existe em dobro é o MARKUP, com
+ * `sm:hidden` / `hidden sm:block` — e é assim porque o servidor não sabe a
+ * largura da tela: ler `headers()` aqui tornaria a rota dinâmica e mataria o
+ * ISR, que é justamente o que faz esta página abrir rápido a partir do QR
+ * impresso. O custo foi medido no HTML transferido, não estimado.
+ *
+ * POR QUE COLUNAS NO DESKTOP: o pedigree é um documento que o criador MOSTRA
+ * — de lado, no estande — e a leitura que ele quer é a comparação entre
+ * linhas. Na árvore aninhada de `<details>` que existia aqui antes, ver o
+ * bisavô paterno e o materno lado a lado era impossível: dois cliques e um
+ * scroll, e a relação sumia no caminho. É a forma que o setor usa há um
+ * século, em papel, e não por acaso.
+ *
+ * POR QUE NÃO NO MOBILE: a mesma coluna que alinha bem em 900px vira, em
+ * 360px, card solto no meio de um vão vertical enorme — o `grid-rows-2` que
+ * alinha o colchete iguala as metades, e numa tela estreita isso é quase tudo
+ * espaço vazio. Ver o cabeçalho de `pedigree-generations.tsx`.
+ *
+ * A ROLAGEM HORIZONTAL AQUI É DESENHO, não acidente: (1) o card do sujeito é
+ * `sticky left-0`, então a referência nunca sai da tela; (2) a faixa de
+ * cabeçalhos define pontos de `scroll-snap`, e a rolagem assenta numa geração
+ * em vez de parar no meio de um nome; (3) `scroll-padding-left` do tamanho do
+ * card fixado impede o snap esconder a coluna atrás dele; (4) uma borda em
+ * degradê e uma frase anunciam que há mais à direita.
+ *
+ * `snap-proximity`, não `mandatory`: com `mandatory` o navegador é obrigado a
+ * repousar num ponto de snap, e alvo maior que a área restante vira briga de
+ * rolagem com conteúdo inalcançável.
+ *
+ * FOTO ATÉ A TERCEIRA GERAÇÃO (`MAX_PHOTO_GENERATION` em `layout.ts`).
+ * Sujeito + g1..g3 = no máximo 15 miniaturas, todas `lazy`. Da quarta em
+ * diante o card é texto: são 16 e 32 posições, e 48 miniaturas a mais em 4G
+ * de feira custariam mais que o pedigree inteiro. A referência do cliente
+ * (`assets/fotos/home-exemplo.jpg`) encolhe o card por geração pelo mesmo
+ * motivo, muito antes de existir 4G.
+ *
+ * AS LINHAS TÊM COR, E A COR TEM DONO: cada FILHO desenha a sua própria
+ * metade do colchete (`pos` par = pai = azul; ímpar = mãe = violeta — ver
+ * `Branches`). Nenhum elemento tem duas cores; as duas metades se encontram
+ * no meio do grupo, que é exatamente o centro do card do pai — de graça, pelo
+ * `items-center`. Sobre `--color-surface` o azul mede ~3,7:1 e o violeta
+ * ~3,4:1, acima dos 3,0 que a WCAG 1.4.11 pede de objeto gráfico. O dourado é
+ * do selo (ver tokens.css) e não entra aqui. A cor NÃO é o único canal: a
+ * relação e o caminho por extenso continuam em todo card — visíveis até a 2ª
+ * geração, em `title`/`sr-only` depois (ver `pedigree-card.tsx`) — o que
+ * atende 1.4.1 e sustenta o leitor de tela, onde linha colorida não existe.
  *
  * O nome do ancestral aparece SEMPRE, inclusive de registro não publicado de
- * outro criador. É decisão de produto registrada em supabase/README.md; o resto
- * dos campos o banco não devolve.
+ * outro criador — decisão de produto em supabase/README.md. O resto dos
+ * campos o banco não devolve, e a MINIATURA só é pedida para ancestral
+ * público de até a terceira geração: ver `thumbnailTargets` (`tree.ts`) e
+ * `getPublicDogThumbs` (`modules/public/queries.ts`).
  */
 
-export function PedigreeTree({ pedigree }: { pedigree: Pedigree | null }) {
+/** Largura útil do `<main>` da página do cão (`max-w-2xl` menos padding).
+ * Acima disso a árvore rola; abaixo, cabe inteira e a affordance some. Os
+ * degraus de `treeWidth` (168/364/544/712/…) nunca caem perto dessa borda —
+ * a transição real é sempre "3 gerações cabem, 4 não". */
+const CONTAINER_WIDTH = 672;
+
+/** Card do sujeito + o padding esquerdo do scroller (`px-3` = 12px). Sem
+ * isto, o `scroll-snap` esconde a coluna assentada atrás do card fixo. */
+const SCROLL_PADDING = GENERATIONS[0]!.card + 12;
+
+export function PedigreeTree({
+  pedigree,
+  thumbs,
+  subjectPhotoUrl,
+  variant = "full",
+}: {
+  pedigree: Pedigree | null;
+  /** `dog_id` → URL da miniatura, geração 1 a 3. Ver `thumbnailTargets`. */
+  thumbs?: ReadonlyMap<string, string>;
+  /** Foto do PRÓPRIO cão — a página já busca por outra consulta; nunca
+   * refazer aqui a mesma ida ao Storage. */
+  subjectPhotoUrl?: string;
+  /**
+   * `full` (padrão): perfil público do cão — com scroller, cabeçalho e foto.
+   * `preview`: card de exemplo da home (`example-profile-card.tsx`), cujo
+   * card INTEIRO já é um `<Link>`. Sem scroller/sticky/cabeçalho e — crucial —
+   * NUNCA emite `<Link>` próprio, senão seria `<a>` dentro de `<a>`.
+   */
+  variant?: "full" | "preview";
+}) {
   if (!pedigree?.subject) return null;
 
-  const [sirePos, damPos] = parentPositions(1);
-  const sire = pedigree.byPosition.get(sirePos);
-  const dam = pedigree.byPosition.get(damPos);
+  const specs = variant === "preview" ? PREVIEW_GENERATIONS : GENERATIONS;
+  const scrolls = variant === "full" && treeWidth(pedigree.depth, specs) > CONTAINER_WIDTH;
 
   return (
     <section className="flex flex-col gap-3">
@@ -58,12 +126,60 @@ export function PedigreeTree({ pedigree }: { pedigree: Pedigree | null }) {
           Pai e mãe ainda não foram informados.
         </p>
       ) : (
-        <div className="border-border bg-surface rounded-card border p-2 sm:p-3">
-          <ol className="flex flex-col gap-1">
-            <Branch node={sire} pos={sirePos} pedigree={pedigree} />
-            <Branch node={dam} pos={damPos} pedigree={pedigree} />
-          </ol>
-        </div>
+        <>
+          {/*
+            MOBILE: lista por geração — ver `pedigree-generations.tsx` para o
+            porquê. A `preview` fica de fora: são duas gerações dentro de um
+            `<Link>`, onde `<details>` navegaria e expandiria no mesmo toque.
+          */}
+          {variant === "full" ? (
+            <div className="sm:hidden">
+              <PedigreeGenerations pedigree={pedigree} thumbs={thumbs} />
+            </div>
+          ) : null}
+
+          {/*
+            A partir de `sm`, a árvore em colunas. Os dois markups convivem e o
+            CSS escolhe: o servidor não sabe a largura da tela, e ler
+            `headers()` aqui tornaria a rota dinâmica e mataria o ISR — que é o
+            que faz esta página abrir rápido a partir do QR impresso.
+          */}
+          <div className={variant === "full" ? "relative hidden sm:block" : "relative"}>
+            <div
+              role={variant === "full" ? "group" : undefined}
+              tabIndex={variant === "full" ? 0 : undefined}
+              aria-label={
+                variant === "full"
+                  ? `Árvore de pedigree de ${pedigree.subject.name}. Role na horizontal para ver as gerações.`
+                  : undefined
+              }
+              style={variant === "full" ? { scrollPaddingLeft: SCROLL_PADDING } : undefined}
+              className={
+                variant === "full"
+                  ? "border-border bg-surface rounded-card focus-visible:outline-ring snap-x snap-proximity overflow-x-auto overscroll-x-contain border px-3 py-3 focus-visible:-outline-offset-2 focus-visible:outline-2"
+                  : "border-border bg-surface rounded-card overflow-hidden border p-2.5"
+              }
+            >
+              <div className="flex w-max flex-col gap-3">
+                {variant === "full" ? <HeaderRow specs={specs} depth={pedigree.depth} /> : null}
+                <SubjectRow
+                  pedigree={pedigree}
+                  specs={specs}
+                  thumbs={thumbs}
+                  subjectPhotoUrl={subjectPhotoUrl}
+                  variant={variant}
+                />
+              </div>
+            </div>
+
+            {scrolls ? (
+              <div
+                aria-hidden="true"
+                className="from-surface rounded-r-card pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l to-transparent"
+              />
+            ) : null}
+          </div>
+        </>
       )}
 
       {pedigree.repeated.size > 0 ? (
@@ -72,152 +188,207 @@ export function PedigreeTree({ pedigree }: { pedigree: Pedigree | null }) {
           posições desta árvore (linebreeding). Cada ocorrência aparece no seu próprio caminho.
         </p>
       ) : null}
+
+      {variant === "full" && pedigree.depth >= 1 ? <ColorLegend /> : null}
+
+      {/* `hidden sm:block`: no mobile não há árvore lateral para arrastar — a
+          navegação lá é o acordeão por geração. */}
+      {scrolls ? (
+        <p className="text-fg-faint hidden text-xs sm:block">
+          Arraste para o lado para ver as gerações →
+        </p>
+      ) : null}
     </section>
   );
 }
 
-/** Um galho: o nó, e — se houver ancestral conhecido acima — os pais dele. */
-function Branch({
-  node,
+/**
+ * Faixa de rótulos de geração ("1ª GERAÇÃO · PAIS"…). Alinha com os cards por
+ * construção — as duas leem a MESMA `specs[g].band` de `layout.ts` — e é ela
+ * que hospeda os pontos de `scroll-snap`: a recursão não tem um elemento por
+ * coluna onde pendurá-los, mas esta faixa tem, um por geração.
+ *
+ * NÃO `sticky top-0`: `overflow-x: auto` no container força `overflow-y` a
+ * computar `auto` também, e o scrollport passa a ser esta caixa, que não rola
+ * verticalmente — `sticky` vertical aqui teria curso zero.
+ */
+function HeaderRow({ specs, depth }: { specs: readonly GenerationSpec[]; depth: number }) {
+  return (
+    <div className="flex shrink-0">
+      {specs.slice(0, depth + 1).map((gen, g) => (
+        <div
+          key={g}
+          style={{ width: gen.band, paddingLeft: g > 0 ? ELBOW : 0 }}
+          className="shrink-0 snap-start"
+        >
+          <span className="text-fg-faint font-mono text-[0.625rem] tracking-[0.15em] uppercase">
+            {gen.label}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** O sujeito e, à direita, as duas ramificações (pai/mãe). */
+function SubjectRow({
+  pedigree,
+  specs,
+  thumbs,
+  subjectPhotoUrl,
+  variant,
+}: {
+  pedigree: Pedigree;
+  specs: readonly GenerationSpec[];
+  thumbs?: ReadonlyMap<string, string>;
+  subjectPhotoUrl?: string;
+  variant: "full" | "preview";
+}) {
+  const subject = pedigree.subject!;
+  const width = widthFor(specs, 0);
+  const card = (
+    <AncestorCard node={subject} width={width} thumbUrl={subjectPhotoUrl} linkable={false} />
+  );
+
+  return (
+    <div className="flex items-center">
+      {variant === "full" ? (
+        // `bg-surface` opaco: sem ele as colunas passariam por baixo ao
+        // rolar. `shrink-0`: sem ele o flex comprime o card fixo. O `after:`
+        // é o degradê de 12px que faz ler como "fixado", não como régua dura.
+        <div className="bg-surface after:from-surface sticky left-0 z-10 shrink-0 after:pointer-events-none after:absolute after:inset-y-0 after:-right-3 after:w-3 after:bg-gradient-to-r after:to-transparent">
+          {card}
+        </div>
+      ) : (
+        card
+      )}
+      <Branches pos={1} pedigree={pedigree} specs={specs} thumbs={thumbs} variant={variant} />
+    </div>
+  );
+}
+
+/**
+ * O grupo dos dois pais de `pos`, se ao menos um for conhecido — senão
+ * `null`, e o nó de `pos` vira folha. Um `<ol>` vazio de placeholders em
+ * cada nível seria ruído: 32 "Não informado" na 5ª geração não é dado.
+ *
+ * `grid grid-rows-2` e não `flex-col`: `flex-1`/`basis-0` NÃO iguala alturas
+ * num container de altura automática (o `min-height:auto` do item trava no
+ * conteúdo, não sobra espaço pro `grow` distribuir). `minmax(0,1fr)` iguala
+ * de verdade — e é isso que garante que o MEIO do grupo seja sempre a
+ * fronteira entre as duas linhas, mesmo com subárvores bem assimétricas (pai
+ * com oito bisavós, mãe folha). É o que alinha as colunas de verdade.
+ */
+function Branches({
   pos,
   pedigree,
+  specs,
+  thumbs,
+  variant,
 }: {
-  node: PedigreeNode | undefined;
   pos: number;
   pedigree: Pedigree;
+  specs: readonly GenerationSpec[];
+  thumbs?: ReadonlyMap<string, string>;
+  variant: "full" | "preview";
 }) {
-  if (!node) return <UnknownBranch pos={pos} />;
-
   const [sirePos, damPos] = parentPositions(pos);
-  const sire = pedigree.byPosition.get(sirePos);
-  const dam = pedigree.byPosition.get(damPos);
+  if (!pedigree.byPosition.has(sirePos) && !pedigree.byPosition.has(damPos)) return null;
 
-  // Nenhum dos dois conhecido: folha. Um `<details>` vazio é um triângulo que
-  // promete algo e não entrega.
-  if (!sire && !dam) {
-    return (
-      <li className="pl-[1.35rem]">
-        <NodeRow node={node} pedigree={pedigree} />
+  const elbow = variant === "preview" ? PREVIEW_ELBOW : ELBOW;
+
+  return (
+    <ol className="before:bg-border-strong relative grid grid-rows-2 gap-y-1 before:absolute before:top-1/2 before:left-0 before:h-px before:w-2 before:content-['']">
+      {/* PAI: posição par. Cada filho pinta a SUA metade do colchete — nenhum
+          elemento tem duas cores. As duas metades se encontram no meio do
+          grupo (o tronco neutro de 8px acima), que é o centro do card pai. */}
+      <li className="relative flex items-center" style={{ paddingLeft: elbow }}>
+        <span
+          aria-hidden="true"
+          className="border-accent pointer-events-none absolute top-1/2 -bottom-0.5 left-2 w-4 rounded-tl-md border-t border-l"
+        />
+        <Subtree
+          pos={sirePos}
+          pedigree={pedigree}
+          specs={specs}
+          thumbs={thumbs}
+          variant={variant}
+        />
       </li>
-    );
-  }
+      {/* MÃE: posição ímpar. */}
+      <li className="relative flex items-center" style={{ paddingLeft: elbow }}>
+        <span
+          aria-hidden="true"
+          className="border-secondary pointer-events-none absolute -top-0.5 bottom-1/2 left-2 w-4 rounded-bl-md border-b border-l"
+        />
+        <Subtree pos={damPos} pedigree={pedigree} specs={specs} thumbs={thumbs} variant={variant} />
+      </li>
+    </ol>
+  );
+}
+
+/** Um nó (card + suas próprias ramificações) ou, sem ancestral cadastrado, a lacuna. */
+function Subtree({
+  pos,
+  pedigree,
+  specs,
+  thumbs,
+  variant,
+}: {
+  pos: number;
+  pedigree: Pedigree;
+  specs: readonly GenerationSpec[];
+  thumbs?: ReadonlyMap<string, string>;
+  variant: "full" | "preview";
+}) {
+  const node = pedigree.byPosition.get(pos);
+  if (!node) return <UnknownSlot pos={pos} width={widthFor(specs, generationOf(pos))} />;
+
+  const occurrences = pedigree.repeated.get(node.dog_id)?.length;
+  const width = widthFor(specs, node.generation);
+  const showPhoto = (specs[node.generation] ?? specs.at(-1)!).photo;
+  const linkable = variant === "full";
+
+  const card = showPhoto ? (
+    <AncestorCard
+      node={node}
+      width={width}
+      thumbUrl={thumbs?.get(node.dog_id)}
+      repeatCount={occurrences}
+      linkable={linkable}
+    />
+  ) : (
+    <CompactCard node={node} width={width} repeatCount={occurrences} linkable={linkable} />
+  );
 
   return (
-    <li>
-      <details open={node.generation <= 2}>
-        <summary className="rounded-control marker:text-fg-faint focus-visible:outline-ring hover:bg-surface-hover cursor-pointer py-1.5 pr-2 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2">
-          <NodeRow node={node} pedigree={pedigree} />
-        </summary>
-
-        <ol className="border-border mt-1 ml-[0.6rem] flex flex-col gap-1 border-l pl-2 sm:pl-3">
-          <Branch node={sire} pos={sirePos} pedigree={pedigree} />
-          <Branch node={dam} pos={damPos} pedigree={pedigree} />
-        </ol>
-      </details>
-    </li>
+    <div className="flex items-center">
+      {card}
+      <Branches pos={pos} pedigree={pedigree} specs={specs} thumbs={thumbs} variant={variant} />
+    </div>
   );
+}
+
+function widthFor(specs: readonly GenerationSpec[], generation: number): number {
+  return (specs[generation] ?? specs.at(-1)!).card;
 }
 
 /**
- * Posição sem ancestral cadastrado.
- *
- * Só aparece quando o irmão de posição existe — a lacuna assimétrica é
- * informação ("sabe-se a mãe, não o pai"). Quando NENHUM dos dois é conhecido, o
- * nó abaixo vira folha e nada disto é desenhado: 32 linhas de "não informado" na
- * quinta geração seriam ruído, não dado.
+ * Conveniência, não conformidade: quem não distingue azul de violeta já tem a
+ * mesma informação no `RelationChip`/`title`/`sr-only` de cada card (WCAG
+ * 1.4.1). Isto aqui é só o glossário de cores pra quem enxerga.
  */
-function UnknownBranch({ pos }: { pos: number }) {
+function ColorLegend() {
   return (
-    <li className="pl-[1.35rem]">
-      <div className="flex flex-wrap items-baseline gap-x-2 py-1.5">
-        <RelationChip pos={pos} />
-        <span className="text-fg-faint text-sm">Não informado</span>
-      </div>
-    </li>
-  );
-}
-
-/** Conteúdo de um nó: relação, nome e apoio. Vive dentro do summary ou da folha. */
-function NodeRow({ node, pedigree }: { node: PedigreeNode; pedigree: Pedigree }) {
-  const support = describeNode(node);
-  const occurrences = pedigree.repeated.get(node.dog_id)?.length ?? 1;
-
-  return (
-    <span className="inline-flex flex-wrap items-baseline gap-x-2 gap-y-0.5 align-middle">
-      <RelationChip pos={node.pos} />
-
-      {node.is_public && node.public_id ? (
-        <Link
-          href={`/d/${node.public_id}`}
-          /**
-           * SEM PREFETCH, e aqui é o que mais importa da auditoria.
-           *
-           * Uma árvore de 5 gerações tem até 62 links. Com o prefetch padrão, o
-           * Next baixa o payload de cada um que entra na viewport — medido em
-           * navegador real, esta página disparava 35 requisições e ~106 KB, NOVE
-           * VEZES o próprio caminho crítico de 11,9 KB. A mesma URL chegava a
-           * ser buscada 6 vezes.
-           *
-           * Quem escaneia um QR na feira abre o perfil, lê e sai; clica em zero
-           * ou um ancestral. Pagar por 62 é o oposto do que a página precisa em
-           * 4G congestionado.
-           */
-          prefetch={false}
-          className="text-link hover:text-link-hover rounded-control text-sm font-medium underline underline-offset-4 transition-colors"
-        >
-          {node.name}
-        </Link>
-      ) : (
-        // Sem `public_id` não há link possível — o banco não devolveu, de
-        // propósito. Mostrar o nome sem link é mais honesto que um link morto.
-        <span className="text-fg-muted text-sm font-medium" title="Registro ainda não publicado">
-          {node.name}
-        </span>
-      )}
-
-      {node.repeated ? <RepeatChip count={occurrences} /> : null}
-
-      {support ? <span className="text-fg-faint text-xs">{support}</span> : null}
-    </span>
-  );
-}
-
-/**
- * A relação, derivada da posição.
- *
- * Até a segunda geração, "Pai" e "Mãe" bastam: o aninhamento visual ainda é
- * curto e óbvio. Da terceira em diante o caminho completo entra por extenso —
- * "mãe da mãe do pai" —, porque a essa altura contar níveis de recuo já não é
- * confiável, e para quem usa leitor de tela o recuo simplesmente não existe.
- */
-function RelationChip({ pos }: { pos: number }) {
-  const path = pathLabel(pos);
-  const curto = generationOf(pos) <= 2;
-
-  return (
-    <span
-      // Maiúscula com tracking só no rótulo curto. "MÃE DA MÃE DO PAI DO PAI DO
-      // PAI" ocuparia mais largura que o nome do cão em 380px, e o caminho é
-      // apoio, não título.
-      className={
-        curto
-          ? "text-fg-faint font-mono text-[0.65rem] tracking-wider uppercase"
-          : "text-fg-faint font-mono text-[0.65rem]"
-      }
-      title={curto && path ? `Caminho: ${path}` : undefined}
-    >
-      {curto ? relationOf(pos) : path}
-    </span>
-  );
-}
-
-function RepeatChip({ count }: { count: number }) {
-  return (
-    <span
-      className="text-data bg-data-subtle rounded-control px-1.5 py-0.5 font-mono text-[0.65rem]"
-      title={`Este ancestral ocupa ${count} posições desta árvore (linebreeding)`}
-    >
-      ×{count}
-    </span>
+    <div className="text-fg-faint flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs">
+      <span className="flex items-center gap-1.5">
+        <span aria-hidden="true" className="bg-accent inline-block h-0.5 w-4 rounded-full" />
+        Linha paterna
+      </span>
+      <span className="flex items-center gap-1.5">
+        <span aria-hidden="true" className="bg-secondary inline-block h-0.5 w-4 rounded-full" />
+        Linha materna
+      </span>
+    </div>
   );
 }
