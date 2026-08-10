@@ -20,8 +20,13 @@ export function siteUrl(): URL {
  * Imagem de card quando não há foto real (canil/cão sem foto, ou página sem
  * `imageUrl` — home, por exemplo). Arquivo estático do build: nunca quebra,
  * ao contrário de uma foto que dependeria do Storage estar de pé.
+ *
+ * `preview.jpg` (a versão anterior) FICA no repositório de propósito, mesmo
+ * sem referência no código: WhatsApp e Facebook guardam a URL da imagem no
+ * cache deles, não só o HTML. Apagar o arquivo quebraria a prévia dos links
+ * que já foram compartilhados e ainda apontam para lá.
  */
-export const DEFAULT_OG_IMAGE = { url: "/brand/preview.jpg", width: 1536, height: 864 };
+export const DEFAULT_OG_IMAGE = { url: "/brand/preview-wpp.jpg", width: 1536, height: 864 };
 
 /**
  * Monta title, description, canonical, Open Graph e Twitter card de uma vez.
