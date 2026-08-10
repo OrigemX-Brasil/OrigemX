@@ -1,6 +1,7 @@
 import Image from "next/image";
 
 import { PedigreeMark } from "@/modules/auth/components/pedigree-mark";
+import { KennelSearch } from "@/modules/search/components/kennel-search";
 
 /**
  * Casca das telas de autenticação.
@@ -13,18 +14,21 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   return (
     <div className="flex min-h-dvh flex-col lg:grid lg:grid-cols-[1fr_minmax(0,28rem)]">
       <aside className="border-border flex flex-col justify-between gap-10 border-b px-6 py-8 lg:border-r lg:border-b-0 lg:px-12 lg:py-14">
-        <div className="flex items-center gap-3">
-          <span className="text-border-strong lg:hidden">
-            <PedigreeMark generations={1} />
-          </span>
-          <Image
-            src="/brand/logo-header.png"
-            alt="OrigemX"
-            width={662}
-            height={132}
-            priority
-            className="h-8 w-auto"
-          />
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className="text-border-strong lg:hidden">
+              <PedigreeMark generations={1} />
+            </span>
+            <Image
+              src="/brand/logo-header.png"
+              alt="OrigemX"
+              width={662}
+              height={132}
+              priority
+              className="h-8 w-auto"
+            />
+          </div>
+          <KennelSearch />
         </div>
 
         <div className="hidden max-w-md flex-col gap-8 lg:flex">

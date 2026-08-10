@@ -11,6 +11,7 @@ import {
   getPublicMedia,
   listPublicDogsOfKennel,
 } from "@/modules/public/queries";
+import { KennelSearch } from "@/modules/search/components/kennel-search";
 
 /**
  * ============================================================================
@@ -71,7 +72,7 @@ export async function KennelProfile({ slug, cursor }: { slug: string; cursor?: s
 
   return (
     <div className="flex min-h-dvh flex-col">
-      <header className="border-border border-b px-5 py-4 lg:px-8">
+      <header className="border-border flex items-center justify-between gap-4 border-b px-5 py-4 lg:px-8">
         {/* Entra na viewport sempre — por isso `prefetch={false}`. Ver a rota
             do cão: foi aqui que um prefetch disparava o pixel de medição da
             captura por engano. */}
@@ -84,6 +85,7 @@ export async function KennelProfile({ slug, cursor }: { slug: string; cursor?: s
             className="h-8 w-auto"
           />
         </Link>
+        <KennelSearch />
       </header>
 
       <main className="mx-auto w-full max-w-2xl flex-1 px-5 py-8 lg:px-8">

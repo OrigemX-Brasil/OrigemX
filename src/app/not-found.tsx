@@ -4,6 +4,7 @@ import Link from "next/link";
 
 import { PedigreeMark } from "@/modules/auth/components/pedigree-mark";
 import { publicMetadata } from "@/modules/public/metadata";
+import { KennelSearch } from "@/modules/search/components/kennel-search";
 
 /**
  * Página estática, sem route group — pega TODA URL não mapeada, e é também
@@ -32,7 +33,7 @@ export const metadata: Metadata = {
 export default function NotFound() {
   return (
     <div className="flex min-h-dvh flex-col">
-      <header className="border-border border-b px-5 py-4 lg:px-8">
+      <header className="border-border flex items-center justify-between gap-4 border-b px-5 py-4 lg:px-8">
         <Link href="/" className="rounded-control">
           <Image
             src="/brand/logo-header.png"
@@ -42,6 +43,7 @@ export default function NotFound() {
             className="h-8 w-auto"
           />
         </Link>
+        <KennelSearch />
       </header>
 
       <main className="flex flex-1 flex-col items-center justify-center gap-6 px-5 py-16 text-center">

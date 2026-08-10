@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { signOut } from "@/modules/auth/actions";
 import { requireUser } from "@/modules/auth/queries";
+import { KennelSearch } from "@/modules/search/components/kennel-search";
 
 /**
  * Casca da área autenticada.
@@ -31,14 +32,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             className="h-8 w-auto"
           />
         </Link>
-        <form action={signOut}>
-          <button
-            type="submit"
-            className="text-fg-muted hover:text-fg rounded-control text-sm transition-colors"
-          >
-            Sair
-          </button>
-        </form>
+        <div className="flex items-center gap-3">
+          <KennelSearch />
+          <form action={signOut}>
+            <button
+              type="submit"
+              className="text-fg-muted hover:text-fg rounded-control text-sm transition-colors"
+            >
+              Sair
+            </button>
+          </form>
+        </div>
       </header>
       <main className="mx-auto w-full max-w-3xl flex-1 px-5 py-10 lg:px-8">{children}</main>
     </div>

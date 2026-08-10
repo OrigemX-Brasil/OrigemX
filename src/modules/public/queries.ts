@@ -8,6 +8,7 @@ import {
   type PageParams,
 } from "@/lib/pagination";
 import { createPublicClient } from "@/lib/supabase/public";
+import { BUCKET_PUBLIC } from "@/modules/media/constraints";
 import { resolveMediaUrls, type MediaItem, type ResolvedMedia } from "@/modules/media/queries";
 
 /**
@@ -226,6 +227,195 @@ export const getPublicMedia = cache(
       return await resolveMediaUrls(data as MediaItem[], supabase);
     } catch {
       return [];
+    }
+  },
+);
+
+/** `%` e `_` são curingas no LIKE; sem escapar, "100%" viraria busca aberta. */
+function escapeLike(value: string): string {
+  return value.replace(/[%_\\]/g, (m) => `\\${m}`);
+}
+
+const MIN_SEARCH_LENGTH = 2;
+
+/**
+ * Busca de canis por nome — lupa do cabeçalho e página `/busca`.
+ *
+ * Mesmo desenho de `listPublicDogsOfKennel`: keyset por `(published_at, id)`,
+ * nunca OFFSET. A ordenação casa com `kennels_published_idx`, que já existe
+ * para o mesmo filtro parcial (`deleted_at is null and published_at is not
+ * null`); `kennels_name_trgm_idx` cobre o `ilike`. Nenhum índice novo.
+ *
+ * Só canil publicado: é a mesma visão que a policy `kennels_select` já dá ao
+ * client anônimo, então a busca funciona igual pra visitante e pra usuário
+ * logado.
+ */
+export const searchPublicKennels = cache(
+  async (params: { q: string } & PageParams): Promise<Page<PublicKennel>> => {
+    const term = params.q.trim();
+    if (term.length < MIN_SEARCH_LENGTH) return { items: [], nextCursor: null };
+
+    const limit = resolveLimit(params.limit);
+    const cursor = decodeCursor(params.cursor);
+
+    const supabase = createPublicClient();
+    let query = supabase
+      .from("kennels")
+      .select(KENNEL_PUBLIC_COLUMNS)
+      .is("deleted_at", null)
+      .ilike("name", `%${escapeLike(term)}%`)
+      .order("published_at", { ascending: false })
+      .order("id", { ascending: false })
+      .limit(limit + 1);
+
+    if (cursor) {
+      query = query.or(
+        `published_at.lt.${cursor.createdAt},and(published_at.eq.${cursor.createdAt},id.lt.${cursor.id})`,
+      );
+    }
+
+    const { data, error } = await query;
+    if (error) return { items: [], nextCursor: null };
+
+    const rows = (data ?? []) as PublicKennel[];
+    const hasMore = rows.length > limit;
+    const items = hasMore ? rows.slice(0, limit) : rows;
+    const last = items.at(-1);
+
+    return {
+      items,
+      nextCursor:
+        hasMore && last?.published_at
+          ? encodeCursor({ createdAt: last.published_at, id: last.id })
+          : null,
+    };
+  },
+);
+
+/**
+ * Logo de vários canis de uma vez, para a grade de resultados de busca. Uma
+ * consulta só — 24 canis na página não viram 24 idas ao Storage.
+ */
+export const getPublicKennelLogos = cache(
+  async (kennelIds: readonly string[]): Promise<Map<string, ResolvedMedia>> => {
+    if (kennelIds.length === 0) return new Map();
+
+    try {
+      const supabase = createPublicClient();
+      const { data } = await supabase
+        .from("media")
+        .select(MEDIA_COLUMNS)
+        .in("kennel_id", kennelIds)
+        .eq("role", "kennel_logo")
+        .is("deleted_at", null)
+        .order("kennel_id", { ascending: true })
+        .order("position", { ascending: true })
+        .limit(kennelIds.length * 3);
+
+      if (!data || data.length === 0) return new Map();
+
+      const resolved = await resolveMediaUrls(data as MediaItem[], supabase);
+
+      const byKennel = new Map<string, ResolvedMedia>();
+      for (const item of resolved) {
+        if (item.kennel_id && !byKennel.has(item.kennel_id)) byKennel.set(item.kennel_id, item);
+      }
+      return byKennel;
+    } catch {
+      return new Map();
+    }
+  },
+);
+
+/**
+ * Cães publicados por canil, em lote — mesma lógica de `getPublicKennelLogos`,
+ * pelo mesmo motivo (sem N+1 na grade de resultados).
+ *
+ * Sem função agregada no banco de propósito: o volume real de cães por canil
+ * hoje é pequeno, e o limite defensivo abaixo cobre isso com folga. Se algum
+ * canil crescer muito, isto vira uma função SQL de soma por grupo — uma troca
+ * fácil de fazer quando o volume pedir, não antes.
+ */
+export const countPublishedDogsByKennel = cache(
+  async (kennelIds: readonly string[]): Promise<Map<string, number>> => {
+    if (kennelIds.length === 0) return new Map();
+
+    const supabase = createPublicClient();
+    const { data } = await supabase
+      .from("dogs")
+      .select("kennel_id")
+      .in("kennel_id", kennelIds)
+      .is("deleted_at", null)
+      .not("published_at", "is", null)
+      .limit(kennelIds.length * 200);
+
+    const counts = new Map<string, number>();
+    for (const row of data ?? []) {
+      if (row.kennel_id) counts.set(row.kennel_id, (counts.get(row.kennel_id) ?? 0) + 1);
+    }
+    return counts;
+  },
+);
+
+/**
+ * Miniatura de até N ancestrais da árvore de pedigree, em lote — mesmo padrão
+ * de `getPublicKennelLogos`, uma consulta para todos, nunca uma por nó.
+ *
+ * `dog_id` chega da RPC `dog_pedigree` (SECURITY DEFINER, ver
+ * `pedigree/queries.ts`), que atravessa ramos que a RLS do client anônimo não
+ * atravessaria sozinha. Devolver aqui `Map<dog_id, string>` — só a URL — e
+ * NUNCA `ResolvedMedia` é deliberado: aquele tipo carrega `storage_path` (com
+ * o uuid do dono embutido) e `owner_id`, que numa árvore de até 14 ancestrais
+ * seriam uuids de pessoas reais passando pelo processo sem uso nenhum. Tipo
+ * estreito torna o vazamento estruturalmente impossível, não só improvável.
+ *
+ * `.eq("bucket_id", BUCKET_PUBLIC)` tem DOIS motivos, nesta ordem de
+ * importância:
+ *
+ *   1. Todo cão publicado tem a mídia em `kennel-media-public` — é
+ *      `targetBucketFor` quem garante isso. Então, nesta página, o ramo
+ *      privado de `resolveMediaUrls` só produziria `null` mesmo; o filtro
+ *      tira do caminho crítico do ISR uma assinatura de URL garantidamente
+ *      inútil e deixa a resolução SÍNCRONA (sem rede).
+ *   2. Defesa em profundidade: o ancestral FANTASMA (sem dono, sem canil)
+ *      satisfaz `dog_is_public()` mesmo sem `published_at`, e por isso passa
+ *      pelo filtro de `thumbnailTargets` (`pedigree/tree.ts`) — que já é o
+ *      controle primário, porque `dog_id` de ancestral restrito nunca chega
+ *      até aqui. A mídia de um fantasma mora no bucket PRIVADO
+ *      (`kennel-media`), que não tem policy para `anon`; sem este filtro, a
+ *      linha ainda seria lida (metadado, não a imagem) por uma consulta que
+ *      não precisava dela.
+ *
+ * NUNCA LEVANTA: foto de ancestral é o item mais dispensável do pedigree.
+ */
+export const getPublicDogThumbs = cache(
+  async (dogIds: readonly string[]): Promise<ReadonlyMap<string, string>> => {
+    if (dogIds.length === 0) return new Map();
+
+    try {
+      const supabase = createPublicClient();
+      const { data } = await supabase
+        .from("media")
+        .select(MEDIA_COLUMNS)
+        .in("dog_id", dogIds)
+        .eq("role", "dog_gallery")
+        .eq("bucket_id", BUCKET_PUBLIC)
+        .is("deleted_at", null)
+        .order("dog_id", { ascending: true })
+        .order("position", { ascending: true })
+        .limit(dogIds.length * 3);
+
+      if (!data || data.length === 0) return new Map();
+
+      const resolved = await resolveMediaUrls(data as MediaItem[], supabase);
+
+      const thumbs = new Map<string, string>();
+      for (const item of resolved) {
+        if (item.dog_id && item.url && !thumbs.has(item.dog_id)) thumbs.set(item.dog_id, item.url);
+      }
+      return thumbs;
+    } catch {
+      return new Map();
     }
   },
 );

@@ -169,6 +169,86 @@
   --radius-control: 0.5rem;
   --radius-card: 0.75rem;
   --radius-panel: 1rem;
+
+  /* -------------------------------------------------------------------------
+     PROFUNDIDADE — as primeiras sombras e os primeiros desfoques do projeto.
+
+     Até aqui o produto expressava elevação SÓ pela rampa de luminosidade das
+     superfícies mais uma borda de 1px. Isso continua valendo para o layout
+     comum: sombra e vidro são para o que FLUTUA sobre a página (o painel de
+     busca), não para card em fluxo normal.
+
+     A sombra não é preto neutro: é o `noite` levado ao fundo da escala, com o
+     matiz 268.5 preservado. Preto puro sobre uma superfície azulada suja a
+     cor — fica cinza-esverdeado no meio da penumbra.
+
+     `color-mix(... transparent)` é a mesma mecânica do modificador `/70` do
+     Tailwind, então o alpha não desvia o matiz. NÃO aplicar modificador de
+     opacidade por cima destes tokens (`bg-glass/50`): aninharia color-mix
+     duas vezes. Se precisar de outra intensidade, ajuste o token.
+     ---------------------------------------------------------------------- */
+  --color-shadow: oklch(0.04 0.03 268.5);
+
+  /* Vidro: superfície translúcida. Só faz sentido com backdrop-filter atrás —
+     sem o desfoque, 72% de superfície lê como defeito, não como material. */
+  --color-glass: color-mix(in oklab, var(--color-surface) 72%, transparent);
+  /* Véu sobre a página, atrás do painel. */
+  --color-overlay: color-mix(in oklab, var(--color-bg) 60%, transparent);
+  /* Fio de 1px do vidro: ~8% do branco de texto. É DECORATIVO e não delimita
+     controle, por isso não precisa dos 3.0:1 que `--color-border-strong`
+     cumpre para fronteira de componente (WCAG 1.4.11). */
+  --color-border-glass: color-mix(in oklab, var(--color-fg) 8%, transparent);
+
+  --blur-overlay: 8px;
+  --blur-panel: 20px;
+
+  /* Elevação do painel modal, em camadas: contato → média → ambiente, e por
+     último o halo da marca. O halo é AZUL (`--color-accent`); o dourado é do
+     selo e não entra em UI comum — ver o bloco do DOURADO acima. */
+  --shadow-panel:
+    0 1px 1px -0.5px color-mix(in oklab, var(--color-shadow) 40%, transparent),
+    0 4px 8px -4px color-mix(in oklab, var(--color-shadow) 45%, transparent),
+    0 16px 32px -12px color-mix(in oklab, var(--color-shadow) 55%, transparent),
+    0 40px 80px -24px color-mix(in oklab, var(--color-shadow) 65%, transparent),
+    0 0 48px -12px color-mix(in oklab, var(--color-accent) 25%, transparent);
+
+  /* Card da grade de resultados. Mais raso: não está por cima de nada. */
+  --shadow-card:
+    0 1px 1px -0.5px color-mix(in oklab, var(--color-shadow) 35%, transparent),
+    0 4px 12px -6px color-mix(in oklab, var(--color-shadow) 45%, transparent);
+  --shadow-card-hover:
+    0 1px 1px -0.5px color-mix(in oklab, var(--color-shadow) 40%, transparent),
+    0 10px 28px -8px color-mix(in oklab, var(--color-shadow) 55%, transparent),
+    0 0 0 1px color-mix(in oklab, var(--color-accent) 22%, transparent);
+
+  /* Filete especular no topo do vidro — é o que separa "escuro" de "premium". */
+  --inset-shadow-glass: inset 0 1px 0 0 color-mix(in oklab, var(--color-fg) 10%, transparent);
+
+  /* Foco do campo de busca: anel sólido + halo, numa coisa só.
+
+     O anel de 2px é `--color-accent` puro — 3.96:1 contra o fundo, acima dos
+     3.0 que a WCAG 2.4.11 exige de indicador de foco. Ou seja, ele NÃO é
+     decoração sobre um outline: ele É o indicador.
+
+     Campo de texto casa com `:focus-visible` SEMPRE que recebe foco, em
+     qualquer navegador — não existe "só no teclado" aqui. Como o painel abre
+     com o campo já focado, o outline ciano global aparecia em toda abertura,
+     um retângulo duro que engolia o brilho inteiro. Trocar por este anel
+     resolve os dois lados: continua legível como foco e volta a parecer
+     desenhado.
+
+     Quem usa este token precisa somar `outline: 2px solid transparent`: em
+     modo de alto contraste do Windows a sombra é descartada, e o outline
+     transparente é convertido em cor de sistema — é o que mantém o foco
+     visível lá. */
+  --shadow-input-focus:
+    0 0 0 2px var(--color-accent),
+    0 0 0 6px color-mix(in oklab, var(--color-accent) 12%, transparent),
+    0 0 24px -6px color-mix(in oklab, var(--color-accent) 45%, transparent);
+
+  /* Curva de saída única do projeto (expo-out). Duplicada como array em
+     `src/modules/search/motion.ts` — a framer-motion recebe número, não CSS. */
+  --ease-panel: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* ---------------------------------------------------------------------------
