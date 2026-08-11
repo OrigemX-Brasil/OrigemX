@@ -16,6 +16,7 @@ modules/
   capture/     página de captura e sua medição (Anexo I.11)
   public/      consultas e metadata das páginas abertas
   auth/        sessão, login e proteção de rota
+  admin/       painel administrativo — leitura cross-usuário, ver nota abaixo
 ```
 
 Dentro de cada módulo:
@@ -107,6 +108,20 @@ Um criador tem no máximo um canil vivo, garantido pelo índice `kennels_owner_u
 e `getMyKennel(ownerId)` devolve **o** canil. Um `listMyKennels` que volte a
 aparecer é sinal de que alguém reintroduziu o 1:N na cabeça antes de
 reintroduzir no banco.
+
+**`admin/` é o primeiro módulo que lista fora do escopo "meu" ou "público".**
+Toda consulta cross-usuário do app mora em `admin/queries.ts` — nenhuma usa a
+chave secreta: a RLS já libera uma sessão admin para ler qualquer linha de
+`profiles`, `kennels` e `dogs` (ramo `or private.is_admin()` nas três policies
+de SELECT), então o `createClient()` de sempre basta, autorização continua
+decidida no banco. `requireAdmin()` — sessão + role + não-suspensão, relidos a
+cada chamada — continua em `auth/queries.ts`, ao lado de `requireUser`, porque
+é proteção de rota, não dado de domínio; `admin/` importa de lá, não duplica.
+
+Nesta rodada o módulo é só LEITURA — as seis seções do painel. Suspender,
+ocultar e corrigir número do canil são Server Actions futuras, que entram
+neste mesmo módulo chamando `requireAdmin()` como primeira linha, do jeito que
+`dogs/`, `kennels/` e `media/` já chamam `requireUser` hoje.
 
 **Autorização não mora aqui.** Quem decide o que o usuário vê é a RLS, em
 `supabase/migrations/`. Filtro em `queries.ts` é para a _consulta_ estar certa,

@@ -557,10 +557,14 @@ declare v_number integer;
 begin
   select founder_number into v_number from public.kennels
    where id = 'c1000000-0000-4000-8000-00000000000f';
-  perform pg_temp.rec(22, 'canil completo recebe selo pelo trigger',
-                      'número entre 1 e 100',
+  -- ERA `between 1 and 100`, e ficou para trás quando a migration
+  -- `founder_number_sem_teto` (2026-08-06) tirou o teto: hoje a emissão começa
+  -- em 100 e não tem limite superior, então o caso reprovava por medir uma regra
+  -- que não existe mais. O que ainda vale é "canil completo RECEBE número".
+  perform pg_temp.rec(22, 'canil completo recebe número pelo trigger',
+                      'número atribuído (>= 1, sem teto desde founder_number_sem_teto)',
                       coalesce(v_number::text, 'NENHUM'),
-                      v_number between 1 and 100);
+                      v_number >= 1);
 end $$;
 
 -- 23. Imutável: update do número é bloqueado.
@@ -615,15 +619,30 @@ begin
                       v_number is not null);
 end $$;
 
--- 26. LIMITE: com a sequence esgotada, o próximo elegível não recebe selo e o
---     cadastro NÃO quebra. É o caso que prova que não sai o 101.
+-- 26. LIMITE: com a sequence esgotada, o próximo elegível não recebe número e o
+--     cadastro NÃO quebra — a função captura o 2200H em vez de propagar.
+--
+--     ESTE CASO FICOU PARA TRÁS junto com o 22. Ele levava a sequence a 100 e
+--     esperava o estouro, o que só fazia sentido enquanto ela tinha
+--     `maxvalue 100`. Desde `founder_number_sem_teto` (2026-08-06) o teto é o do
+--     integer, então `setval(…, 100)` só emitia o 101 e o caso reprovava por
+--     medir uma regra revogada.
+--
+--     O TETO É LIDO DO PRÓPRIO OBJETO agora, em vez de repetido aqui: assim o
+--     caso continua medindo "esgotamento não quebra cadastro" sem precisar ser
+--     reescrito toda vez que o limite mudar.
 do $$
 declare
   v_number integer;
+  v_max    bigint;
   v_erro   text := 'sem erro';
 begin
-  -- Leva a sequence ao teto. `is_called = true` faz o próximo nextval estourar.
-  perform setval('public.kennel_founder_seq', 100, true);
+  select s.max_value into v_max
+    from pg_sequences s
+   where s.schemaname = 'public' and s.sequencename = 'kennel_founder_seq';
+
+  -- `is_called = true` faz o PRÓXIMO nextval estourar.
+  perform setval('public.kennel_founder_seq', v_max, true);
 
   -- Dono é u4: `kennels_owner_uk` impede que este canil de cenário pertença a
   -- u1, que já tem `battery-canil-um` vivo.
@@ -646,13 +665,13 @@ begin
   select founder_number into v_number from public.kennels
    where id = 'c1000000-0000-4000-8000-000000000010';
 
-  perform pg_temp.rec(26, 'pool esgotado: 101º canil elegível',
-                      'sem selo, e o cadastro não quebra',
-                      'selo ' || coalesce(v_number::text, 'nenhum') || ', cadastro ' || v_erro,
+  perform pg_temp.rec(26, 'sequence esgotada: o próximo elegível não quebra',
+                      'sem número, e o cadastro não quebra',
+                      'número ' || coalesce(v_number::text, 'nenhum') || ', cadastro ' || v_erro,
                       v_number is null);
 exception when others then
-  perform pg_temp.rec(26, 'pool esgotado: 101º canil elegível',
-                      'sem selo, e o cadastro não quebra',
+  perform pg_temp.rec(26, 'sequence esgotada: o próximo elegível não quebra',
+                      'sem número, e o cadastro não quebra',
                       'CADASTRO QUEBROU: ' || sqlstate || ' ' || sqlerrm, false);
 end $$;
 
@@ -754,6 +773,643 @@ begin
                       '1 canil vivo', v_n || ' canis vivos', v_n = 1);
 end $$;
 
+-- =============================================================================
+-- Grupo 7 — painel administrativo (casos 30 a 53)
+--
+-- O que está sob teste não é "o admin consegue", e sim as três garantias que
+-- fazem a capacidade valer alguma coisa:
+--
+--   * NINGUÉM escreve em `audit_log` a não ser pelas funções `admin_*`;
+--   * a suspensão barra a PESSOA sem tocar no conteúdo dela;
+--   * a escotilha do `founder_number` abre a camada 2 e NÃO a camada 1 — e não
+--     sobrevive à chamada que a abriu.
+--
+-- ORDEM IMPORTA em dois pontos, e os dois estão comentados no lugar: o caso da
+-- escotilha vazando roda ANTES do caso que define a GUC à mão, e a sequence é
+-- restaurada no fim porque `setval` não volta atrás com o rollback.
+-- =============================================================================
+
+-- Fixtures próprias do grupo, para não depender do estado deixado por outro.
+do $$
+declare
+  u6 constant uuid := 'b1000000-0000-4000-8000-000000000006';  -- admin
+  u7 constant uuid := 'b1000000-0000-4000-8000-000000000007';  -- alvo da suspensão
+  u8 constant uuid := 'b1000000-0000-4000-8000-000000000008';  -- alvo da ocultação
+begin
+  insert into auth.users (
+    id, instance_id, aud, role, email, encrypted_password,
+    email_confirmed_at, created_at, updated_at,
+    raw_app_meta_data, raw_user_meta_data
+  )
+  values
+    (u6, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+     'battery-u6@example.test', '', now(), now(), now(), '{}'::jsonb,
+     '{"full_name":"Battery Admin"}'::jsonb),
+    (u7, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+     'battery-u7@example.test', '', now(), now(), now(), '{}'::jsonb,
+     '{"full_name":"Battery Suspenso"}'::jsonb),
+    (u8, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+     'battery-u8@example.test', '', now(), now(), now(), '{}'::jsonb,
+     '{"full_name":"Battery Oculto"}'::jsonb);
+
+  -- Como superusuário, e é o único jeito: `role` está fora do GRANT por coluna.
+  update public.profiles set role = 'admin' where id = u6;
+end $$;
+
+insert into public.kennels (id, owner_id, name, slug, created_by, published_at)
+values
+  ('c1000000-0000-4000-8000-000000000021', 'b1000000-0000-4000-8000-000000000007',
+   'Canil Battery Suspenso', 'battery-canil-suspenso',
+   'b1000000-0000-4000-8000-000000000007', now()),
+  ('c1000000-0000-4000-8000-000000000022', 'b1000000-0000-4000-8000-000000000008',
+   'Canil Battery Oculto', 'battery-canil-oculto',
+   'b1000000-0000-4000-8000-000000000008', now());
+
+-- Logo do canil que vai ser ocultado. SEM cidade/estado no canil acima de
+-- propósito: assim ele não fica elegível ao selo e este INSERT não consome um
+-- número da sequence por tabela.
+insert into public.media (bucket_id, storage_path, kennel_id, role, mime, size_bytes, owner_id)
+values ('kennel-media-public', 'battery/u8/logo-oculto.webp',
+        'c1000000-0000-4000-8000-000000000022', 'kennel_logo', 'image/webp', 1024,
+        'b1000000-0000-4000-8000-000000000008');
+
+-- Canil com número, para os casos de correção. NULL -> valor passa pelo trigger
+-- de imutabilidade (é o caminho legítimo da atribuição), então dá para semear.
+-- Números na casa dos 900 mil para não colidir com nada real.
+insert into public.kennels (id, owner_id, name, slug, created_by)
+values ('c1000000-0000-4000-8000-000000000023', 'b1000000-0000-4000-8000-000000000006',
+        'Canil Battery Numero', 'battery-canil-numero',
+        'b1000000-0000-4000-8000-000000000006');
+
+update public.kennels set founder_number = 900001
+ where id = 'c1000000-0000-4000-8000-000000000023';
+
+-- -----------------------------------------------------------------------------
+-- Autorização e imutabilidade do log
+-- -----------------------------------------------------------------------------
+
+-- 30. Usuário comum chamando uma função admin.
+do $$
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000001","role":"authenticated"}';
+  perform public.admin_set_profile_suspended(
+    'b1000000-0000-4000-8000-000000000007', true, 'tentativa de usuário comum');
+  reset role;
+  perform pg_temp.rec(30, 'usuário comum chama admin_set_profile_suspended',
+                      '42501 insufficient_privilege',
+                      'ACEITOU — QUALQUER UM SUSPENDE QUALQUER UM', false);
+exception when others then
+  reset role;
+  perform pg_temp.rec(30, 'usuário comum chama admin_set_profile_suspended',
+                      '42501 insufficient_privilege', sqlstate || ' ' || sqlerrm,
+                      sqlstate = '42501');
+end $$;
+
+-- 31. INSERT direto em audit_log. Sem GRANT para ninguém: a única porta é
+--     private.audit(), de dentro das funções admin.
+do $$
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000006","role":"authenticated"}';
+  insert into public.audit_log (actor_id, action, entity_type, entity_id, reason)
+  values ('b1000000-0000-4000-8000-000000000006', 'profile.suspend', 'profile',
+          'b1000000-0000-4000-8000-000000000007', 'linha forjada');
+  reset role;
+  perform pg_temp.rec(31, 'admin insere em audit_log pela API',
+                      'erro de permissão', 'ACEITOU — LOG FORJÁVEL', false);
+exception when others then
+  reset role;
+  perform pg_temp.rec(31, 'admin insere em audit_log pela API',
+                      'erro de permissão', sqlstate || ' ' || sqlerrm, sqlstate = '42501');
+end $$;
+
+-- 32. UPDATE em audit_log. Append-only por PRIVILÉGIO, não por convenção — é o
+--     que substitui o `deleted_at` que a tabela deliberadamente não tem.
+do $$
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000006","role":"authenticated"}';
+  update public.audit_log set reason = 'reescrito';
+  reset role;
+  perform pg_temp.rec(32, 'admin reescreve linha de audit_log',
+                      'erro de permissão', 'ACEITOU — HISTÓRICO EDITÁVEL', false);
+exception when others then
+  reset role;
+  perform pg_temp.rec(32, 'admin reescreve linha de audit_log',
+                      'erro de permissão', sqlstate || ' ' || sqlerrm, sqlstate = '42501');
+end $$;
+
+-- -----------------------------------------------------------------------------
+-- Suspensão
+-- -----------------------------------------------------------------------------
+
+-- 33. A suspensão grava nos DOIS lugares: RLS (profiles) e Auth (auth.users).
+--     O segundo é o que impede o suspenso de simplesmente continuar logando.
+do $$
+declare v_susp timestamptz; v_ban timestamptz;
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000006","role":"authenticated"}';
+  perform public.admin_set_profile_suspended(
+    'b1000000-0000-4000-8000-000000000007', true, 'conduta abusiva — caso de bateria');
+  reset role;
+
+  select p.suspended_at into v_susp from public.profiles p
+   where p.id = 'b1000000-0000-4000-8000-000000000007';
+  select u.banned_until into v_ban from auth.users u
+   where u.id = 'b1000000-0000-4000-8000-000000000007';
+
+  perform pg_temp.rec(33, 'suspensão grava profiles.suspended_at E auth.users.banned_until',
+                      'os dois preenchidos',
+                      'suspended_at ' || coalesce(v_susp::text, 'NULO') ||
+                      ' / banned_until ' || coalesce(v_ban::text, 'NULO'),
+                      v_susp is not null and v_ban is not null and v_ban > now());
+exception when others then
+  reset role;
+  perform pg_temp.rec(33, 'suspensão grava profiles.suspended_at E auth.users.banned_until',
+                      'os dois preenchidos', 'ERRO: ' || sqlstate || ' ' || sqlerrm, false);
+end $$;
+
+-- 34. Uma ação, uma linha de auditoria, com o motivo.
+do $$
+declare v_n int; v_reason text;
+begin
+  select count(*), max(reason) into v_n, v_reason from public.audit_log
+   where entity_type = 'profile'
+     and entity_id = 'b1000000-0000-4000-8000-000000000007'
+     and action = 'profile.suspend';
+  perform pg_temp.rec(34, 'a suspensão gerou exatamente 1 linha de auditoria com motivo',
+                      '1 linha, motivo preservado',
+                      v_n || ' linha(s), motivo: ' || coalesce(v_reason, 'NENHUM'),
+                      v_n = 1 and v_reason = 'conduta abusiva — caso de bateria');
+end $$;
+
+-- 35. Idempotência. Repetir uma ação que não muda nada NÃO é uma ação — se
+--     gerasse linha, o histórico encheria de eventos vazios e viraria ilegível.
+do $$
+declare v_n int;
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000006","role":"authenticated"}';
+  perform public.admin_set_profile_suspended(
+    'b1000000-0000-4000-8000-000000000007', true, 'segunda chamada, mesmo estado');
+  reset role;
+
+  select count(*) into v_n from public.audit_log
+   where entity_type = 'profile'
+     and entity_id = 'b1000000-0000-4000-8000-000000000007'
+     and action = 'profile.suspend';
+  perform pg_temp.rec(35, 'suspender de novo quem já está suspenso não audita',
+                      'continua 1 linha', v_n || ' linha(s)', v_n = 1);
+exception when others then
+  reset role;
+  perform pg_temp.rec(35, 'suspender de novo quem já está suspenso não audita',
+                      'continua 1 linha', 'ERRO: ' || sqlstate || ' ' || sqlerrm, false);
+end $$;
+
+-- 36. Suspenso não cria. INSERT recusado pela RLS levanta erro, não devolve 0.
+do $$
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000007","role":"authenticated"}';
+  insert into public.dogs (name, sex, kennel_id, owner_id, created_by)
+  values ('Battery Suspenso Tentou', 'male', 'c1000000-0000-4000-8000-000000000021',
+          'b1000000-0000-4000-8000-000000000007', 'b1000000-0000-4000-8000-000000000007');
+  reset role;
+  perform pg_temp.rec(36, 'suspenso cadastra cão no próprio canil',
+                      'recusado pela RLS', 'ACEITOU — SUSPENSÃO NÃO BARRA NADA', false);
+exception when others then
+  reset role;
+  perform pg_temp.rec(36, 'suspenso cadastra cão no próprio canil',
+                      'recusado pela RLS', sqlstate || ' ' || sqlerrm, true);
+end $$;
+
+-- 37. Suspenso não edita. Aqui o USING nega, então são 0 linhas — mesmo formato
+--     com que este schema trata "não é seu" em todo lugar.
+do $$
+declare v_n int;
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000007","role":"authenticated"}';
+  with upd as (
+    update public.kennels set name = 'renomeado pelo suspenso'
+     where id = 'c1000000-0000-4000-8000-000000000021' returning 1
+  ) select count(*) into v_n from upd;
+  reset role;
+  perform pg_temp.rec(37, 'suspenso altera o próprio canil', '0 linhas',
+                      v_n || ' linhas', v_n = 0);
+exception when others then
+  reset role;
+  perform pg_temp.rec(37, 'suspenso altera o próprio canil', '0 linhas',
+                      'erro (também aceitável): ' || sqlstate, true);
+end $$;
+
+-- 38. Mas CONTINUA LENDO. Suspensão barra a ação, não o acesso aos próprios
+--     dados — nenhuma policy de SELECT foi tocada, e este caso é o que prova.
+do $$
+declare v_n int;
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000007","role":"authenticated"}';
+  select count(*) into v_n from public.kennels
+   where id = 'c1000000-0000-4000-8000-000000000021';
+  reset role;
+  perform pg_temp.rec(38, 'suspenso LÊ o próprio canil', '1 linha — ler não é agir',
+                      v_n || ' linhas', v_n = 1);
+exception when others then
+  reset role;
+  perform pg_temp.rec(38, 'suspenso LÊ o próprio canil', '1 linha',
+                      'ERRO: ' || sqlstate || ' ' || sqlerrm, false);
+end $$;
+
+-- 39. Admin suspenso perde o poder de admin. Sem isto, suspender um admin seria
+--     reversível por ele mesmo, e a suspensão não valeria justamente contra quem
+--     tem mais poder de causar dano.
+do $$
+declare v_admin boolean;
+begin
+  update public.profiles set suspended_at = now()
+   where id = 'b1000000-0000-4000-8000-000000000006';
+
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000006","role":"authenticated"}';
+  select private.is_admin() into v_admin;
+  reset role;
+
+  update public.profiles set suspended_at = null
+   where id = 'b1000000-0000-4000-8000-000000000006';
+
+  perform pg_temp.rec(39, 'admin suspenso continua sendo admin?', 'false',
+                      coalesce(v_admin::text, 'nulo'), v_admin is false);
+exception when others then
+  reset role;
+  update public.profiles set suspended_at = null
+   where id = 'b1000000-0000-4000-8000-000000000006';
+  perform pg_temp.rec(39, 'admin suspenso continua sendo admin?', 'false',
+                      'ERRO: ' || sqlstate || ' ' || sqlerrm, false);
+end $$;
+
+-- 40. Admin se trancando para fora. Reativar exige ser admin ATIVO, então a
+--     operação seria irreversível pela aplicação.
+do $$
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000006","role":"authenticated"}';
+  perform public.admin_set_profile_suspended(
+    'b1000000-0000-4000-8000-000000000006', true, 'auto-suspensão');
+  reset role;
+  perform pg_temp.rec(40, 'admin suspende a própria conta', 'recusado',
+                      'ACEITOU — ADMIN SE TRANCA PARA FORA', false);
+exception when others then
+  reset role;
+  perform pg_temp.rec(40, 'admin suspende a própria conta', 'recusado',
+                      sqlstate || ' ' || sqlerrm, true);
+end $$;
+
+-- 41. Reativar limpa os dois lados.
+do $$
+declare v_susp timestamptz; v_ban timestamptz;
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000006","role":"authenticated"}';
+  perform public.admin_set_profile_suspended(
+    'b1000000-0000-4000-8000-000000000007', false, 'revisão concluída — caso de bateria');
+  reset role;
+
+  select p.suspended_at into v_susp from public.profiles p
+   where p.id = 'b1000000-0000-4000-8000-000000000007';
+  select u.banned_until into v_ban from auth.users u
+   where u.id = 'b1000000-0000-4000-8000-000000000007';
+
+  perform pg_temp.rec(41, 'reativar limpa suspended_at E banned_until',
+                      'os dois nulos',
+                      'suspended_at ' || coalesce(v_susp::text, 'nulo') ||
+                      ' / banned_until ' || coalesce(v_ban::text, 'nulo'),
+                      v_susp is null and v_ban is null);
+exception when others then
+  reset role;
+  perform pg_temp.rec(41, 'reativar limpa suspended_at E banned_until', 'os dois nulos',
+                      'ERRO: ' || sqlstate || ' ' || sqlerrm, false);
+end $$;
+
+-- -----------------------------------------------------------------------------
+-- Correção do número do canil
+-- -----------------------------------------------------------------------------
+
+-- 42. O trigger de imutabilidade continua inteiro para quem escreve DIRETO,
+--     inclusive para o admin. A escotilha não é "admin pode"; é "esta função
+--     pode, nesta linha".
+do $$
+begin
+  update public.kennels set founder_number = 900099
+   where id = 'c1000000-0000-4000-8000-000000000023';
+  perform pg_temp.rec(42, 'UPDATE direto em founder_number (como superusuário)',
+                      'erro — trigger de imutabilidade',
+                      'ACEITOU — TRIGGER FUROU', false);
+exception when others then
+  perform pg_temp.rec(42, 'UPDATE direto em founder_number (como superusuário)',
+                      'erro — trigger de imutabilidade', sqlstate || ' ' || sqlerrm, true);
+end $$;
+
+-- 43. E a função corrige.
+do $$
+declare v_num integer;
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000006","role":"authenticated"}';
+  select public.admin_set_founder_number(
+           'c1000000-0000-4000-8000-000000000023', 900002,
+           'número atribuído errado na importação') into v_num;
+  reset role;
+  perform pg_temp.rec(43, 'admin_set_founder_number corrige o número',
+                      '900002 gravado', coalesce(v_num::text, 'nulo'), v_num = 900002);
+exception when others then
+  reset role;
+  perform pg_temp.rec(43, 'admin_set_founder_number corrige o número', '900002 gravado',
+                      'ERRO: ' || sqlstate || ' ' || sqlerrm, false);
+end $$;
+
+-- 44. A ESCOTILHA NÃO VAZA — o caso que justifica o desenho inteiro.
+--
+-- `set_config(..., is_local => true)` já limitaria à transação; como a função
+-- tem cláusula SET (`search_path = ''`), o Postgres abre um nível de GUC próprio
+-- e reverte na saída. Este caso mede isso em vez de supor.
+--
+-- RODA ANTES DO CASO 47, que define a GUC à mão de propósito.
+do $$
+declare v_guc text;
+begin
+  v_guc := current_setting('origemx.founder_override', true);
+  perform pg_temp.rec(44, 'a escotilha sobrevive à chamada de admin_set_founder_number?',
+                      'não — GUC vazia depois da função',
+                      coalesce(nullif(v_guc, ''), '(vazia)'),
+                      coalesce(v_guc, '') = '');
+end $$;
+
+-- 45. Número já em uso. O ÍNDICE ÚNICO é o mecanismo — nada de `select` prévio
+--     de "já existe?", que duas correções simultâneas passariam juntas.
+do $$
+declare v_estado integer;
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000006","role":"authenticated"}';
+  begin
+    perform public.admin_set_founder_number(
+      'c1000000-0000-4000-8000-000000000021', 900002, 'tentando duplicar');
+  exception when others then
+    null;  -- o estado é medido abaixo, não o erro
+  end;
+  reset role;
+
+  select k.founder_number into v_estado from public.kennels k
+   where k.id = 'c1000000-0000-4000-8000-000000000021';
+  perform pg_temp.rec(45, 'atribuir número já em uso a outro canil',
+                      'recusado e nada gravado',
+                      'founder_number do segundo canil: ' || coalesce(v_estado::text, 'nulo'),
+                      v_estado is null);
+exception when others then
+  reset role;
+  perform pg_temp.rec(45, 'atribuir número já em uso a outro canil',
+                      'recusado e nada gravado', 'ERRO: ' || sqlstate || ' ' || sqlerrm, false);
+end $$;
+
+-- 46. A sequence não pode ficar ATRÁS de um número posto à mão: senão a
+--     atribuição automática colidiria com ele lá na frente, e a colisão
+--     estouraria dentro de try_assign_founder_number, abortando o INSERT do cão
+--     que a disparou.
+do $$
+declare v_last bigint;
+begin
+  select s.last_value into v_last from public.kennel_founder_seq s;
+  perform pg_temp.rec(46, 'número corrigido à mão empurra a sequence',
+                      'last_value >= 900002',
+                      'last_value = ' || v_last, v_last >= 900002);
+end $$;
+
+-- 47. A CAMADA 1 CONTINUA DE PÉ. Mesmo com a escotilha escancarada à mão, o
+--     usuário comum é recusado por FALTA DE PRIVILÉGIO DE COLUNA, antes de
+--     qualquer trigger rodar. É esta camada — e não o trigger — que impede
+--     alguém de escolher o próprio número.
+--
+--     ÚLTIMO caso a mexer na GUC, e ele a limpa no fim.
+do $$
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000001","role":"authenticated"}';
+  perform set_config('origemx.founder_override',
+                     'c1000000-0000-4000-8000-000000000001', true);
+  update public.kennels set founder_number = 1
+   where id = 'c1000000-0000-4000-8000-000000000001';
+  reset role;
+  perform set_config('origemx.founder_override', '', true);
+  perform pg_temp.rec(47, 'usuário comum abre a escotilha à mão e grava founder_number',
+                      '42501 — barrado pelo GRANT de coluna',
+                      'ACEITOU — QUALQUER UM ESCOLHE O PRÓPRIO NÚMERO', false);
+exception when others then
+  reset role;
+  perform set_config('origemx.founder_override', '', true);
+  perform pg_temp.rec(47, 'usuário comum abre a escotilha à mão e grava founder_number',
+                      '42501 — barrado pelo GRANT de coluna', sqlstate || ' ' || sqlerrm,
+                      sqlstate = '42501');
+end $$;
+
+-- A sequence é restaurada aqui: `setval` não volta atrás com rollback, e o
+-- caso 46 a empurrou para 900 mil. Mesmo procedimento do grupo 5.
+do $$
+declare b record;
+begin
+  select * into b from founder_seq_backup;
+  perform setval('public.kennel_founder_seq', b.last_value, b.is_called);
+end $$;
+
+-- -----------------------------------------------------------------------------
+-- Ocultar / reativar
+-- -----------------------------------------------------------------------------
+
+-- 48/49. Canil oculto some para o anônimo e CONTINUA para o dono — ele precisa
+--        saber que foi ocultado, senão a moderação é invisível para quem sofreu.
+do $$
+declare v_anon int; v_dono int;
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000006","role":"authenticated"}';
+  perform public.admin_set_kennel_hidden(
+    'c1000000-0000-4000-8000-000000000022', true, 'denúncia em apuração — caso de bateria');
+  reset role;
+
+  set local role anon;
+  set local "request.jwt.claims" to '';
+  select count(*) into v_anon from public.kennels
+   where id = 'c1000000-0000-4000-8000-000000000022';
+  reset role;
+
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000008","role":"authenticated"}';
+  select count(*) into v_dono from public.kennels
+   where id = 'c1000000-0000-4000-8000-000000000022';
+  reset role;
+
+  perform pg_temp.rec(48, 'anônimo lê canil ocultado pelo admin', '0 linhas',
+                      v_anon || ' linhas', v_anon = 0);
+  perform pg_temp.rec(49, 'o DONO lê o próprio canil ocultado', '1 linha',
+                      v_dono || ' linhas', v_dono = 1);
+exception when others then
+  reset role;
+  perform pg_temp.rec(48, 'anônimo lê canil ocultado pelo admin', '0 linhas',
+                      'ERRO: ' || sqlstate || ' ' || sqlerrm, false);
+end $$;
+
+-- 50. Mídia do canil oculto some junto, SEM uma linha de policy a mais:
+--     `media_select` pergunta "o canil existe para mim?" em vez de repetir a
+--     regra de publicação. É o desenho delegado pagando dividendo.
+do $$
+declare v_n int;
+begin
+  set local role anon;
+  set local "request.jwt.claims" to '';
+  select count(*) into v_n from public.media
+   where storage_path = 'battery/u8/logo-oculto.webp';
+  reset role;
+  perform pg_temp.rec(50, 'anônimo lê a mídia de um canil ocultado', '0 linhas',
+                      v_n || ' linhas', v_n = 0);
+exception when others then
+  reset role;
+  perform pg_temp.rec(50, 'anônimo lê a mídia de um canil ocultado', '0 linhas',
+                      'ERRO: ' || sqlstate || ' ' || sqlerrm, false);
+end $$;
+
+-- 51. Cão oculto some para o anônimo.
+do $$
+declare v_n int;
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000006","role":"authenticated"}';
+  perform public.admin_set_dog_hidden(
+    'd1000000-0000-4000-8000-00000000000a', true, 'foto imprópria — caso de bateria');
+  reset role;
+
+  set local role anon;
+  set local "request.jwt.claims" to '';
+  select count(*) into v_n from public.dogs
+   where id = 'd1000000-0000-4000-8000-00000000000a';
+  reset role;
+
+  perform pg_temp.rec(51, 'anônimo lê cão ocultado pelo admin', '0 linhas',
+                      v_n || ' linhas', v_n = 0);
+exception when others then
+  reset role;
+  perform pg_temp.rec(51, 'anônimo lê cão ocultado pelo admin', '0 linhas',
+                      'ERRO: ' || sqlstate || ' ' || sqlerrm, false);
+end $$;
+
+-- 52. E no pedigree de terceiro ele vira NÓ SEM LINK: o nome continua saindo
+--     (pedigree com lacuna não é pedigree), mas sem public_id não há URL
+--     construível. A árvore não quebra e o registro não é alcançável.
+do $$
+declare v_nome text; v_pub text; v_is_public boolean;
+begin
+  select p.name, p.public_id, p.is_public into v_nome, v_pub, v_is_public
+    from public.dog_pedigree('d1000000-0000-4000-8000-00000000000c', 5) p
+   where p.pos = 2;  -- pai do sujeito
+
+  perform pg_temp.rec(52, 'cão ocultado no pedigree de terceiro',
+                      'nome sai, public_id e is_public não',
+                      'nome ' || coalesce(v_nome, 'NULO') ||
+                      ' / public_id ' || coalesce(v_pub, 'nulo') ||
+                      ' / is_public ' || coalesce(v_is_public::text, 'nulo'),
+                      v_nome = 'Battery A' and v_pub is null and v_is_public is false);
+end $$;
+
+-- 53. LIMITAÇÃO DELIBERADA, sob teste para não virar surpresa no painel:
+--     ocultar o canil NÃO oculta os cães dele. Cada ocultação é uma decisão e
+--     uma linha de auditoria; um botão "ocultar tudo" é N chamadas, não cascata.
+do $$
+declare v_n int;
+begin
+  set local role anon;
+  set local "request.jwt.claims" to '';
+  select count(*) into v_n from public.dogs
+   where id = 'd1000000-0000-4000-8000-00000000000b';  -- Battery B, canil de u1, não ocultado
+  reset role;
+  perform pg_temp.rec(53, 'ocultar canil oculta os cães dele? (não cascateia, de propósito)',
+                      'cão segue visível — 1 linha', v_n || ' linhas', v_n = 1);
+exception when others then
+  reset role;
+  perform pg_temp.rec(53, 'ocultar canil oculta os cães dele?', '1 linha',
+                      'ERRO: ' || sqlstate || ' ' || sqlerrm, false);
+end $$;
+
+-- 54. `admin_get_profile_email` — a quinta função admin_*, nascida na tela de
+--     detalhe do usuário. Mesma dupla camada de todo `admin_*`: aqui é a
+--     rejeição pela camada SQL; `scripts/test-rls.mts` prova pela API a
+--     rejeição E o sucesso (a primeira chamada admin_* de sucesso provada
+--     naquele arquivo).
+do $$
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000001","role":"authenticated"}';
+  perform public.admin_get_profile_email('b1000000-0000-4000-8000-000000000007');
+  reset role;
+  perform pg_temp.rec(54, 'usuário comum chama admin_get_profile_email',
+                      '42501 insufficient_privilege',
+                      'ACEITOU — QUALQUER UM LÊ O E-MAIL DE QUALQUER UM', false);
+exception when others then
+  reset role;
+  perform pg_temp.rec(54, 'usuário comum chama admin_get_profile_email',
+                      '42501 insufficient_privilege', sqlstate || ' ' || sqlerrm,
+                      sqlstate = '42501');
+end $$;
+
+-- 55/56. Reativar canil e cão — os casos 48-53 só exercitam OCULTAR; nenhum
+--        prova o outro lado do ciclo (o painel também tem botão "Reativar").
+--        Reaproveita os mesmos dois registros ocultados acima.
+do $$
+declare v_anon int;
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000006","role":"authenticated"}';
+  perform public.admin_set_kennel_hidden(
+    'c1000000-0000-4000-8000-000000000022', false, 'apuração encerrada — caso de bateria');
+  reset role;
+
+  set local role anon;
+  set local "request.jwt.claims" to '';
+  select count(*) into v_anon from public.kennels
+   where id = 'c1000000-0000-4000-8000-000000000022';
+  reset role;
+
+  perform pg_temp.rec(55, 'anônimo volta a ler o canil, depois de reativado', '1 linha',
+                      v_anon || ' linhas', v_anon = 1);
+exception when others then
+  reset role;
+  perform pg_temp.rec(55, 'anônimo volta a ler o canil, depois de reativado', '1 linha',
+                      'ERRO: ' || sqlstate || ' ' || sqlerrm, false);
+end $$;
+
+do $$
+declare v_anon int;
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000006","role":"authenticated"}';
+  perform public.admin_set_dog_hidden(
+    'd1000000-0000-4000-8000-00000000000a', false, 'apuração encerrada — caso de bateria');
+  reset role;
+
+  set local role anon;
+  set local "request.jwt.claims" to '';
+  select count(*) into v_anon from public.dogs
+   where id = 'd1000000-0000-4000-8000-00000000000a';
+  reset role;
+
+  perform pg_temp.rec(56, 'anônimo volta a ler o cão, depois de reativado', '1 linha',
+                      v_anon || ' linhas', v_anon = 1);
+exception when others then
+  reset role;
+  perform pg_temp.rec(56, 'anônimo volta a ler o cão, depois de reativado', '1 linha',
+                      'ERRO: ' || sqlstate || ' ' || sqlerrm, false);
+end $$;
+
 -- -----------------------------------------------------------------------------
 -- Limpeza. Vem ANTES do relatório de propósito: a Management API devolve o
 -- resultado do último statement, então o SELECT final tem de ser o último.
@@ -774,6 +1430,13 @@ delete from public.dogs where name = 'Battery E';
 delete from public.dogs where name in ('Battery C', 'Battery D');
 delete from public.dogs where name like 'Battery%' or name = 'Rex do Dois';
 delete from public.kennels where slug like 'battery-%';
+
+-- audit_log ANTES de auth.users: `actor_id` é ON DELETE RESTRICT de propósito
+-- (trilha com ator apagado não é trilha), então apagar o admin de fixture sem
+-- limpar as linhas dele derrubaria a limpeza inteira com erro de FK.
+delete from public.audit_log
+ where actor_id in (select id from auth.users where email like 'battery-%@example.test');
+
 delete from auth.users where email like 'battery-%@example.test';
 
 -- =============================================================================

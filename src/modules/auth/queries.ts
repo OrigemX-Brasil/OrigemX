@@ -50,6 +50,43 @@ export async function requireUser(nextPath: string): Promise<AuthUser> {
   return user;
 }
 
+/**
+ * Exige admin ATIVO. Sem sessão, manda para o login (via `requireUser`); com
+ * sessão mas sem `role='admin'`, ou admin suspenso agora, manda para
+ * `/painel` — nunca renderiza nada de `/admin` para quem não pode.
+ *
+ * RELÊ `role` e `suspended_at` do banco a CADA chamada, sem cache. Isto não é
+ * paranoia redundante: `getClaims()` verifica o JWT localmente (assinatura +
+ * expiração, sem ida ao servidor de Auth quando a chave é assimétrica), então
+ * o token de acesso de um admin recém-suspenso continua válido para
+ * `requireUser()` por até `jwt_expiry` (1h em `supabase/config.toml`) depois
+ * de `admin_set_profile_suspended` gravar `auth.users.banned_until` — banir
+ * bloqueia login/refresh novo, não invalida na hora um token já emitido. Esta
+ * consulta fresca é o que fecha essa janela.
+ *
+ * `profiles_select_public` já deixa qualquer usuário ler a própria linha,
+ * então não precisa de nada além da sessão para funcionar.
+ *
+ * Mesma função serve layout de `/admin` e futura Server Action admin —
+ * `redirect()` funciona nos dois contextos, como `requireUser` já é reusado.
+ */
+export async function requireAdmin(): Promise<AuthUser> {
+  const user = await requireUser("/admin");
+
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("profiles")
+    .select("role, suspended_at")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (!data || data.role !== "admin" || data.suspended_at !== null) {
+    redirect("/painel");
+  }
+
+  return user;
+}
+
 export type Profile = {
   id: string;
   role: string;

@@ -12,8 +12,17 @@
  * rotas — página pública nova nunca precisa tocar aqui.
  */
 
-/** Único prefixo autenticado do app hoje. */
-const PROTECTED_PREFIXES = ["/painel"];
+/**
+ * Prefixos autenticados do app.
+ *
+ * `/admin` exige sessão aqui, igual a `/painel` — mas sessão não é
+ * autorização de admin. Quem decide isso é `requireAdmin()`, em
+ * `queries.ts`, que roda no layout de `/admin` e relê `role`/`suspended_at`
+ * do banco a cada request. Checar role AQUI exigiria consulta a tabela em
+ * toda navegação — este arquivo e o proxy continuam sem tocar em banco,
+ * de propósito.
+ */
+const PROTECTED_PREFIXES = ["/painel", "/admin"];
 
 /** Rotas que quem já tem sessão não precisa ver. */
 const GUEST_ONLY = new Set(["/login", "/cadastro"]);

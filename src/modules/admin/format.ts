@@ -1,0 +1,113 @@
+/**
+ * Formatação de exibição do painel administrativo — pura, sem banco.
+ */
+
+/** Mesmo formato de `src/lib/notify/template.ts::formatarInstante`. */
+export function formatDateTime(iso: string): string {
+  return new Intl.DateTimeFormat("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short",
+    timeZone: "America/Sao_Paulo",
+  }).format(new Date(iso));
+}
+
+/**
+ * Tradução da ação do `audit_log`, mesmo espírito do mapa `SEX_LABEL` que já
+ * existe em `/painel/caes`. Lista FECHADA, casada com o CHECK
+ * `audit_log_action_valid` do banco — ação nova entra nos dois lugares
+ * juntos, e o fallback abaixo evita quebrar a tela se algum dia divergir.
+ */
+export const ACTION_LABEL: Record<string, string> = {
+  "profile.suspend": "Suspendeu usuário",
+  "profile.unsuspend": "Reativou usuário",
+  "kennel.hide": "Ocultou canil",
+  "kennel.unhide": "Reativou canil",
+  "dog.hide": "Ocultou cão",
+  "dog.unhide": "Reativou cão",
+  "kennel.founder_number.set": "Corrigiu número do selo",
+};
+
+export function actionLabel(action: string): string {
+  return ACTION_LABEL[action] ?? action;
+}
+
+/**
+ * "de → para" quando o `details` tiver as duas chaves — todo `admin_*` grava
+ * exatamente `{de, para}` (ver `private.audit()` nas migrations), então
+ * generalizar aqui é seguro em vez de um formatador por ação.
+ */
+export function detailsSummary(details: unknown): string | null {
+  if (!details || typeof details !== "object") return null;
+  const d = details as Record<string, unknown>;
+  if (!("de" in d) || !("para" in d)) return null;
+
+  const format = (v: unknown) => (v === null || v === undefined ? "—" : String(v));
+  return `${format(d.de)} → ${format(d.para)}`;
+}
+
+/**
+ * O motivo do bloqueio/desbloqueio, na tela, é OPCIONAL — nada trava o admin
+ * que não quiser escrever nada. O banco pensa diferente: `audit_log_reason_len`
+ * exige pelo menos 3 caracteres, e `private.audit()` levanta erro se vier
+ * curto — é o que garante que toda linha do histórico tem um motivo, mesmo
+ * que genérico. Esta função reconcilia os dois lados: o campo vazio vira um
+ * motivo padrão ANTES de chegar na RPC, então o banco nunca recebe vazio e a
+ * tela nunca trava por causa disso.
+ */
+export const DEFAULT_SUSPEND_REASON = "Suspenso pelo admin, sem motivo detalhado.";
+export const DEFAULT_UNSUSPEND_REASON = "Reativado pelo admin, sem motivo detalhado.";
+
+export function resolveSuspendReason(raw: string, suspend: boolean): string {
+  const trimmed = raw.trim();
+  if (trimmed.length > 0) return trimmed;
+  return suspend ? DEFAULT_SUSPEND_REASON : DEFAULT_UNSUSPEND_REASON;
+}
+
+/** Mesma reconciliação de `resolveSuspendReason`, para ocultar/reativar canil e cão. */
+export const DEFAULT_HIDE_REASON = "Ocultado pelo admin, sem motivo detalhado.";
+export const DEFAULT_UNHIDE_REASON = "Reativado pelo admin, sem motivo detalhado.";
+
+export function resolveHideReason(raw: string, hide: boolean): string {
+  const trimmed = raw.trim();
+  if (trimmed.length > 0) return trimmed;
+  return hide ? DEFAULT_HIDE_REASON : DEFAULT_UNHIDE_REASON;
+}
+
+/**
+ * Início/fim do dia em America/Sao_Paulo, como ISO com offset explícito —
+ * Postgres entende `-03:00` direto, sem precisar converter para UTC aqui.
+ * Offset fixo porque o Brasil não usa mais horário de verão desde 2019; não
+ * é o caso geral de fuso horário, é este fuso específico.
+ */
+export function startOfDaySaoPaulo(dateOnly: string): string {
+  return `${dateOnly}T00:00:00-03:00`;
+}
+
+export function endOfDaySaoPaulo(dateOnly: string): string {
+  return `${dateOnly}T23:59:59.999-03:00`;
+}
+
+/**
+ * Rótulo e destino da entidade de uma linha do `audit_log` — mesma lista
+ * fechada de `entity_type` que o CHECK `audit_log_entity_valid` já garante.
+ */
+export const ENTITY_LABEL: Record<string, string> = {
+  profile: "Usuário",
+  kennel: "Canil",
+  dog: "Cão",
+};
+
+export function entityLabel(entityType: string): string {
+  return ENTITY_LABEL[entityType] ?? entityType;
+}
+
+const ENTITY_BASE_PATH: Record<string, string> = {
+  profile: "/admin/usuarios",
+  kennel: "/admin/canis",
+  dog: "/admin/caes",
+};
+
+export function entityHref(entityType: string, entityId: string): string | null {
+  const base = ENTITY_BASE_PATH[entityType];
+  return base ? `${base}/${entityId}` : null;
+}

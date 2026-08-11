@@ -39,6 +39,50 @@ export type Database = {
   }
   public: {
     Tables: {
+      audit_log: {
+        Row: {
+          action: string
+          actor_id: string
+          created_at: string
+          details: Json
+          entity_id: string
+          entity_type: string
+          id: number
+          reason: string
+          updated_at: string
+        }
+        Insert: {
+          action: string
+          actor_id: string
+          created_at?: string
+          details?: Json
+          entity_id: string
+          entity_type: string
+          id?: never
+          reason: string
+          updated_at?: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string
+          created_at?: string
+          details?: Json
+          entity_id?: string
+          entity_type?: string
+          id?: never
+          reason?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_log_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dog_identifiers: {
         Row: {
           created_at: string
@@ -103,6 +147,7 @@ export type Database = {
           created_by: string | null
           dam_id: string | null
           deleted_at: string | null
+          hidden_at: string | null
           id: string
           kennel_id: string | null
           name: string
@@ -123,6 +168,7 @@ export type Database = {
           created_by?: string | null
           dam_id?: string | null
           deleted_at?: string | null
+          hidden_at?: string | null
           id?: string
           kennel_id?: string | null
           name: string
@@ -143,6 +189,7 @@ export type Database = {
           created_by?: string | null
           dam_id?: string | null
           deleted_at?: string | null
+          hidden_at?: string | null
           id?: string
           kennel_id?: string | null
           name?: string
@@ -200,6 +247,7 @@ export type Database = {
           deleted_at: string | null
           description: string | null
           founder_number: number | null
+          hidden_at: string | null
           id: string
           instagram_handle: string | null
           logo_url: string | null
@@ -219,6 +267,7 @@ export type Database = {
           deleted_at?: string | null
           description?: string | null
           founder_number?: number | null
+          hidden_at?: string | null
           id?: string
           instagram_handle?: string | null
           logo_url?: string | null
@@ -238,6 +287,7 @@ export type Database = {
           deleted_at?: string | null
           description?: string | null
           founder_number?: number | null
+          hidden_at?: string | null
           id?: string
           instagram_handle?: string | null
           logo_url?: string | null
@@ -401,6 +451,7 @@ export type Database = {
           phone: string | null
           role: string
           state: string | null
+          suspended_at: string | null
           updated_at: string
         }
         Insert: {
@@ -414,6 +465,7 @@ export type Database = {
           phone?: string | null
           role?: string
           state?: string | null
+          suspended_at?: string | null
           updated_at?: string
         }
         Update: {
@@ -427,6 +479,7 @@ export type Database = {
           phone?: string | null
           role?: string
           state?: string | null
+          suspended_at?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -436,10 +489,31 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_get_profile_email: {
+        Args: { p_profile_id: string }
+        Returns: string
+      }
+      admin_set_dog_hidden: {
+        Args: { p_dog_id: string; p_hidden: boolean; p_reason: string }
+        Returns: string
+      }
+      admin_set_founder_number: {
+        Args: { p_kennel_id: string; p_number: number; p_reason: string }
+        Returns: number
+      }
+      admin_set_kennel_hidden: {
+        Args: { p_hidden: boolean; p_kennel_id: string; p_reason: string }
+        Returns: string
+      }
+      admin_set_profile_suspended: {
+        Args: { p_profile_id: string; p_reason: string; p_suspended: boolean }
+        Returns: string
+      }
       dog_descendant_ids: { Args: { p_dog_id: string }; Returns: string[] }
       dog_is_public: {
         Args: {
           p_deleted_at: string
+          p_hidden_at: string
           p_kennel_id: string
           p_owner_id: string
           p_published_at: string

@@ -3,7 +3,14 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { Database } from "@/lib/types/database";
 
-import { adminClient, cookieDeSessao, criarUsuario, limparUsuario, type TestUser } from "./admin";
+import {
+  adminClient,
+  cookieDeSessao,
+  criarAdmin,
+  criarUsuario,
+  limparUsuario,
+  type TestUser,
+} from "./admin";
 
 /**
  * ============================================================================
@@ -24,6 +31,12 @@ type Fixtures = {
   criador: TestUser;
   /** Segundo usuário, SEM sessão na página. Para os testes de isolamento. */
   outroCriador: TestUser;
+  /**
+   * Usuário com `role='admin'`, SEM sessão na página — os cenários de
+   * `/admin` autenticam explicitamente com `autenticar`, um por vez, porque
+   * cada um testa uma identidade diferente na mesma rota.
+   */
+  adminUser: TestUser;
   /** Autentica uma página qualquer como o usuário dado. */
   autenticar: (page: Page, user: TestUser) => Promise<void>;
 };
@@ -51,6 +64,14 @@ export const test = base.extend<Fixtures>({
   outroCriador: async ({}, use) => {
     const user = await criarUsuario("outro");
     await use(user);
+    await limparUsuario(user.id);
+  },
+
+  adminUser: async ({}, use) => {
+    const user = await criarAdmin("admin");
+    await use(user);
+    // `limparUsuario` limpa por posse (owner_id/created_by), independente de
+    // role — a promoção não muda nada que a limpeza precise saber.
     await limparUsuario(user.id);
   },
 });

@@ -3,19 +3,28 @@
 ## Estado atual: VERIFICADO em projeto de desenvolvimento
 
 Aplicado e verificado contra o projeto de desenvolvimento
-`lcqhnfdsrioufwvnrqnt` (Postgres 17.6). Última verificação: 2026-08-03.
+`lcqhnfdsrioufwvnrqnt` (Postgres 17.6). Última verificação: 2026-08-10, depois
+da tela de detalhe de canil/cão no painel (ocultar/reativar pela UI, sobre
+`admin_set_kennel_hidden`/`admin_set_dog_hidden` — a peça de banco já existia,
+faltava só a Server Action e as duas páginas).
 
-| Verificação                                                       | Resultado                            |
-| ----------------------------------------------------------------- | ------------------------------------ |
-| `db reset --linked` — aplicação do zero, em banco vazio, na ordem | sem erro (2026-07-31)                |
-| Bateria SQL (`tests/battery.sql`)                                 | **27 PASS, 0 FAIL**                  |
-| Evidência pela API (`npm run test:rls`)                           | **59 PASS, 0 FAIL**                  |
-| `db advisors --linked --type security`                            | 7 WARN, todos aceitos e justificados |
-| `db push` incremental                                             | sem erro                             |
+| Verificação                                                       | Resultado                             |
+| ----------------------------------------------------------------- | ------------------------------------- |
+| `db reset --linked` — aplicação do zero, em banco vazio, na ordem | sem erro (2026-07-31)                 |
+| Bateria SQL (`tests/battery.sql`)                                 | **57 PASS, 0 FAIL**                   |
+| Evidência pela API (`npm run test:rls`)                           | **93 PASS, 0 FAIL**                   |
+| `db advisors --linked --type security`                            | 12 WARN, todos aceitos e justificados |
+| Comparativo antes/depois (`evidence:compare`)                     | **0 divergência não explicada**       |
+| `db push` incremental                                             | sem erro                              |
 
-Os 7 WARN estão explicados um a um em "Advisors de segurança", abaixo: dois são
-configuração de auth (HaveIBeenPwned, MFA) e cinco são `SECURITY DEFINER`
-deliberados. **Nenhum é alerta de schema ou de RLS.**
+Os 12 WARN estão explicados um a um em "Advisors de segurança", abaixo: dois são
+configuração de auth (HaveIBeenPwned, MFA) e dez são `SECURITY DEFINER`
+deliberados — cinco já existiam (`dog_pedigree`, `dog_descendant_ids`,
+`record_landing_event`), quatro nasceram com o painel administrativo
+(`admin_set_profile_suspended`, `admin_set_founder_number`,
+`admin_set_kennel_hidden`, `admin_set_dog_hidden`) e um nasceu com a tela de
+detalhe do usuário (`admin_get_profile_email`). **Nenhum é alerta de schema
+ou de RLS.**
 
 Não há Supabase local neste ambiente (sem Docker) — ver a seção AMBIENTE do
 `CLAUDE.md`. Toda verificação roda contra o projeto de desenvolvimento.
@@ -100,7 +109,37 @@ o índice único **não** é, e é por isso que estes casos medem o mecanismo re
 | 28  | novo canil depois de excluir logicamente o antigo | sucesso — a exclusão libera a vaga              |
 | 29  | reverter a exclusão tendo outro canil vivo        | erro — o índice cobre o UPDATE, não só o INSERT |
 
-Por fim, `supabase db advisors --linked` deve sair apenas com os sete WARN
+E o painel administrativo, que tem seção própria mais abaixo:
+
+| #   | Caso                                                         | Esperado                                                            |
+| --- | ------------------------------------------------------------ | ------------------------------------------------------------------- |
+| 30  | usuário comum chama `admin_set_profile_suspended`            | `42501` — insuficiente privilégio                                   |
+| 31  | `insert` direto em `audit_log`, como admin                   | erro de permissão — sem GRANT para ninguém                          |
+| 32  | `update` direto em `audit_log`, como admin                   | erro de permissão — append-only                                     |
+| 33  | suspensão grava os DOIS lugares                              | `profiles.suspended_at` **e** `auth.users.banned_until` preenchidos |
+| 34  | a suspensão gerou auditoria                                  | 1 linha, com o motivo preservado                                    |
+| 35  | suspender de novo quem já está suspenso                      | **idempotente** — 0 linhas novas de auditoria                       |
+| 36  | suspenso tenta cadastrar cão                                 | recusado pela RLS                                                   |
+| 37  | suspenso tenta editar o próprio canil                        | 0 linhas                                                            |
+| 38  | suspenso **lê** o próprio canil                              | **retorna** — ler não é agir                                        |
+| 39  | admin suspenso chama `private.is_admin()`                    | `false`                                                             |
+| 40  | admin tenta suspender a própria conta                        | recusado — senão se tranca para fora                                |
+| 41  | reativar                                                     | os dois lugares voltam a `NULL`                                     |
+| 42  | `update` direto em `founder_number`, mesmo como superusuário | erro — trigger de imutabilidade intacto                             |
+| 43  | `admin_set_founder_number` corrige o número                  | número novo gravado, com auditoria                                  |
+| 44  | a escotilha do trigger sobrevive à chamada?                  | **não** — GUC vazia depois da função                                |
+| 45  | corrigir para um número já em uso por outro canil            | recusado pelo índice único, nada gravado                            |
+| 46  | número corrigido à mão empurra a sequence                    | `last_value` não fica atrás do número atribuído                     |
+| 47  | usuário comum abre a escotilha à mão e tenta gravar          | `42501` — camada 1 (GRANT de coluna) barra do mesmo jeito           |
+| 48  | anônimo lê canil ocultado pelo admin                         | 0 linhas                                                            |
+| 49  | o **dono** lê o próprio canil ocultado                       | **retorna** — precisa saber que foi ocultado                        |
+| 50  | mídia de canil ocultado, por anônimo                         | 0 linhas — sem mexer em `media`                                     |
+| 51  | anônimo lê cão ocultado pelo admin                           | 0 linhas                                                            |
+| 52  | cão ocultado no pedigree de terceiro                         | nome sai, `public_id`/`is_public` não                               |
+| 53  | ocultar canil oculta os cães dele?                           | **não** — sem cascata, de propósito                                 |
+| 54  | usuário comum chama `admin_get_profile_email`                | `42501` — insuficiente privilégio                                   |
+
+Por fim, `supabase db advisors --linked` deve sair apenas com os doze WARN
 listados em "Advisors de segurança" — qualquer alerta além desses é regressão.
 
 ### Nota sobre os casos 1 e 2 — dois CHECKs são inalcançáveis
@@ -141,11 +180,14 @@ Por isso as policies de `dogs` decidem posse pelas **colunas da própria linha**
 (`private.owns_kennel`). `private.can_manage_dog` continua válida para
 `dog_identifiers`, que consulta `dogs` — uma tabela diferente da sua.
 
-## Advisors de segurança — sete WARN aceitos, com motivo
+## Advisors de segurança — doze WARN aceitos, com motivo
 
-`db advisors --type security` sai com sete alertas. Nenhum é regressão de schema
-ou de RLS: dois são configuração de auth e cinco são funções `SECURITY DEFINER`
-deliberadas (`dog_pedigree`, `dog_descendant_ids` e `record_landing_event`).
+`db advisors --type security` sai com doze alertas. Nenhum é regressão de schema
+ou de RLS: dois são configuração de auth e dez são funções `SECURITY DEFINER`
+deliberadas. Cinco já existiam (`dog_pedigree`, `dog_descendant_ids` e
+`record_landing_event`); cinco nasceram com o painel administrativo e têm
+seção própria mais abaixo — "Painel administrativo", incluindo
+`admin_get_profile_email` (tela de detalhe do usuário, mais recente).
 
 **`record_landing_event`** é `SECURITY DEFINER` executável por `anon`
 justamente para a aplicação NÃO precisar da chave secreta — ver "Página de
@@ -236,6 +278,15 @@ constraint.
 `npm run db:founder-reset` devolve a sequence ao início. O script recusa rodar
 se houver selo em canil que não seja fixture, como salvaguarda contra apontar
 para o projeto errado.
+
+### Correção admin — sem enfraquecer as duas camadas acima
+
+O número é imutável **por trigger**, de propósito — mas duplicidade nunca foi
+possível (`kennels_founder_number_key` é único global, nem parcial por
+`deleted_at`). Os casos reais de correção são "número errado atribuído" e
+"número queimado por um rollback", não duplicata. Ver "Painel administrativo",
+abaixo, para como `admin_set_founder_number` abre uma escotilha estreita nesse
+trigger sem tocar nas duas camadas que protegem o usuário comum.
 
 ## Mídia pública: dois buckets, move e a janela do CDN
 
@@ -418,25 +469,36 @@ o `UNION` deduplica, e é justamente a deduplicação que faz a recursão termin
 com linebreeding. Aqui queremos a repetição, então a terminação vem do limite de
 profundidade — travado no corpo da função, não confiando no parâmetro.
 
-`dog_is_public(deleted_at, published_at, owner_id, kennel_id)` é a **fonte única**
-da regra de visibilidade: a mesma função decide a policy `dogs_select` e os
-campos que o pedigree devolve. Antes ela era uma expressão escrita duas vezes, e
-duplicar regra de visibilidade é como um vazamento nasce seis meses depois.
+`dog_is_public(deleted_at, hidden_at, published_at, owner_id, kennel_id)` é a
+**fonte única** da regra de visibilidade: a mesma função decide a policy
+`dogs_select` e os campos que o pedigree devolve. Antes ela era uma expressão
+escrita duas vezes, e duplicar regra de visibilidade é como um vazamento nasce
+seis meses depois.
 
-### Evidência de que a reescrita da policy não mudou comportamento
+`hidden_at` (o painel administrativo, ver a seção própria abaixo) entrou aqui
+como **quinto parâmetro**, não como sobrecarga: a assinatura de 4 argumentos foi
+apagada de propósito, para qualquer chamada que sobrasse virar erro alto na
+hora — nenhum código de aplicação chamava a função direto, só a policy e
+`dog_pedigree`, e as duas foram atualizadas na mesma migration.
 
-`dogs_select` foi reescrita para chamar o helper. Como é caminho crítico, o
-comportamento foi capturado caso a caso antes e depois:
+### Evidência de que as reescritas da policy não mudaram comportamento
 
-| Arquivo                             | O que é                                     |
-| ----------------------------------- | ------------------------------------------- |
-| `reports/baseline-pre-pedigree.md`  | os 86 casos ANTES da reescrita              |
-| `reports/baseline-post-pedigree.md` | comparativo caso a caso: **0 divergências** |
+`dogs_select` foi reescrita DUAS vezes até aqui — uma para chamar o helper
+(migration do pedigree), outra para o helper aprender `hidden_at` (migration do
+painel administrativo) — e as duas vezes o comportamento foi capturado caso a
+caso antes e depois, porque é caminho crítico:
+
+| Arquivo                             | O que é                                                                                                                                                                                                                                                                                     |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `reports/baseline-pre-pedigree.md`  | os 86 casos ANTES da reescrita que introduziu `dog_is_public`                                                                                                                                                                                                                               |
+| `reports/baseline-post-pedigree.md` | comparativo caso a caso: **0 divergências**                                                                                                                                                                                                                                                 |
+| `reports/baseline-pre-admin.md`     | os 97 casos ANTES do painel administrativo                                                                                                                                                                                                                                                  |
+| `reports/baseline-post-admin.md`    | comparativo caso a caso: **31 divergências, todas explicadas** — os 24 casos novos do painel (30–53) mais deriva numérica do selo Fundador entre execuções da bateria (`nextval` não é transacional). **Zero divergência** nos casos que cobrem `dogs_select` diretamente (13, 14, 18, 19). |
 
 A comparação olha o **texto do resultado** de cada caso, não o placar — um caso
 que saísse de "0 linhas" para "erro de permissão" continuaria PASS e teria
-mudado de comportamento. Os dois arquivos vão para a homologação junto do
-relatório de RLS.
+mudado de comportamento. Os arquivos vão para a homologação junto do relatório
+de RLS.
 
 ```bash
 npm run evidence:baseline   # captura o antes
@@ -454,6 +516,170 @@ quatro casos que importam: profundidade cheia, lacuna assimétrica, galho curto 
 quatro ancestrais repetidos. São todos fantasmas (sem dono, sem canil), então não
 encostam em nenhum dado de teste existente. O script é idempotente e traz a
 instrução de limpeza por exclusão lógica no cabeçalho.
+
+## Painel administrativo
+
+Esta seção documenta a **capacidade de banco** por trás do painel — a UI
+(`src/app/admin/`, `src/modules/admin/`) já existe e é documentada no código,
+não aqui. Nasceu em `20260810185938_painel_admin.sql` e
+`20260810191529_painel_admin_escotilha_nao_vaza.sql`, para as quatro
+lacunas que bloqueavam qualquer moderação:
+
+1. auditoria — nenhuma tabela guardava "quem fez o quê";
+2. bloqueio de usuário, distinto de exclusão lógica;
+3. correção do número do canil, que é imutável por trigger, de propósito;
+4. ocultar/reativar um registro por decisão do ADMIN, distinta da decisão do
+   dono de publicar/despublicar.
+
+### O princípio que amarra as quatro
+
+Toda mutação administrativa passa por uma função `SECURITY DEFINER` que confere
+`private.is_admin()`, aplica a mudança e grava a auditoria na MESMA transação.
+Não existe caminho admin que escreva sem auditar, porque não existe caminho
+admin nenhum além dessas funções: `audit_log` não tem GRANT de `INSERT` para
+ninguém, e `profiles.suspended_at` / `kennels.hidden_at` / `dogs.hidden_at`
+ficam FORA da lista de `grant update` por coluna — admin também é
+`authenticated`, e nem ele grava direto pela API REST. É a mesma técnica que
+`profiles.role` e `kennels.founder_number` já usavam, e o mesmo desenho de
+`record_landing_event`: porta única, estreita, `SECURITY DEFINER`.
+
+**Limite declarado:** quem tem a chave secreta (`service_role`) sempre pôde
+escrever direto e continua podendo, sem auditoria — a auditoria cobre o caminho
+da aplicação, que é onde as pessoas agem. Efeito colateral desejável:
+`private.is_admin()` devolve `false` para `service_role` (não há `auth.uid()`),
+então um script com chave secreta **não consegue chamar** estas funções — toda
+linha de `audit_log` tem uma pessoa por trás, nunca um processo.
+
+### `audit_log` — append-only por privilégio, não por convenção
+
+Sem `deleted_at`, contra a invariante de exclusão lógica do projeto, e de
+propósito: log de auditoria apagável não é log de auditoria. Sem GRANT de
+`DELETE` nem de `UPDATE` para ninguém, a linha é imutável por **privilégio**,
+garantia mais forte que a coluna daria (casos 31 e 32 da bateria provam os dois
+lados). `reason` é `not null`: toda ação aqui é intervenção deliberada, e
+histórico sem porquê é log, não histórico.
+
+A única escrita é `private.audit()`, sem GRANT para ninguém — só é alcançável
+de dentro de outra função `SECURITY DEFINER` de dono `postgres`, que é
+exatamente o conjunto das funções `admin_*`.
+
+### Suspensão — barra a PESSOA, sem tocar no conteúdo
+
+`profiles.suspended_at` é distinto de `deleted_at`: exclusão lógica some com o
+registro, suspensão o mantém inteiro e visível ao admin, e apenas impede o
+titular de agir. **Não tira nada do ar** — o canil e os cães do suspenso
+continuam publicados até um admin ocultá-los separadamente (próxima seção).
+Duas alavancas, duas decisões, duas linhas de auditoria.
+
+O motivo **não é coluna**: `profiles_select_public` deixa qualquer anônimo ler
+a linha inteira de todo perfil não excluído, e uma nota de moderação ali seria
+mundialmente legível. O porquê vive só em `audit_log.reason`, admin-only.
+
+`private.is_suspended()` entra em `USING` **e** `WITH CHECK` de toda policy de
+escrita que um usuário comum aciona — `profiles`, `kennels`, `dogs`,
+`dog_identifiers`, `media` e os dois buckets de `storage.objects` — sempre como
+`(select private.is_suspended())`, para o planner avaliar uma vez por
+statement. **Nenhuma policy de `SELECT` foi tocada**: ler não é agir, e o
+suspenso continua enxergando os próprios dados (caso 38).
+
+Admin suspenso **perde o poder de admin** — `private.is_admin()` ganhou
+`and p.suspended_at is null` — senão a suspensão do primeiro admin seria
+reversível por ele mesmo (caso 39). E um admin não pode suspender a própria
+conta (caso 40): o estrago seria assimétrico, porque reativar exige ser admin
+ativo.
+
+**Login:** a RLS barra a escrita na hora, mas o GoTrue não lê `public.profiles`
+— sem mais nada, o suspenso continuaria logando. `admin_set_profile_suspended`
+também grava `auth.users.banned_until`, com `interval '100 years'` em vez de
+`'infinity'` (o driver Go do GoTrue não trata infinito de forma confiável).
+Verificado, não suposto: caso 33 confere as duas colunas depois da chamada.
+
+### E-mail do usuário — a quinta função `admin_*`
+
+`profiles` não tem coluna de e-mail — mora em `auth.users`, que o PostgREST
+não expõe a nenhuma sessão comum. A tela de detalhe do usuário
+(`/admin/usuarios/[id]`) precisa dele, então `admin_get_profile_email`
+segue o mesmo molde das quatro funções acima: `security definer`,
+`private.is_admin()` checado no corpo, `revoke`/`grant` por role, zero chave
+secreta em qualquer lugar do app. Diferença de propósito em relação às
+outras quatro: `raise` em vez de devolver `NULL` para quem não é admin — um
+`NULL` silencioso poderia ser confundido com "usuário sem e-mail", que é
+outra coisa (registro com `auth.users` inconsistente, por exemplo).
+
+### Correção do número do canil — a escotilha vive por UM statement
+
+Ver "Selo Criador Fundador", acima, para as duas camadas que já protegiam o
+número (`GRANT` por coluna e trigger de imutabilidade). `admin_set_founder_number`
+abre uma escotilha na camada 2 **carregando o id da linha**, não um booleano —
+abrir para o canil A não abre para o canil B:
+
+```sql
+-- no trigger:
+if current_setting('origemx.founder_override', true) = old.id::text then
+  return new;
+end if;
+```
+
+**Achado real, não hipotético:** a primeira versão desta função (migration
+`20260810185938`) afirmava em comentário que a escotilha "não sobrevive à
+chamada" porque a função tem cláusula `SET search_path = ''`. **Medido, e
+estava errado** — o caso 44 da bateria flagrou a GUC ainda aberta depois do
+retorno. O save/restore da cláusula `SET` cobre o parâmetro dela
+(`search_path`); um valor gravado com `set_config(..., is_local => true)`
+continua valendo até o fim da **transação**, não da função. Corrigido em
+`20260810191529_painel_admin_escotilha_nao_vaza.sql`: a função agora fecha a
+escotilha explicitamente, na linha seguinte ao `UPDATE`. PL/pgSQL não tem
+`finally` — o fechamento explícito cobre o sucesso, e o rollback de subtransação
+(o `raise exception` de um número duplicado) cobre o erro.
+
+A camada 1 nunca dependeu disto e não foi tocada: mesmo com a escotilha
+escancarada à mão, `authenticated` não tem privilégio na coluna `founder_number`
+e é recusado antes de qualquer trigger rodar (caso 47) — é ELA, não o trigger,
+que impede um usuário comum de escolher o próprio número.
+
+A função também **empurra a sequence** quando o número corrigido é maior ou
+igual ao próximo valor (caso 46): sem isso, a atribuição automática colidiria
+com o número posto à mão lá na frente, e a colisão estouraria dentro de
+`try_assign_founder_number`, abortando o `INSERT` do cão que a disparou.
+`try_assign_founder_number` também ganhou uma captura de `unique_violation`
+como defesa em profundidade — selo é opcional, cadastro de cão não é.
+
+### Ocultar/reativar — por que `published_at` não bastava
+
+`published_at` é do **dono**: está no `grant update` por coluna e
+`kennels_update_own` deixa o dono escrever. Um admin que o zerasse veria o dono
+republicar em seguida, perderia a data real de publicação, e confundiria "o
+dono não quis publicar" com "o admin tirou do ar". `kennels.hidden_at` e
+`dogs.hidden_at` são colunas próprias, fora do alcance de `authenticated`.
+
+**Sem cascata**, de propósito (caso 53): ocultar um canil não oculta os cães
+dele. Cada ocultação é uma decisão e uma linha de auditoria; um botão "ocultar
+tudo" no painel faria N chamadas, não uma mágica silenciosa.
+
+**UI:** `/admin/canis/[id]` e `/admin/caes/[id]` — visão do admin (leitura,
+sem formulário de edição) mais o botão de ocultar/reativar. É também o
+mecanismo de "corrigir duplicidade" do painel: sem tabela nem tela própria,
+o admin oculta o registro duplicado escrevendo no motivo qual é o outro —
+fica em `audit_log`, sem peça nova de banco. Casos 48-53 provam ocultar;
+55-56 provam o outro lado do ciclo, reativar, que não tinha teste até aqui.
+
+Dois lugares herdam a regra de graça, sem mexer em suas próprias tabelas:
+
+- `media_select` já pergunta "o canil/cão existe para mim?" em vez de repetir a
+  regra de publicação — ocultar o registro esconde a mídia dele (caso 50).
+- o pedigree de terceiros vê o cão ocultado virar **nó sem link**: o nome
+  continua saindo (pedigree com lacuna não é pedigree, mesma decisão de
+  "Precisa de confirmação do cliente" abaixo), mas `public_id` sai `NULL` — sem
+  ele não há URL construível (caso 52).
+
+**O que isto NÃO resolve, registrado e não escondido:** o arquivo de um canil
+publicado vive em `kennel-media-public`, servido pelo CDN por URL estável.
+`hidden_at` tira a _página_ do ar; SQL não move bytes. O arquivo segue
+alcançável por quem já tiver a URL até a camada de aplicação mover o objeto de
+volta ao bucket privado — mesmo caminho que despublicar já usa
+(`reconcileMediaBucket`). A UI de ocultar/reativar já existe (seção acima) e
+**não** faz esse move — pendência real, não teórica, registrada e não
+escondida.
 
 ## Decisão anterior, agora resolvida
 
@@ -537,6 +763,15 @@ Não foi alterado porque a correção óbvia — `ON DELETE RESTRICT`, como em
 `kennel_id` — impediria apagar a conta de quem tem cães cadastrados, o que
 conflita com pedido de exclusão de dados. A decisão é de produto: o que acontece
 com os cães quando o criador apaga a conta.
+
+**A mesma pergunta agora vale também para `audit_log.actor_id`**, que É
+`ON DELETE RESTRICT` de propósito (painel administrativo, acima): um admin que
+já agiu não pode ter a conta apagada fisicamente, porque trilha de auditoria
+com ator apagado não é trilha. Diferente do caso de `dogs.owner_id`, aqui a
+recomendação já é a mais forte (RESTRICT) — a decisão de produto pendente é se
+"admin nunca pode ser apagado fisicamente depois de agir" é aceitável, ou se o
+cliente precisa de um caminho de anonimização que preserve a linha do log sem
+preservar a pessoa.
 
 ## Pontos que merecem atenção na revisão
 

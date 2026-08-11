@@ -95,6 +95,25 @@ export async function criarUsuario(prefixo: string): Promise<TestUser> {
 }
 
 /**
+ * Usuário comum promovido a `role='admin'`, pela chave secreta.
+ *
+ * NÃO CONFUNDIR com `adminClient()`/o parâmetro `admin` deste arquivo — aquele
+ * é o CLIENTE de chave secreta usado para montar e desmontar fixtures, nunca
+ * um usuário. Este é um usuário de verdade, autenticável no navegador, com
+ * `profiles.role = 'admin'`. A promoção usa a mesma via de bypass de RLS que
+ * `supabase/tests/battery.sql` já usa "como superusuário" — não é a trigger
+ * de cadastro criando alguém admin, que a RLS continua recusando.
+ */
+export async function criarAdmin(prefixo: string): Promise<TestUser> {
+  const user = await criarUsuario(prefixo);
+
+  const { error } = await adminClient().from("profiles").update({ role: "admin" }).eq("id", user.id);
+  if (error) throw new Error(`Não consegui promover usuário de teste a admin: ${error.message}`);
+
+  return user;
+}
+
+/**
  * Remove tudo que o usuário criou, e só então o usuário.
  *
  * A ORDEM NÃO É DETALHE:

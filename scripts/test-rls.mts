@@ -1001,6 +1001,11 @@ async function main() {
   // pulado, e limpar lista vazia é no-op.
   let founders: Actor[] = [];
 
+  // Kennel ids dos founders, expostos para o cenário 17 reaproveitar números
+  // JÁ emitidos por 11b em vez de inventar novos — mesmo raciocínio: gastar
+  // do pool de verdade só quando o próprio mecanismo pede.
+  let founderKennelIds: string[] = [];
+
   // Canil sem cão e, portanto, SEM selo — o suficiente para 11a. Fica fora do
   // `if` de propósito: é o que permite provar a proteção de escrita mesmo
   // quando a parte que consome o pool não roda.
@@ -1095,6 +1100,7 @@ async function main() {
       .filter((p): p is { actor: Actor; kennelId: string } => Boolean(p.kennelId));
 
     const kennelIds = founderPairs.map((p) => p.kennelId);
+    founderKennelIds = kennelIds;
 
     // Nenhum tem selo ainda: falta o cão.
     const { data: beforeDogs } = await admin
@@ -1449,6 +1455,524 @@ async function main() {
   );
 
   // ---------------------------------------------------------------------------
+  // Cenário 14 — superfície admin_* pela API, com sessão de usuário comum
+  //
+  // `supabase/tests/battery.sql` já prova que estas quatro RPCs recusam
+  // usuário comum, mas roda como POSTGRES na mesma sessão SQL — nunca prova o
+  // caminho que um ataque real usaria: a API REST, chave publishable, sessão
+  // de B. É exatamente "manipular a request diretamente", a mesma porta que
+  // as Server Actions futuras do painel admin vão reabrir se esquecerem de
+  // chamar requireAdmin() — a RLS é a rede que pega mesmo assim.
+  //
+  // O admin de fixture é promovido pela chave secreta (bypassa RLS por
+  // desenho, não é um bug sendo explorado) — mesmo mecanismo que
+  // `battery.sql` já usa "como superusuário" na camada SQL. É a primeira vez
+  // que este arquivo faz essa promoção, então o erro é checado como em toda
+  // outra operação daqui, não presumido como sucesso silencioso.
+  // ---------------------------------------------------------------------------
+
+  const ADMIN = await createActor("admin");
+  const { error: promoteAdminError } = await admin
+    .from("profiles")
+    .update({ role: "admin" })
+    .eq("id", ADMIN.id);
+  if (promoteAdminError) {
+    throw new Error(`fixture obrigatória falhou: promover admin de teste: ${promoteAdminError.message}`);
+  }
+
+  const rpcSuspend = await B.client.rpc("admin_set_profile_suspended", {
+    p_profile_id: B.id,
+    p_suspended: true,
+    p_reason: "tentativa de usuário comum via RPC",
+  });
+  record(
+    "14. Superfície admin_*",
+    "usuário comum chama admin_set_profile_suspended",
+    "erro — insufficient_privilege",
+    rpcSuspend.error ? `erro: ${rpcSuspend.error.message}` : "EXECUTOU — SUSPENSÃO SEM ADMIN",
+    !!rpcSuspend.error,
+  );
+
+  const rpcFounder = await B.client.rpc("admin_set_founder_number", {
+    p_kennel_id: kennelB.id,
+    p_number: 999999,
+    p_reason: "tentativa de usuário comum via RPC",
+  });
+  record(
+    "14. Superfície admin_*",
+    "usuário comum chama admin_set_founder_number",
+    "erro — insufficient_privilege",
+    rpcFounder.error ? `erro: ${rpcFounder.error.message}` : "EXECUTOU — NÚMERO GRAVADO SEM ADMIN",
+    !!rpcFounder.error,
+  );
+
+  const rpcHideKennel = await B.client.rpc("admin_set_kennel_hidden", {
+    p_kennel_id: kennelB.id,
+    p_hidden: true,
+    p_reason: "tentativa de usuário comum via RPC",
+  });
+  record(
+    "14. Superfície admin_*",
+    "usuário comum chama admin_set_kennel_hidden",
+    "erro — insufficient_privilege",
+    rpcHideKennel.error ? `erro: ${rpcHideKennel.error.message}` : "EXECUTOU — CANIL OCULTADO SEM ADMIN",
+    !!rpcHideKennel.error,
+  );
+
+  const rpcHideDog = await B.client.rpc("admin_set_dog_hidden", {
+    p_dog_id: dogB!.id,
+    p_hidden: true,
+    p_reason: "tentativa de usuário comum via RPC",
+  });
+  record(
+    "14. Superfície admin_*",
+    "usuário comum chama admin_set_dog_hidden",
+    "erro — insufficient_privilege",
+    rpcHideDog.error ? `erro: ${rpcHideDog.error.message}` : "EXECUTOU — CÃO OCULTADO SEM ADMIN",
+    !!rpcHideDog.error,
+  );
+
+  // Confirma pela chave secreta que NADA das quatro tentativas gravou —
+  // mesmo formato do "papel de B... após as tentativas" do cenário 6.
+  const { data: bAfter } = await admin
+    .from("profiles")
+    .select("suspended_at")
+    .eq("id", B.id)
+    .single();
+  const { data: kennelBAfter } = await admin
+    .from("kennels")
+    .select("founder_number, hidden_at")
+    .eq("id", kennelB.id)
+    .single();
+  const { data: dogBAfter } = await admin
+    .from("dogs")
+    .select("hidden_at")
+    .eq("id", dogB!.id)
+    .single();
+  const nadaMudou =
+    bAfter?.suspended_at === null &&
+    kennelBAfter?.founder_number === null &&
+    kennelBAfter?.hidden_at === null &&
+    dogBAfter?.hidden_at === null;
+  record(
+    "14. Superfície admin_*",
+    "estado de B, do canil e do cão após as quatro tentativas",
+    "nada mudou",
+    nadaMudou
+      ? "nada mudou"
+      : `suspended_at=${bAfter?.suspended_at} founder_number=${kennelBAfter?.founder_number} kennel.hidden_at=${kennelBAfter?.hidden_at} dog.hidden_at=${dogBAfter?.hidden_at}`,
+    nadaMudou,
+  );
+
+  // `admin_get_profile_email` — a quinta função admin_*, nascida na tela de
+  // detalhe do usuário. Mesma dupla checagem das outras quatro: usuário comum
+  // recusado, e — pela primeira vez neste arquivo — uma chamada admin_* de
+  // SUCESSO sendo provada (até aqui só se provava rejeição).
+  const rpcEmailDenied = await B.client.rpc("admin_get_profile_email", {
+    p_profile_id: B.id,
+  });
+  record(
+    "14. Superfície admin_*",
+    "usuário comum chama admin_get_profile_email",
+    "erro — insufficient_privilege",
+    rpcEmailDenied.error ? `erro: ${rpcEmailDenied.error.message}` : "EXECUTOU — E-MAIL LIDO SEM ADMIN",
+    !!rpcEmailDenied.error,
+  );
+
+  const rpcEmailOk = await ADMIN.client.rpc("admin_get_profile_email", {
+    p_profile_id: B.id,
+  });
+  record(
+    "14. Superfície admin_*",
+    "admin chama admin_get_profile_email para B",
+    B.email,
+    rpcEmailOk.error ? `erro: ${rpcEmailOk.error.message}` : String(rpcEmailOk.data),
+    !rpcEmailOk.error && rpcEmailOk.data === B.email,
+  );
+
+  // ---------------------------------------------------------------------------
+  // Cenário 15 — ciclo completo de suspensão, com sessões reais dos dois lados
+  //
+  // O cenário 14 prova AUTORIZAÇÃO (quem pode chamar a RPC). Este prova EFEITO:
+  // um admin de verdade suspende um usuário de verdade, e o alvo perde a
+  // capacidade de agir E de logar — as duas metades do pedido "usuário
+  // bloqueado não consegue mais logar/agir". `battery.sql` já prova o
+  // mecanismo de RLS por trás disso (casos 33-41), como POSTGRES; aqui é a
+  // MESMA porta que um atacante ou uma Server Action com bug usaria — a API
+  // REST, sessão real.
+  // ---------------------------------------------------------------------------
+
+  const suspendReal = await ADMIN.client.rpc("admin_set_profile_suspended", {
+    p_profile_id: B.id,
+    p_suspended: true,
+    p_reason: "cenário 15 — suspensão real via API",
+  });
+  record(
+    "15. Ciclo de suspensão",
+    "admin suspende B de verdade, pela RPC",
+    "sucesso",
+    suspendReal.error ? `erro: ${suspendReal.error.message}` : "sucesso",
+    !suspendReal.error,
+  );
+
+  const { data: auditRows } = await admin
+    .from("audit_log")
+    .select("id")
+    .eq("entity_type", "profile")
+    .eq("entity_id", B.id)
+    .eq("action", "profile.suspend");
+  record(
+    "15. Ciclo de suspensão",
+    "audit_log tem exatamente 1 linha para esta suspensão",
+    "1 linha",
+    `${auditRows?.length ?? 0} linha(s)`,
+    (auditRows?.length ?? 0) === 1,
+  );
+
+  // "Não consegue mais agir" — a SESSÃO de B, que já estava aberta antes da
+  // suspensão, tenta escrever. `is_suspended()` na RLS barra na hora, sem
+  // precisar de um logout/login para valer.
+  const bWriteAfterSuspend = await B.client
+    .from("kennels")
+    .update({ description: "tentativa depois de suspenso" })
+    .eq("id", kennelB.id)
+    .select();
+  record(
+    "15. Ciclo de suspensão",
+    "B (já suspenso) tenta escrever com a sessão que já tinha aberta",
+    "0 linhas",
+    describe(bWriteAfterSuspend.error, bWriteAfterSuspend.data ?? []),
+    !bWriteAfterSuspend.error && (bWriteAfterSuspend.data?.length ?? -1) === 0,
+  );
+
+  // "Não consegue mais logar" — prova o `banned_until` pela porta real: uma
+  // sessão NOVA, não a que já estava aberta. É o que distingue isto de só
+  // conferir a coluna no banco.
+  const loginAfterSuspend = await createClient(URL!, PUBLISHABLE!, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  }).auth.signInWithPassword({ email: B.email, password: PASSWORD });
+  record(
+    "15. Ciclo de suspensão",
+    "B tenta logar de novo (sessão nova) enquanto suspenso",
+    "erro — banido",
+    loginAfterSuspend.error
+      ? `erro: ${loginAfterSuspend.error.message}`
+      : "LOGOU — SUSPENSÃO NÃO BLOQUEIA LOGIN",
+    !!loginAfterSuspend.error,
+  );
+
+  // Fecha o ciclo: reativa, e as duas metades voltam a funcionar.
+  const unsuspendReal = await ADMIN.client.rpc("admin_set_profile_suspended", {
+    p_profile_id: B.id,
+    p_suspended: false,
+    p_reason: "cenário 15 — reativação real via API",
+  });
+  record(
+    "15. Ciclo de suspensão",
+    "admin reativa B de verdade, pela RPC",
+    "sucesso",
+    unsuspendReal.error ? `erro: ${unsuspendReal.error.message}` : "sucesso",
+    !unsuspendReal.error,
+  );
+
+  const loginAfterUnsuspend = await createClient(URL!, PUBLISHABLE!, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  }).auth.signInWithPassword({ email: B.email, password: PASSWORD });
+  record(
+    "15. Ciclo de suspensão",
+    "B loga de novo depois de reativado",
+    "sucesso",
+    loginAfterUnsuspend.error ? `erro: ${loginAfterUnsuspend.error.message}` : "sucesso",
+    !loginAfterUnsuspend.error,
+  );
+
+  const bWriteAfterUnsuspend = await B.client
+    .from("kennels")
+    .update({ description: "voltou a funcionar" })
+    .eq("id", kennelB.id)
+    .select();
+  record(
+    "15. Ciclo de suspensão",
+    "B volta a conseguir escrever, com a sessão antiga, depois de reativado",
+    "1 linha",
+    describe(bWriteAfterUnsuspend.error, bWriteAfterUnsuspend.data ?? []),
+    !bWriteAfterUnsuspend.error && (bWriteAfterUnsuspend.data?.length ?? 0) === 1,
+  );
+
+  // ---------------------------------------------------------------------------
+  // Cenário 16 — ciclo completo de ocultar/reativar canil e cão, pela API real
+  //
+  // Mesmo espírito do cenário 15, para as outras duas RPCs de moderação. O
+  // cenário 14 já provou AUTORIZAÇÃO (B não consegue); este prova EFEITO: um
+  // admin de verdade oculta o canil e o cão publicados de B, e os dois somem
+  // da sessão anônima, mas B — o dono — continua enxergando (mesma
+  // propriedade que `battery.sql` casos 48/49/51 já provam em SQL puro, aqui
+  // pela porta real). `battery.sql` também não tinha nenhum caso de
+  // REATIVAR canil/cão até agora — cobre-se os dois lados aqui.
+  // ---------------------------------------------------------------------------
+
+  const hideKennelReal = await ADMIN.client.rpc("admin_set_kennel_hidden", {
+    p_kennel_id: kennelB.id,
+    p_hidden: true,
+    p_reason: "cenário 16 — ocultar real via API",
+  });
+  record(
+    "16. Ciclo de ocultar canil e cão",
+    "admin oculta o canil de B de verdade, pela RPC",
+    "sucesso",
+    hideKennelReal.error ? `erro: ${hideKennelReal.error.message}` : "sucesso",
+    !hideKennelReal.error,
+  );
+
+  const hideDogReal = await ADMIN.client.rpc("admin_set_dog_hidden", {
+    p_dog_id: dogB!.id,
+    p_hidden: true,
+    p_reason: "cenário 16 — ocultar real via API",
+  });
+  record(
+    "16. Ciclo de ocultar canil e cão",
+    "admin oculta o cão de B de verdade, pela RPC",
+    "sucesso",
+    hideDogReal.error ? `erro: ${hideDogReal.error.message}` : "sucesso",
+    !hideDogReal.error,
+  );
+
+  const { data: hideAuditRows } = await admin
+    .from("audit_log")
+    .select("id, entity_type, action")
+    .in("entity_id", [kennelB.id, dogB!.id])
+    .in("action", ["kennel.hide", "dog.hide"]);
+  record(
+    "16. Ciclo de ocultar canil e cão",
+    "audit_log tem exatamente 1 linha para cada ocultação",
+    "2 linhas",
+    `${hideAuditRows?.length ?? 0} linha(s)`,
+    (hideAuditRows?.length ?? 0) === 2,
+  );
+
+  const anonKennelHidden = await anon.from("kennels").select("id").eq("id", kennelB.id);
+  record(
+    "16. Ciclo de ocultar canil e cão",
+    "sessão anônima não vê mais o canil oculto",
+    "0 linhas",
+    describe(anonKennelHidden.error, anonKennelHidden.data ?? []),
+    !anonKennelHidden.error && (anonKennelHidden.data?.length ?? -1) === 0,
+  );
+
+  const anonDogHidden = await anon.from("dogs").select("id").eq("id", dogB!.id);
+  record(
+    "16. Ciclo de ocultar canil e cão",
+    "sessão anônima não vê mais o cão oculto",
+    "0 linhas",
+    describe(anonDogHidden.error, anonDogHidden.data ?? []),
+    !anonDogHidden.error && (anonDogHidden.data?.length ?? -1) === 0,
+  );
+
+  const ownerSeesKennelHidden = await B.client.from("kennels").select("id").eq("id", kennelB.id);
+  record(
+    "16. Ciclo de ocultar canil e cão",
+    "o DONO continua enxergando o próprio canil oculto",
+    "1 linha",
+    describe(ownerSeesKennelHidden.error, ownerSeesKennelHidden.data ?? []),
+    !ownerSeesKennelHidden.error && (ownerSeesKennelHidden.data?.length ?? 0) === 1,
+  );
+
+  const ownerSeesDogHidden = await B.client.from("dogs").select("id").eq("id", dogB!.id);
+  record(
+    "16. Ciclo de ocultar canil e cão",
+    "o DONO continua enxergando o próprio cão oculto",
+    "1 linha",
+    describe(ownerSeesDogHidden.error, ownerSeesDogHidden.data ?? []),
+    !ownerSeesDogHidden.error && (ownerSeesDogHidden.data?.length ?? 0) === 1,
+  );
+
+  // Fecha o ciclo: reativa os dois, e a sessão anônima volta a enxergar.
+  const unhideKennelReal = await ADMIN.client.rpc("admin_set_kennel_hidden", {
+    p_kennel_id: kennelB.id,
+    p_hidden: false,
+    p_reason: "cenário 16 — reativação real via API",
+  });
+  record(
+    "16. Ciclo de ocultar canil e cão",
+    "admin reativa o canil de B de verdade, pela RPC",
+    "sucesso",
+    unhideKennelReal.error ? `erro: ${unhideKennelReal.error.message}` : "sucesso",
+    !unhideKennelReal.error,
+  );
+
+  const unhideDogReal = await ADMIN.client.rpc("admin_set_dog_hidden", {
+    p_dog_id: dogB!.id,
+    p_hidden: false,
+    p_reason: "cenário 16 — reativação real via API",
+  });
+  record(
+    "16. Ciclo de ocultar canil e cão",
+    "admin reativa o cão de B de verdade, pela RPC",
+    "sucesso",
+    unhideDogReal.error ? `erro: ${unhideDogReal.error.message}` : "sucesso",
+    !unhideDogReal.error,
+  );
+
+  const { data: unhideAuditRows } = await admin
+    .from("audit_log")
+    .select("id")
+    .in("entity_id", [kennelB.id, dogB!.id])
+    .in("action", ["kennel.unhide", "dog.unhide"]);
+  record(
+    "16. Ciclo de ocultar canil e cão",
+    "audit_log tem exatamente 1 linha para cada reativação",
+    "2 linhas",
+    `${unhideAuditRows?.length ?? 0} linha(s)`,
+    (unhideAuditRows?.length ?? 0) === 2,
+  );
+
+  const anonKennelBack = await anon.from("kennels").select("id").eq("id", kennelB.id);
+  record(
+    "16. Ciclo de ocultar canil e cão",
+    "sessão anônima volta a ver o canil, reativado",
+    "1 linha",
+    describe(anonKennelBack.error, anonKennelBack.data ?? []),
+    !anonKennelBack.error && (anonKennelBack.data?.length ?? 0) === 1,
+  );
+
+  const anonDogBack = await anon.from("dogs").select("id").eq("id", dogB!.id);
+  record(
+    "16. Ciclo de ocultar canil e cão",
+    "sessão anônima volta a ver o cão, reativado",
+    "1 linha",
+    describe(anonDogBack.error, anonDogBack.data ?? []),
+    !anonDogBack.error && (anonDogBack.data?.length ?? 0) === 1,
+  );
+
+  // ---------------------------------------------------------------------------
+  // Cenário 17 — corrigir founder_number pela API real, com sessão de admin
+  //
+  // Não-admin bloqueado já está provado no cenário 14 (B chamando
+  // admin_set_founder_number é rejeitado) — nada repetido aqui.
+  //
+  // Reaproveita os kennels de 11b (`founderKennelIds`) em vez de inventar
+  // números novos: números novos gastariam do pool de verdade e empurrariam
+  // `kennel_founder_seq` para um valor artificial que só
+  // `npm run db:founder-reset` desfaria depois. Índice 0 já foi excluído
+  // logicamente por 11b (sobra o número, mas não é um bom sujeito de teste
+  // aqui) — uso 1, 2 e 3.
+  //
+  // O round-trip nulo→número evita QUALQUER bump de sequence: `p_number
+  // null` pula o bloco de `setval` por completo, e devolver o número
+  // original não dispara `setval` porque ele já é menor que o `last_value`
+  // atual (foi emitido antes, a sequence só cresce). Fecha sem deixar
+  // rastro no estado nem na sequence.
+  // ---------------------------------------------------------------------------
+
+  if (PULAR_SELO || founderKennelIds.length < 4) {
+    const motivo = PULAR_SELO
+      ? "pulado por RLS_PULAR_SELO_FUNDADOR=1 — depende dos kennels de 11b"
+      : "11b não deixou kennels suficientes para o cenário 17";
+    skip("17. Corrigir número do selo", "duplicidade é impedida mesmo pelo caminho admin", motivo);
+    skip("17. Corrigir número do selo", "correção real grava histórico, de→para", motivo);
+  } else {
+    const alvo = founderKennelIds[1]!;
+    const outro = founderKennelIds[2]!;
+    const livre = founderKennelIds[3]!;
+
+    const { data: numerosAntes } = await admin
+      .from("kennels")
+      .select("id, founder_number")
+      .in("id", [alvo, outro, livre]);
+    const numeroAlvo = numerosAntes?.find((k) => k.id === alvo)?.founder_number ?? null;
+    const numeroOutro = numerosAntes?.find((k) => k.id === outro)?.founder_number ?? null;
+    const numeroLivre = numerosAntes?.find((k) => k.id === livre)?.founder_number ?? null;
+
+    // Duplicidade — mesmo pelo caminho admin.
+    const dupTentativa = await ADMIN.client.rpc("admin_set_founder_number", {
+      p_kennel_id: alvo,
+      p_number: numeroOutro,
+      p_reason: "cenário 17 — tentativa de duplicidade",
+    });
+    record(
+      "17. Corrigir número do selo",
+      "admin tenta atribuir a um canil o número que já pertence a outro",
+      "erro — número já pertence a outro canil",
+      dupTentativa.error ? `erro: ${dupTentativa.error.message}` : "EXECUTOU — DUPLICOU O NÚMERO",
+      !!dupTentativa.error && dupTentativa.error.message.includes("já pertence a outro canil"),
+    );
+
+    const { data: alvoAposDup } = await admin
+      .from("kennels")
+      .select("founder_number")
+      .eq("id", alvo)
+      .single();
+    record(
+      "17. Corrigir número do selo",
+      "número do canil-alvo não mudou depois da tentativa de duplicidade",
+      `nº ${numeroAlvo}`,
+      `nº ${alvoAposDup?.founder_number}`,
+      alvoAposDup?.founder_number === numeroAlvo,
+    );
+
+    // Correção real: libera (para null) e devolve — dois `de/para` reais,
+    // sem tocar a sequence em nenhum dos dois.
+    const libera = await ADMIN.client.rpc("admin_set_founder_number", {
+      p_kennel_id: livre,
+      p_number: null,
+      p_reason: "cenário 17 — libera temporariamente para provar a correção",
+    });
+    record(
+      "17. Corrigir número do selo",
+      "admin libera o número do canil (correção real, primeira metade)",
+      "sucesso",
+      libera.error ? `erro: ${libera.error.message}` : "sucesso",
+      !libera.error,
+    );
+
+    const devolve = await ADMIN.client.rpc("admin_set_founder_number", {
+      p_kennel_id: livre,
+      p_number: numeroLivre,
+      p_reason: "cenário 17 — devolve o número correto",
+    });
+    record(
+      "17. Corrigir número do selo",
+      "admin devolve o número certo (correção real, segunda metade)",
+      "sucesso",
+      devolve.error ? `erro: ${devolve.error.message}` : "sucesso",
+      !devolve.error,
+    );
+
+    const { data: auditFounder } = await admin
+      .from("audit_log")
+      .select("id, details")
+      .eq("entity_id", livre)
+      .eq("action", "kennel.founder_number.set")
+      .order("id", { ascending: true });
+    const deParaCorretos =
+      (auditFounder?.length ?? 0) === 2 &&
+      (auditFounder![0]!.details as { de: unknown; para: unknown }).de === numeroLivre &&
+      (auditFounder![0]!.details as { de: unknown; para: unknown }).para === null &&
+      (auditFounder![1]!.details as { de: unknown; para: unknown }).de === null &&
+      (auditFounder![1]!.details as { de: unknown; para: unknown }).para === numeroLivre;
+    record(
+      "17. Corrigir número do selo",
+      "audit_log grava as duas correções, de→para corretos",
+      `2 linhas: {de:${numeroLivre},para:null} e {de:null,para:${numeroLivre}}`,
+      `${auditFounder?.length ?? 0} linha(s): ${JSON.stringify(auditFounder?.map((a) => a.details))}`,
+      deParaCorretos,
+    );
+
+    const { data: livreFinal } = await admin
+      .from("kennels")
+      .select("founder_number")
+      .eq("id", livre)
+      .single();
+    record(
+      "17. Corrigir número do selo",
+      "canil termina com o número original — round-trip fechado",
+      `nº ${numeroLivre}`,
+      `nº ${livreFinal?.founder_number}`,
+      livreFinal?.founder_number === numeroLivre,
+    );
+  }
+
+  // ---------------------------------------------------------------------------
   // Limpeza
   //
   // POR POSSE, não por padrão de slug — e esta distinção não é estilo.
@@ -1465,7 +1989,7 @@ async function main() {
   // que `e2e/support/admin.ts` já documenta.
   // ---------------------------------------------------------------------------
 
-  const atores = [A, B, C, S, U, ...founders];
+  const atores = [A, B, C, S, U, ADMIN, ...founders];
   const ids = atores.map((a) => a.id);
 
   await admin.storage
@@ -1517,6 +2041,15 @@ async function main() {
   await limpar("dogs (slug)", () => admin.from("dogs").delete().like("slug", `rls-${RUN}-%`));
 
   await limpar("kennels", () => admin.from("kennels").delete().in("owner_id", ids));
+
+  // `audit_log.actor_id` é ON DELETE RESTRICT DE PROPÓSITO (trilha de
+  // auditoria com ator apagado não é trilha — ver a migration do painel
+  // admin). Desde o cenário 15, ADMIN realmente age (suspende/reativa B), e
+  // sem este passo `deleteUser(ADMIN.id)` falharia toda execução daqui em
+  // diante — hard delete aqui é a mesma exceção consciente que `dogs`/
+  // `kennels` já usam para fixture de teste, não a invariante de exclusão
+  // lógica do produto.
+  await limpar("audit_log", () => admin.from("audit_log").delete().in("actor_id", ids));
 
   // `profiles` some por CASCADE de auth.users. Os canis já saíram, então o
   // RESTRICT de `kennels.owner_id` não bloqueia mais.

@@ -10,10 +10,16 @@ describe("isProtectedRoute", () => {
     expect(isProtectedRoute("/painel/caes/novo")).toBe(true);
   });
 
+  it("fecha a área administrativa — sessão é exigida aqui, autorização de admin não", () => {
+    expect(isProtectedRoute("/admin")).toBe(true);
+    expect(isProtectedRoute("/admin/qualquer-coisa")).toBe(true);
+  });
+
   it("não fecha rota que só COMEÇA com o nome protegido", () => {
     // Sem correspondência de segmento, `/painel` como prefixo cru casaria
-    // `/painel-privado` também.
+    // `/painel-privado` também. Mesma regra vale para `/admin-privado`.
     expect(isProtectedRoute("/painel-privado")).toBe(false);
+    expect(isProtectedRoute("/admin-privado")).toBe(false);
   });
 
   it("deixa passar as telas de entrada e o perfil público", () => {

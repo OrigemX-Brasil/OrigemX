@@ -1,0 +1,974 @@
+{
+  "when": "2026-08-10T19:19:17.046Z",
+  "label": "depois do painel administrativo",
+  "cases": [
+    {
+      "suite": "bateria",
+      "key": "bateria#00",
+      "nome": "trigger handle_new_user cria profile no signup",
+      "esperado": "2 profiles",
+      "obtido": "2 profiles",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#01",
+      "nome": "cão como pai de si mesmo",
+      "esperado": "bloqueio (trigger de ciclo dispara antes do CHECK)",
+      "obtido": "23514 ciclo genealógico: o cão <uuid> apareceria como ancestral de si mesmo",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#02",
+      "nome": "sire_id = dam_id",
+      "esperado": "bloqueio (validação de sexo dispara antes do CHECK)",
+      "obtido": "23514 dam_id (<uuid>) precisa referenciar uma cadela",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#03",
+      "nome": "ciclo indireto (avô vira neto)",
+      "esperado": "erro trigger dogs_check_ancestry",
+      "obtido": "23514 ciclo genealógico: o cão <uuid> apareceria como ancestral de si mesmo",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#04",
+      "nome": "fêmea em sire_id",
+      "esperado": "erro trigger dogs_check_ancestry",
+      "obtido": "23514 sire_id (<uuid>) precisa referenciar um cão macho",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#05",
+      "nome": "update em public_id",
+      "esperado": "erro trigger dogs_freeze_public_id",
+      "obtido": "23001 public_id é imutável (cão <uuid>): QR Code já impresso passaria a apontar para o lugar errado",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#06",
+      "nome": "mesmo microchip em dois cães",
+      "esperado": "erro índice microchip_uk",
+      "obtido": "23505 duplicate key value violates unique constraint \"dog_identifiers_microchip_uk\"",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#07",
+      "nome": "linebreeding (ancestral repetido por 2 caminhos)",
+      "esperado": "DEVE PASSAR",
+      "obtido": "inseriu",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#08",
+      "nome": "u1 altera canil de u2",
+      "esperado": "0 linhas",
+      "obtido": "0 linhas",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#09",
+      "nome": "usuário se promove a admin",
+      "esperado": "erro de permissão de coluna",
+      "obtido": "42501 permission denied for table profiles",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#10",
+      "nome": "u2 lê dog_identifiers de cão de u1",
+      "esperado": "0 linhas",
+      "obtido": "0 linhas",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#11",
+      "nome": "u2 move cão de u1 para o próprio canil",
+      "esperado": "0 linhas",
+      "obtido": "0 linhas",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#12",
+      "nome": "DELETE físico em dogs",
+      "esperado": "erro de permissão",
+      "obtido": "42501 permission denied for table dogs",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#13",
+      "nome": "anônimo lê cão não publicado",
+      "esperado": "0 linhas",
+      "obtido": "0 linhas (identidade: anônimo)",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#14",
+      "nome": "dono lê o próprio rascunho",
+      "esperado": "1 linha",
+      "obtido": "1 linhas (identidade: <uuid>)",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#15",
+      "nome": "slug \"rex\" em canis diferentes",
+      "esperado": "DEVE PASSAR (2 linhas)",
+      "obtido": "2 linhas",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#16",
+      "nome": "slug \"rex\" repetido no mesmo canil",
+      "esperado": "erro índice dogs_kennel_slug_key",
+      "obtido": "23505 duplicate key value violates unique constraint \"dogs_kennel_slug_key\"",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#17",
+      "nome": "slug preenchido sem kennel_id",
+      "esperado": "erro CHECK dogs_slug_requires_kennel",
+      "obtido": "23514 new row for relation \"dogs\" violates check constraint \"dogs_slug_requires_kennel\"",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#18",
+      "nome": "anônimo lê fantasma (sem dono e sem canil, não publicado)",
+      "esperado": "1 linha — é nó de árvore",
+      "obtido": "1 linhas (identidade: anônimo)",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#19",
+      "nome": "anônimo lê cão com canil, sem dono, não publicado",
+      "esperado": "0 linhas — é rascunho",
+      "obtido": "0 linhas (identidade: anônimo)",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#20",
+      "nome": "DELETE físico de canil com cães",
+      "esperado": "erro FK RESTRICT",
+      "obtido": "23503 update or delete on table \"kennels\" violates foreign key constraint \"dogs_kennel_id_fkey\" on table \"dogs\"",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#21",
+      "nome": "canil incompleto não recebe selo nem consome número",
+      "esperado": "sem número e sequence parada",
+      "obtido": "sem número, sequence parada",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#22",
+      "nome": "canil completo recebe número pelo trigger",
+      "esperado": "número atribuído (>= 1, sem teto desde founder_number_sem_teto)",
+      "obtido": "128",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#23",
+      "nome": "update de founder_number já atribuído",
+      "esperado": "erro do trigger de imutabilidade",
+      "obtido": "23001 O selo Criador Fundador é imutável e intransferível (canil <uuid>, número 128)",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#24",
+      "nome": "re-disparo em canil que já tem selo",
+      "esperado": "mesmo número e sequence parada",
+      "obtido": "128 -> 128, sequence parada",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#25",
+      "nome": "exclusão lógica do canil com selo",
+      "esperado": "número permanece na linha",
+      "obtido": "128",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#26",
+      "nome": "sequence esgotada: o próximo elegível não quebra",
+      "esperado": "sem número, e o cadastro não quebra",
+      "obtido": "número nenhum, cadastro sem erro",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#27",
+      "nome": "segundo canil vivo para o mesmo dono é recusado",
+      "esperado": "1 canil vivo",
+      "obtido": "1 canis vivos",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#28",
+      "nome": "exclusão lógica libera a vaga para um canil novo",
+      "esperado": "1 canil novo vivo",
+      "obtido": "1 criado",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#29",
+      "nome": "reverter a exclusão com outro canil vivo é recusado",
+      "esperado": "1 canil vivo",
+      "obtido": "1 canis vivos",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#30",
+      "nome": "usuário comum chama admin_set_profile_suspended",
+      "esperado": "42501 insufficient_privilege",
+      "obtido": "42501 apenas um admin pode suspender ou reativar um usuário",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#31",
+      "nome": "admin insere em audit_log pela API",
+      "esperado": "erro de permissão",
+      "obtido": "42501 permission denied for table audit_log",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#32",
+      "nome": "admin reescreve linha de audit_log",
+      "esperado": "erro de permissão",
+      "obtido": "42501 permission denied for table audit_log",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#33",
+      "nome": "suspensão grava profiles.suspended_at E auth.users.banned_until",
+      "esperado": "os dois preenchidos",
+      "obtido": "suspended_at 2026-08-10 19:19:16.013184+00 / banned_until 2126-08-10 19:19:16.013184+00",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#34",
+      "nome": "a suspensão gerou exatamente 1 linha de auditoria com motivo",
+      "esperado": "1 linha, motivo preservado",
+      "obtido": "1 linha(s), motivo: conduta abusiva — caso de bateria",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#35",
+      "nome": "suspender de novo quem já está suspenso não audita",
+      "esperado": "continua 1 linha",
+      "obtido": "1 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#36",
+      "nome": "suspenso cadastra cão no próprio canil",
+      "esperado": "recusado pela RLS",
+      "obtido": "42501 new row violates row-level security policy for table \"dogs\"",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#37",
+      "nome": "suspenso altera o próprio canil",
+      "esperado": "0 linhas",
+      "obtido": "0 linhas",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#38",
+      "nome": "suspenso LÊ o próprio canil",
+      "esperado": "1 linha — ler não é agir",
+      "obtido": "1 linhas",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#39",
+      "nome": "admin suspenso continua sendo admin?",
+      "esperado": "false",
+      "obtido": "false",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#40",
+      "nome": "admin suspende a própria conta",
+      "esperado": "recusado",
+      "obtido": "23514 um admin não pode suspender a própria conta",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#41",
+      "nome": "reativar limpa suspended_at E banned_until",
+      "esperado": "os dois nulos",
+      "obtido": "suspended_at nulo / banned_until nulo",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#42",
+      "nome": "UPDATE direto em founder_number (como superusuário)",
+      "esperado": "erro — trigger de imutabilidade",
+      "obtido": "23001 O selo Criador Fundador é imutável e intransferível (canil <uuid>, número 900001)",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#43",
+      "nome": "admin_set_founder_number corrige o número",
+      "esperado": "900002 gravado",
+      "obtido": "900002",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#44",
+      "nome": "a escotilha sobrevive à chamada de admin_set_founder_number?",
+      "esperado": "não — GUC vazia depois da função",
+      "obtido": "(vazia)",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#45",
+      "nome": "atribuir número já em uso a outro canil",
+      "esperado": "recusado e nada gravado",
+      "obtido": "founder_number do segundo canil: nulo",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#46",
+      "nome": "número corrigido à mão empurra a sequence",
+      "esperado": "last_value >= 900002",
+      "obtido": "last_value = 900002",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#47",
+      "nome": "usuário comum abre a escotilha à mão e grava founder_number",
+      "esperado": "42501 — barrado pelo GRANT de coluna",
+      "obtido": "42501 permission denied for table kennels",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#48",
+      "nome": "anônimo lê canil ocultado pelo admin",
+      "esperado": "0 linhas",
+      "obtido": "0 linhas",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#49",
+      "nome": "o DONO lê o próprio canil ocultado",
+      "esperado": "1 linha",
+      "obtido": "1 linhas",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#50",
+      "nome": "anônimo lê a mídia de um canil ocultado",
+      "esperado": "0 linhas",
+      "obtido": "0 linhas",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#51",
+      "nome": "anônimo lê cão ocultado pelo admin",
+      "esperado": "0 linhas",
+      "obtido": "0 linhas",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#52",
+      "nome": "cão ocultado no pedigree de terceiro",
+      "esperado": "nome sai, public_id e is_public não",
+      "obtido": "nome Battery A / public_id nulo / is_public false",
+      "status": "PASS"
+    },
+    {
+      "suite": "bateria",
+      "key": "bateria#53",
+      "nome": "ocultar canil oculta os cães dele? (não cascateia, de propósito)",
+      "esperado": "cão segue visível — 1 linha",
+      "obtido": "1 linhas",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#1. Criação — A cria o próprio canil",
+      "nome": "1. Criação — A cria o próprio canil",
+      "esperado": "1 linha",
+      "obtido": "1 linha",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#1. Criação — B cria o próprio canil",
+      "nome": "1. Criação — B cria o próprio canil",
+      "esperado": "1 linha",
+      "obtido": "1 linha",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#1. Criação — A cria cão PUBLICADO no próprio canil",
+      "nome": "1. Criação — A cria cão PUBLICADO no próprio canil",
+      "esperado": "1 linha",
+      "obtido": "1 linha",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#1. Criação — A cria cão RASCUNHO no próprio canil",
+      "nome": "1. Criação — A cria cão RASCUNHO no próprio canil",
+      "esperado": "1 linha",
+      "obtido": "1 linha",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#1. Criação — B cria o próprio cão",
+      "nome": "1. Criação — B cria o próprio cão",
+      "esperado": "1 linha",
+      "obtido": "1 linha",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#1. Criação — A registra microchip do próprio cão",
+      "nome": "1. Criação — A registra microchip do próprio cão",
+      "esperado": "sucesso",
+      "obtido": "sucesso",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#2. Leitura de B sobre A — B lê o cão RASCUNHO de A",
+      "nome": "2. Leitura de B sobre A — B lê o cão RASCUNHO de A",
+      "esperado": "0 linhas",
+      "obtido": "0 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#2. Leitura de B sobre A — B lê o microchip do cão de A (dado sensível)",
+      "nome": "2. Leitura de B sobre A — B lê o microchip do cão de A (dado sensível)",
+      "esperado": "0 linhas",
+      "obtido": "0 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#2. Leitura de B sobre A — B varre TODOS os rascunhos da base procurando os de A",
+      "nome": "2. Leitura de B sobre A — B varre TODOS os rascunhos da base procurando os de A",
+      "esperado": "nenhum rascunho de A",
+      "obtido": "0 rascunho(s) de A em 12 visíveis",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#2. Leitura de B sobre A — B lê o cão PUBLICADO de A (comportamento esperado: diretório é público)",
+      "nome": "2. Leitura de B sobre A — B lê o cão PUBLICADO de A (comportamento esperado: diretório é público)",
+      "esperado": "1 linha",
+      "obtido": "1 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#3. Escrita de B sobre A — B faz UPDATE no canil de A",
+      "nome": "3. Escrita de B sobre A — B faz UPDATE no canil de A",
+      "esperado": "0 linhas afetadas",
+      "obtido": "0 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#3. Escrita de B sobre A — B faz UPDATE no cão publicado de A",
+      "nome": "3. Escrita de B sobre A — B faz UPDATE no cão publicado de A",
+      "esperado": "0 linhas afetadas",
+      "obtido": "0 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#3. Escrita de B sobre A — B move o cão de A para o próprio canil",
+      "nome": "3. Escrita de B sobre A — B move o cão de A para o próprio canil",
+      "esperado": "0 linhas afetadas",
+      "obtido": "0 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#3. Escrita de B sobre A — B faz DELETE no cão de A",
+      "nome": "3. Escrita de B sobre A — B faz DELETE no cão de A",
+      "esperado": "erro de permissão (exclusão é lógica)",
+      "obtido": "erro 42501: permission denied for table dogs",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#3. Escrita de B sobre A — B faz DELETE no PRÓPRIO cão (DELETE físico é negado a todos)",
+      "nome": "3. Escrita de B sobre A — B faz DELETE no PRÓPRIO cão (DELETE físico é negado a todos)",
+      "esperado": "erro de permissão",
+      "obtido": "erro 42501: permission denied for table dogs",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#4. Anônimo — anônimo lê cão publicado",
+      "nome": "4. Anônimo — anônimo lê cão publicado",
+      "esperado": "1 linha",
+      "obtido": "1 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#4. Anônimo — anônimo lê cão em rascunho",
+      "nome": "4. Anônimo — anônimo lê cão em rascunho",
+      "esperado": "0 linhas",
+      "obtido": "0 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#4. Anônimo — anônimo lê dog_identifiers (microchip)",
+      "nome": "4. Anônimo — anônimo lê dog_identifiers (microchip)",
+      "esperado": "0 linhas ou erro de permissão",
+      "obtido": "erro 42501: permission denied for table dog_identifiers",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#4. Anônimo — anônimo tenta INSERT em dogs",
+      "nome": "4. Anônimo — anônimo tenta INSERT em dogs",
+      "esperado": "erro de permissão",
+      "obtido": "erro 42501: permission denied for table dogs",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#5. Storage — B grava no PRÓPRIO prefixo (controle: precisa funcionar)",
+      "nome": "5. Storage — B grava no PRÓPRIO prefixo (controle: precisa funcionar)",
+      "esperado": "sucesso",
+      "obtido": "sucesso",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#5. Storage — B grava no prefixo de A",
+      "nome": "5. Storage — B grava no prefixo de A",
+      "esperado": "erro de permissão",
+      "obtido": "erro: new row violates row-level security policy",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#5. Storage — B lista o prefixo de A",
+      "nome": "5. Storage — B lista o prefixo de A",
+      "esperado": "vazio ou erro",
+      "obtido": "0 objeto(s)",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#5. Storage — B baixa arquivo de A",
+      "nome": "5. Storage — B baixa arquivo de A",
+      "esperado": "erro de permissão",
+      "obtido": "erro: Object not found",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#5. Storage — anônimo baixa arquivo de A",
+      "nome": "5. Storage — anônimo baixa arquivo de A",
+      "esperado": "erro de permissão",
+      "obtido": "erro: Object not found",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#6. Admin — usuário comum se promove a admin",
+      "nome": "6. Admin — usuário comum se promove a admin",
+      "esperado": "erro de permissão de coluna",
+      "obtido": "erro 42501: permission denied for table profiles",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#6. Admin — usuário comum edita o perfil de outro",
+      "nome": "6. Admin — usuário comum edita o perfil de outro",
+      "esperado": "0 linhas afetadas",
+      "obtido": "0 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#6. Admin — usuário comum chama private.is_admin() via RPC",
+      "nome": "6. Admin — usuário comum chama private.is_admin() via RPC",
+      "esperado": "erro — schema private não é exposto",
+      "obtido": "erro: Could not find the function public.is_admin without parameters in the schema cache",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#6. Admin — usuário comum chama função de trigger via RPC",
+      "nome": "6. Admin — usuário comum chama função de trigger via RPC",
+      "esperado": "erro — EXECUTE revogado",
+      "obtido": "erro: Could not find the function public.dogs_check_ancestry without parameters in the schema cache",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#6. Admin — papel de B no banco após as tentativas",
+      "nome": "6. Admin — papel de B no banco após as tentativas",
+      "esperado": "user",
+      "obtido": "user",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#7. Criação de conta — conta criada com user_metadata.role = 'admin'",
+      "nome": "7. Criação de conta — conta criada com user_metadata.role = 'admin'",
+      "esperado": "profile nasce com role = 'user'",
+      "obtido": "role = user",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#7. Criação de conta — conta em formato OAuth (name/picture) gera profile preenchido",
+      "nome": "7. Criação de conta — conta em formato OAuth (name/picture) gera profile preenchido",
+      "esperado": "full_name e avatar_url preenchidos",
+      "obtido": "full_name = Fulano do Google, avatar_url = preenchido",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#7. Criação de conta — conta em formato OAuth nasce como usuário comum",
+      "nome": "7. Criação de conta — conta em formato OAuth nasce como usuário comum",
+      "esperado": "role = 'user'",
+      "obtido": "role = user",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#8. CRUD de canil — A atualiza TODOS os campos editáveis de uma vez (payload real de updateKennel)",
+      "nome": "8. CRUD de canil — A atualiza TODOS os campos editáveis de uma vez (payload real de updateKennel)",
+      "esperado": "1 linha — nenhuma coluna sem GRANT",
+      "obtido": "1 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#8. CRUD de canil — A exclui o próprio canil (lógico)",
+      "nome": "8. CRUD de canil — A exclui o próprio canil (lógico)",
+      "esperado": "1 linha marcada",
+      "obtido": "1 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#8. CRUD de canil — linha continua na tabela — exclusão é lógica, nunca física",
+      "nome": "8. CRUD de canil — linha continua na tabela — exclusão é lógica, nunca física",
+      "esperado": "linha existe com deleted_at preenchido",
+      "obtido": "existe, deleted_at preenchido",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#8. CRUD de canil — anônimo lê canil excluído logicamente",
+      "nome": "8. CRUD de canil — anônimo lê canil excluído logicamente",
+      "esperado": "0 linhas",
+      "obtido": "0 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#8. CRUD de canil — C (sem canil) tenta reusar o endereço de um canil excluído de A",
+      "nome": "8. CRUD de canil — C (sem canil) tenta reusar o endereço de um canil excluído de A",
+      "esperado": "erro em kennels_slug_key — slug fica reservado para sempre",
+      "obtido": "erro 23505: duplicate key value violates unique constraint \"kennels_slug_key\"",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#9. Genealogia — A cadastra ancestral fantasma (sem dono e sem canil)",
+      "nome": "9. Genealogia — A cadastra ancestral fantasma (sem dono e sem canil)",
+      "esperado": "criado",
+      "obtido": "criado",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#9. Genealogia — anônimo lê o fantasma — é nó de árvore, não precisa estar publicado",
+      "nome": "9. Genealogia — anônimo lê o fantasma — é nó de árvore, não precisa estar publicado",
+      "esperado": "1 linha",
+      "obtido": "1 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#9. Genealogia — dog_descendant_ids devolve o descendente",
+      "nome": "9. Genealogia — dog_descendant_ids devolve o descendente",
+      "esperado": "inclui o filho",
+      "obtido": "inclui",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#9. Genealogia — ciclo pela API vira mensagem legível, não 500",
+      "nome": "9. Genealogia — ciclo pela API vira mensagem legível, não 500",
+      "esperado": "erro traduzido, sem jargão de banco",
+      "obtido": "[23514] -> \"Esse cão já aparece como descendente na árvore. Defini-lo como pai ou mãe faria com que ele fosse ancestral de si mesmo, o que o registro não permite.\"",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#9. Genealogia — macho na posição de mãe vira mensagem no campo certo",
+      "nome": "9. Genealogia — macho na posição de mãe vira mensagem no campo certo",
+      "esperado": "campo dam_id, texto sobre fêmea",
+      "obtido": "dam_id: \"A mãe precisa ser uma fêmea.\"",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#10. Mídia — A registra metadata do próprio logo",
+      "nome": "10. Mídia — A registra metadata do próprio logo",
+      "esperado": "criado",
+      "obtido": "criado",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#10. Mídia — B grava metadata no canil de A",
+      "nome": "10. Mídia — B grava metadata no canil de A",
+      "esperado": "erro de permissão",
+      "obtido": "erro 42501: new row violates row-level security policy for table \"media\"",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#10. Mídia — mime fora da lista de imagem",
+      "nome": "10. Mídia — mime fora da lista de imagem",
+      "esperado": "erro CHECK media_mime_valid",
+      "obtido": "erro 23514: new row for relation \"media\" violates check constraint \"media_mime_valid\"",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#10. Mídia — arquivo acima do teto do banco",
+      "nome": "10. Mídia — arquivo acima do teto do banco",
+      "esperado": "erro CHECK media_size_positive",
+      "obtido": "erro 23514: new row for relation \"media\" violates check constraint \"media_size_positive\"",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#10. Mídia — quota do usuário soma o que ele gravou",
+      "nome": "10. Mídia — quota do usuário soma o que ele gravou",
+      "esperado": "pelo menos 12345 bytes",
+      "obtido": "12345",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#11b. Selo Fundador (concorrência) — canil sem cão não recebe selo",
+      "nome": "11b. Selo Fundador (concorrência) — canil sem cão não recebe selo",
+      "esperado": "todos sem número",
+      "obtido": "0 com número",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#11b. Selo Fundador (concorrência) — 5 atribuições CONCORRENTES não geram número duplicado",
+      "nome": "11b. Selo Fundador (concorrência) — 5 atribuições CONCORRENTES não geram número duplicado",
+      "esperado": "5 números distintos",
+      "obtido": "5 atribuídos, 5 distintos",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#11b. Selo Fundador (concorrência) — nenhum número emitido abaixo de 100",
+      "nome": "11b. Selo Fundador (concorrência) — nenhum número emitido abaixo de 100",
+      "esperado": "todos >= 100",
+      "obtido": "min 123, max 127",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#11b. Selo Fundador (concorrência) — exclusão lógica não devolve o número ao pool",
+      "nome": "11b. Selo Fundador (concorrência) — exclusão lógica não devolve o número ao pool",
+      "esperado": "número permanece",
+      "obtido": "nº 124",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#11a. Selo Fundador (autorização) — usuário grava founder_number no PRÓPRIO canil",
+      "nome": "11a. Selo Fundador (autorização) — usuário grava founder_number no PRÓPRIO canil",
+      "esperado": "erro de permissão de coluna",
+      "obtido": "erro 42501: permission denied for table kennels",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#11a. Selo Fundador (autorização) — usuário grava founder_number no canil de OUTRO",
+      "nome": "11a. Selo Fundador (autorização) — usuário grava founder_number no canil de OUTRO",
+      "esperado": "erro de permissão",
+      "obtido": "erro 42501: permission denied for table kennels",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#11a. Selo Fundador (autorização) — após as duas tentativas, o número no banco não mudou",
+      "nome": "11a. Selo Fundador (autorização) — após as duas tentativas, o número no banco não mudou",
+      "esperado": "continua nulo",
+      "obtido": "nulo",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#12. Bucket público — A grava no próprio prefixo do bucket público",
+      "nome": "12. Bucket público — A grava no próprio prefixo do bucket público",
+      "esperado": "sucesso",
+      "obtido": "sucesso",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#12. Bucket público — B grava no prefixo de A no bucket público",
+      "nome": "12. Bucket público — B grava no prefixo de A no bucket público",
+      "esperado": "erro de permissão",
+      "obtido": "erro: new row violates row-level security policy",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#12. Bucket público — anônimo grava no bucket público",
+      "nome": "12. Bucket público — anônimo grava no bucket público",
+      "esperado": "erro de permissão",
+      "obtido": "erro: new row violates row-level security policy",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#12. Bucket público — URL pública não carrega token nem expiração",
+      "nome": "12. Bucket público — URL pública não carrega token nem expiração",
+      "esperado": "sem ?token= e sem expires",
+      "obtido": "/storage/v1/object/public/kennel-media-public/<uuid>/canis/publico-<run>.png",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#12. Bucket público — anônimo BAIXA o objeto pela URL pública, sem sessão",
+      "nome": "12. Bucket público — anônimo BAIXA o objeto pela URL pública, sem sessão",
+      "esperado": "HTTP 200",
+      "obtido": "HTTP 200",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#12. Bucket público — A move o objeto de volta ao bucket privado (despublicar)",
+      "nome": "12. Bucket público — A move o objeto de volta ao bucket privado (despublicar)",
+      "esperado": "sucesso",
+      "obtido": "sucesso",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#12. Bucket público — objeto sai do bucket público ao despublicar (fonte: Storage)",
+      "nome": "12. Bucket público — objeto sai do bucket público ao despublicar (fonte: Storage)",
+      "esperado": "não está mais lá",
+      "obtido": "removido",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#13. Um canil por dono — U cria o primeiro canil",
+      "nome": "13. Um canil por dono — U cria o primeiro canil",
+      "esperado": "sucesso",
+      "obtido": "sucesso",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#13. Um canil por dono — U cria um SEGUNDO canil, com endereço novo",
+      "nome": "13. Um canil por dono — U cria um SEGUNDO canil, com endereço novo",
+      "esperado": "erro em kennels_owner_uk",
+      "obtido": "erro 23505: duplicate key value violates unique constraint \"kennels_owner_uk\"",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#13. Um canil por dono — B, que já tem canil, também é barrado — o limite é por dono, não global",
+      "nome": "13. Um canil por dono — B, que já tem canil, também é barrado — o limite é por dono, não global",
+      "esperado": "erro em kennels_owner_uk",
+      "obtido": "erro 23505: duplicate key value violates unique constraint \"kennels_owner_uk\"",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#13. Um canil por dono — depois de excluir logicamente, U cadastra outro canil",
+      "nome": "13. Um canil por dono — depois de excluir logicamente, U cadastra outro canil",
+      "esperado": "sucesso — a exclusão libera a vaga",
+      "obtido": "1 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#13. Um canil por dono — o endereço do canil excluído de U continua reservado",
+      "nome": "13. Um canil por dono — o endereço do canil excluído de U continua reservado",
+      "esperado": "erro em kennels_slug_key — a vaga volta, o endereço não",
+      "obtido": "erro 23505: duplicate key value violates unique constraint \"kennels_slug_key\"",
+      "status": "PASS"
+    },
+    {
+      "suite": "test:rls",
+      "key": "rls#13. Um canil por dono — U tenta REVERTER a exclusão tendo outro canil vivo",
+      "nome": "13. Um canil por dono — U tenta REVERTER a exclusão tendo outro canil vivo",
+      "esperado": "erro em kennels_owner_uk — o índice cobre o UPDATE, não só o INSERT",
+      "obtido": "erro 23505: duplicate key value violates unique constraint \"kennels_owner_uk\"",
+      "status": "PASS"
+    }
+  ]
+}

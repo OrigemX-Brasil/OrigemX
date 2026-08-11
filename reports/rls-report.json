@@ -1,7 +1,7 @@
 {
-  "when": "2026-08-08T03:26:17.830Z",
+  "when": "2026-08-11T01:09:46.868Z",
   "project": "https://lcqhnfdsrioufwvnrqnt.supabase.co",
-  "run": "msjta0qu",
+  "run": "msnypp0j",
   "fatal": null,
   "checks": [
     {
@@ -336,30 +336,30 @@
     {
       "cenario": "11b. Selo Fundador (concorrência)",
       "verificacao": "canil sem cão não recebe selo",
-      "esperado": "—",
-      "obtido": "pulado por RLS_PULAR_SELO_FUNDADOR=1 — consumiria 5 dos 100 selos, sem como devolvê-los sem setval",
-      "status": "PULADO"
+      "esperado": "todos sem número",
+      "obtido": "0 com número",
+      "status": "PASS"
     },
     {
       "cenario": "11b. Selo Fundador (concorrência)",
       "verificacao": "5 atribuições CONCORRENTES não geram número duplicado",
-      "esperado": "—",
-      "obtido": "pulado por RLS_PULAR_SELO_FUNDADOR=1 — consumiria 5 dos 100 selos, sem como devolvê-los sem setval",
-      "status": "PULADO"
+      "esperado": "5 números distintos",
+      "obtido": "5 atribuídos, 5 distintos",
+      "status": "PASS"
     },
     {
       "cenario": "11b. Selo Fundador (concorrência)",
       "verificacao": "nenhum número emitido abaixo de 100",
-      "esperado": "—",
-      "obtido": "pulado por RLS_PULAR_SELO_FUNDADOR=1 — consumiria 5 dos 100 selos, sem como devolvê-los sem setval",
-      "status": "PULADO"
+      "esperado": "todos >= 100",
+      "obtido": "min 555004, max 555008",
+      "status": "PASS"
     },
     {
       "cenario": "11b. Selo Fundador (concorrência)",
       "verificacao": "exclusão lógica não devolve o número ao pool",
-      "esperado": "—",
-      "obtido": "pulado por RLS_PULAR_SELO_FUNDADOR=1 — consumiria 5 dos 100 selos, sem como devolvê-los sem setval",
-      "status": "PULADO"
+      "esperado": "número permanece",
+      "obtido": "nº 555004",
+      "status": "PASS"
     },
     {
       "cenario": "11a. Selo Fundador (autorização)",
@@ -407,7 +407,7 @@
       "cenario": "12. Bucket público",
       "verificacao": "URL pública não carrega token nem expiração",
       "esperado": "sem ?token= e sem expires",
-      "obtido": "/storage/v1/object/public/kennel-media-public/7efce8fa-29b3-4d2c-a16d-54e2d938a990/canis/publico-msjta0qu.png",
+      "obtido": "/storage/v1/object/public/kennel-media-public/b95ed138-dee1-4624-8c90-ae7dcd53e9e0/canis/publico-msnypp0j.png",
       "status": "PASS"
     },
     {
@@ -471,6 +471,230 @@
       "verificacao": "U tenta REVERTER a exclusão tendo outro canil vivo",
       "esperado": "erro em kennels_owner_uk — o índice cobre o UPDATE, não só o INSERT",
       "obtido": "erro 23505: duplicate key value violates unique constraint \"kennels_owner_uk\"",
+      "status": "PASS"
+    },
+    {
+      "cenario": "14. Superfície admin_*",
+      "verificacao": "usuário comum chama admin_set_profile_suspended",
+      "esperado": "erro — insufficient_privilege",
+      "obtido": "erro: apenas um admin pode suspender ou reativar um usuário",
+      "status": "PASS"
+    },
+    {
+      "cenario": "14. Superfície admin_*",
+      "verificacao": "usuário comum chama admin_set_founder_number",
+      "esperado": "erro — insufficient_privilege",
+      "obtido": "erro: apenas um admin pode corrigir o número do canil",
+      "status": "PASS"
+    },
+    {
+      "cenario": "14. Superfície admin_*",
+      "verificacao": "usuário comum chama admin_set_kennel_hidden",
+      "esperado": "erro — insufficient_privilege",
+      "obtido": "erro: apenas um admin pode ocultar ou reativar um canil",
+      "status": "PASS"
+    },
+    {
+      "cenario": "14. Superfície admin_*",
+      "verificacao": "usuário comum chama admin_set_dog_hidden",
+      "esperado": "erro — insufficient_privilege",
+      "obtido": "erro: apenas um admin pode ocultar ou reativar um cão",
+      "status": "PASS"
+    },
+    {
+      "cenario": "14. Superfície admin_*",
+      "verificacao": "estado de B, do canil e do cão após as quatro tentativas",
+      "esperado": "nada mudou",
+      "obtido": "nada mudou",
+      "status": "PASS"
+    },
+    {
+      "cenario": "14. Superfície admin_*",
+      "verificacao": "usuário comum chama admin_get_profile_email",
+      "esperado": "erro — insufficient_privilege",
+      "obtido": "erro: apenas um admin pode ler o e-mail de um usuário",
+      "status": "PASS"
+    },
+    {
+      "cenario": "14. Superfície admin_*",
+      "verificacao": "admin chama admin_get_profile_email para B",
+      "esperado": "rls-msnypp0j-b@origemx.test",
+      "obtido": "rls-msnypp0j-b@origemx.test",
+      "status": "PASS"
+    },
+    {
+      "cenario": "15. Ciclo de suspensão",
+      "verificacao": "admin suspende B de verdade, pela RPC",
+      "esperado": "sucesso",
+      "obtido": "sucesso",
+      "status": "PASS"
+    },
+    {
+      "cenario": "15. Ciclo de suspensão",
+      "verificacao": "audit_log tem exatamente 1 linha para esta suspensão",
+      "esperado": "1 linha",
+      "obtido": "1 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "15. Ciclo de suspensão",
+      "verificacao": "B (já suspenso) tenta escrever com a sessão que já tinha aberta",
+      "esperado": "0 linhas",
+      "obtido": "0 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "15. Ciclo de suspensão",
+      "verificacao": "B tenta logar de novo (sessão nova) enquanto suspenso",
+      "esperado": "erro — banido",
+      "obtido": "erro: User is banned",
+      "status": "PASS"
+    },
+    {
+      "cenario": "15. Ciclo de suspensão",
+      "verificacao": "admin reativa B de verdade, pela RPC",
+      "esperado": "sucesso",
+      "obtido": "sucesso",
+      "status": "PASS"
+    },
+    {
+      "cenario": "15. Ciclo de suspensão",
+      "verificacao": "B loga de novo depois de reativado",
+      "esperado": "sucesso",
+      "obtido": "sucesso",
+      "status": "PASS"
+    },
+    {
+      "cenario": "15. Ciclo de suspensão",
+      "verificacao": "B volta a conseguir escrever, com a sessão antiga, depois de reativado",
+      "esperado": "1 linha",
+      "obtido": "1 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "16. Ciclo de ocultar canil e cão",
+      "verificacao": "admin oculta o canil de B de verdade, pela RPC",
+      "esperado": "sucesso",
+      "obtido": "sucesso",
+      "status": "PASS"
+    },
+    {
+      "cenario": "16. Ciclo de ocultar canil e cão",
+      "verificacao": "admin oculta o cão de B de verdade, pela RPC",
+      "esperado": "sucesso",
+      "obtido": "sucesso",
+      "status": "PASS"
+    },
+    {
+      "cenario": "16. Ciclo de ocultar canil e cão",
+      "verificacao": "audit_log tem exatamente 1 linha para cada ocultação",
+      "esperado": "2 linhas",
+      "obtido": "2 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "16. Ciclo de ocultar canil e cão",
+      "verificacao": "sessão anônima não vê mais o canil oculto",
+      "esperado": "0 linhas",
+      "obtido": "0 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "16. Ciclo de ocultar canil e cão",
+      "verificacao": "sessão anônima não vê mais o cão oculto",
+      "esperado": "0 linhas",
+      "obtido": "0 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "16. Ciclo de ocultar canil e cão",
+      "verificacao": "o DONO continua enxergando o próprio canil oculto",
+      "esperado": "1 linha",
+      "obtido": "1 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "16. Ciclo de ocultar canil e cão",
+      "verificacao": "o DONO continua enxergando o próprio cão oculto",
+      "esperado": "1 linha",
+      "obtido": "1 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "16. Ciclo de ocultar canil e cão",
+      "verificacao": "admin reativa o canil de B de verdade, pela RPC",
+      "esperado": "sucesso",
+      "obtido": "sucesso",
+      "status": "PASS"
+    },
+    {
+      "cenario": "16. Ciclo de ocultar canil e cão",
+      "verificacao": "admin reativa o cão de B de verdade, pela RPC",
+      "esperado": "sucesso",
+      "obtido": "sucesso",
+      "status": "PASS"
+    },
+    {
+      "cenario": "16. Ciclo de ocultar canil e cão",
+      "verificacao": "audit_log tem exatamente 1 linha para cada reativação",
+      "esperado": "2 linhas",
+      "obtido": "2 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "16. Ciclo de ocultar canil e cão",
+      "verificacao": "sessão anônima volta a ver o canil, reativado",
+      "esperado": "1 linha",
+      "obtido": "1 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "16. Ciclo de ocultar canil e cão",
+      "verificacao": "sessão anônima volta a ver o cão, reativado",
+      "esperado": "1 linha",
+      "obtido": "1 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "17. Corrigir número do selo",
+      "verificacao": "admin tenta atribuir a um canil o número que já pertence a outro",
+      "esperado": "erro — número já pertence a outro canil",
+      "obtido": "erro: o número 555005 já pertence a outro canil",
+      "status": "PASS"
+    },
+    {
+      "cenario": "17. Corrigir número do selo",
+      "verificacao": "número do canil-alvo não mudou depois da tentativa de duplicidade",
+      "esperado": "nº 555008",
+      "obtido": "nº 555008",
+      "status": "PASS"
+    },
+    {
+      "cenario": "17. Corrigir número do selo",
+      "verificacao": "admin libera o número do canil (correção real, primeira metade)",
+      "esperado": "sucesso",
+      "obtido": "sucesso",
+      "status": "PASS"
+    },
+    {
+      "cenario": "17. Corrigir número do selo",
+      "verificacao": "admin devolve o número certo (correção real, segunda metade)",
+      "esperado": "sucesso",
+      "obtido": "sucesso",
+      "status": "PASS"
+    },
+    {
+      "cenario": "17. Corrigir número do selo",
+      "verificacao": "audit_log grava as duas correções, de→para corretos",
+      "esperado": "2 linhas: {de:555006,para:null} e {de:null,para:555006}",
+      "obtido": "2 linha(s): [{\"de\":555006,\"para\":null},{\"de\":null,\"para\":555006}]",
+      "status": "PASS"
+    },
+    {
+      "cenario": "17. Corrigir número do selo",
+      "verificacao": "canil termina com o número original — round-trip fechado",
+      "esperado": "nº 555006",
+      "obtido": "nº 555006",
       "status": "PASS"
     }
   ]
