@@ -260,9 +260,13 @@ function SubjectRow({
   variant: "full" | "preview";
 }) {
   const subject = pedigree.subject!;
-  const width = widthFor(specs, 0);
   const card = (
-    <AncestorCard node={subject} width={width} thumbUrl={subjectPhotoUrl} linkable={false} />
+    <AncestorCard
+      node={subject}
+      width={specFor(specs, 0).card}
+      thumbUrl={subjectPhotoUrl}
+      linkable={false}
+    />
   );
 
   return (
@@ -293,6 +297,17 @@ function SubjectRow({
  * de verdade — e é isso que garante que o MEIO do grupo seja sempre a
  * fronteira entre as duas linhas, mesmo com subárvores bem assimétricas (pai
  * com oito bisavós, mãe folha). É o que alinha as colunas de verdade.
+ *
+ * `self-stretch` É METADE DA RÉGUA VERTICAL, e a outra metade está no `div`
+ * de `Subtree`. Sem ele o grupo ficava com a ALTURA NATURAL do conteúdo,
+ * centralizado na faixa que recebeu — e então dividia ao meio a própria
+ * altura pequena, não a faixa. Numa árvore assimétrica isso saía como escada
+ * irregular: os avós paternos a 180px um do outro e os maternos a 90px,
+ * cada card materno 45px fora da posição do seu nó (medido; ver
+ * `e2e/03-cao-pedigree.spec.ts`). Preenchendo a faixa, a indução fecha —
+ * faixa da raiz é a árvore, cada `<li>` é metade da faixa do pai, o nó
+ * preenche o `<li>`, o grupo preenche o nó — e TODA faixa da geração g passa
+ * a ser `altura/2^g`, em qualquer formato de árvore.
  */
 function Branches({
   pos,
@@ -313,7 +328,7 @@ function Branches({
   const elbow = variant === "preview" ? PREVIEW_ELBOW : ELBOW;
 
   return (
-    <ol className="before:bg-border-strong relative grid grid-rows-2 gap-y-1 before:absolute before:top-1/2 before:left-0 before:h-px before:w-2 before:content-['']">
+    <ol className="before:bg-border-strong relative grid grid-rows-2 gap-y-1 self-stretch before:absolute before:top-1/2 before:left-0 before:h-px before:w-2 before:content-['']">
       {/* PAI: posição par. Cada filho pinta a SUA metade do colchete — nenhum
           elemento tem duas cores. As duas metades se encontram no meio do
           grupo (o tronco neutro de 8px acima), que é o centro do card pai. */}
@@ -342,7 +357,21 @@ function Branches({
   );
 }
 
-/** Um nó (card + suas próprias ramificações) ou, sem ancestral cadastrado, a lacuna. */
+/**
+ * Um nó (card + suas próprias ramificações) ou, sem ancestral cadastrado, a
+ * lacuna.
+ *
+ * O nó PREENCHE a faixa que o `<li>` lhe deu (`self-stretch`) e centraliza o
+ * card dentro dela (`items-center`) — ver o comentário de `Branches` para o
+ * porquê. O card fica então no centro da faixa, que é exatamente a fronteira
+ * entre as faixas dos dois pais: o colchete encontra no meio do card sozinho,
+ * sem ninguém calcular posição.
+ *
+ * A LACUNA NÃO ESTICA, de propósito: `UnknownSlot` é devolvido direto, sem o
+ * `div`, e o `items-center` do `<li>` a mantém centralizada no tamanho dela.
+ * Uma caixa tracejada de "Não informado" com 350px de altura seria pior que o
+ * problema que este arquivo resolve.
+ */
 function Subtree({
   pos,
   pedigree,
@@ -357,35 +386,42 @@ function Subtree({
   variant: "full" | "preview";
 }) {
   const node = pedigree.byPosition.get(pos);
-  if (!node) return <UnknownSlot pos={pos} width={widthFor(specs, generationOf(pos))} />;
+  // A geração sai da POSIÇÃO, não do nó: dá o mesmo número (`buildPedigree`
+  // recalcula `generation` a partir de `pos`, e é a posição que manda) e vale
+  // também para a lacuna, que não tem nó de quem perguntar.
+  const spec = specFor(specs, generationOf(pos));
+
+  if (!node) return <UnknownSlot pos={pos} width={spec.card} compact={!spec.photo} />;
 
   const occurrences = pedigree.repeated.get(node.dog_id)?.length;
-  const width = widthFor(specs, node.generation);
-  const showPhoto = (specs[node.generation] ?? specs.at(-1)!).photo;
   const linkable = variant === "full";
 
-  const card = showPhoto ? (
+  const card = spec.photo ? (
     <AncestorCard
       node={node}
-      width={width}
+      width={spec.card}
       thumbUrl={thumbs?.get(node.dog_id)}
       repeatCount={occurrences}
       linkable={linkable}
     />
   ) : (
-    <CompactCard node={node} width={width} repeatCount={occurrences} linkable={linkable} />
+    <CompactCard node={node} width={spec.card} repeatCount={occurrences} linkable={linkable} />
   );
 
   return (
-    <div className="flex items-center">
+    <div className="flex items-center self-stretch">
       {card}
       <Branches pos={pos} pedigree={pedigree} specs={specs} thumbs={thumbs} variant={variant} />
     </div>
   );
 }
 
-function widthFor(specs: readonly GenerationSpec[], generation: number): number {
-  return (specs[generation] ?? specs.at(-1)!).card;
+/**
+ * A régua daquela geração. Geração além do array (não acontece hoje, mas o
+ * tipo permite) cai na última — encolher mais que a 5ª não faria sentido.
+ */
+function specFor(specs: readonly GenerationSpec[], generation: number): GenerationSpec {
+  return specs[generation] ?? specs.at(-1)!;
 }
 
 /**

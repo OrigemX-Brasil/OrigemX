@@ -257,6 +257,105 @@ test("ancestral não cadastrado vira lacuna, sem deslocar o resto", async ({
 
 /**
  * ============================================================================
+ * A GEOMETRIA da árvore em colunas — medida no navegador, não deduzida.
+ * ============================================================================
+ *
+ * `layout.test.ts` prova a régua HORIZONTAL (largura de card, cotovelo, faixa)
+ * porque ela é aritmética. A vertical não é: quem decide a altura de cada
+ * faixa é o algoritmo de grid do navegador, e o defeito que este bloco tranca
+ * não aparece em nenhum número do código — só no retângulo renderizado.
+ *
+ * Por isso a asserção é sobre `getBoundingClientRect`, e a árvore é de
+ * propósito ASSIMÉTRICA (ramo paterno até a 3ª geração, materno parando na
+ * 2ª): na árvore cheia o layout antigo já acertava sozinho, e um teste com ela
+ * passaria sem provar nada.
+ */
+test.describe("geometria da árvore em colunas", () => {
+  // A árvore em colunas é `hidden sm:block`. Nos 390px do projeto padrão ela
+  // não entra no layout, e a medição pegaria a lista por geração do mobile.
+  test.use({ viewport: { width: 1440, height: 900 } });
+
+  test("card no centro entre os dois pais, e a geração formando escada regular", async ({
+    page,
+    criador,
+    admin,
+  }) => {
+    const canil = await criarCanil(admin, criador.id);
+    const token = Date.now().toString(36);
+
+    // O nome CARREGA a posição de Ahnentafel do nó, então a asserção pode ser
+    // escrita na mesma linguagem da árvore: o card de `pos` contra os cards de
+    // `2·pos` e `2·pos+1`.
+    const nome = (pos: number) => `P${pos} ${token}`;
+    const ids = new Map<number, string>();
+
+    const criar = async (pos: number, pais?: [number, number]) => {
+      const cao = await criarCao(admin, criador.id, {
+        name: nome(pos),
+        sex: pos % 2 === 0 ? "male" : "female",
+        kennel_id: canil.id,
+        sire_id: pais ? ids.get(pais[0])! : null,
+        dam_id: pais ? ids.get(pais[1])! : null,
+      });
+      ids.set(pos, cao.id);
+      return cao;
+    };
+
+    // De trás para frente: o pai precisa existir antes do filho o referenciar.
+    for (const pos of [8, 9, 10, 11]) await criar(pos);
+    await criar(4, [8, 9]);
+    await criar(5, [10, 11]);
+    // 6 e 7 são folhas — é a assimetria de que este teste vive.
+    for (const pos of [6, 7]) await criar(pos);
+    await criar(2, [4, 5]);
+    await criar(3, [6, 7]);
+    const sujeito = await criar(1, [2, 3]);
+
+    await publicar(admin, { kennelId: canil.id, dogIds: [...ids.values()] });
+    await page.goto(`/d/${sujeito.public_id}`);
+
+    const arvore = page.locator("section", { hasText: "Pedigree" }).first();
+    await expect(arvore).toContainText(nome(11));
+
+    const centros = new Map<number, number>();
+    for (const pos of ids.keys()) {
+      // `visible: true` porque o pedigree tem DUAS apresentações no DOM e o
+      // CSS escolhe qual aparece — sem o filtro o card escondido do mobile
+      // entraria na conta com caixa zerada.
+      const card = arvore.locator("article").filter({ hasText: nome(pos) }).filter({ visible: true });
+      const box = await card.boundingBox();
+      if (!box) throw new Error(`sem caixa para o card da posição ${pos}`);
+      centros.set(pos, box.y + box.height / 2);
+    }
+
+    // 1. O COLCHETE ENCONTRA NO CENTRO DO CARD DO FILHO. Já valia antes desta
+    //    correção — está aqui como trava, porque é a propriedade que qualquer
+    //    mexida na altura da faixa quebra primeiro.
+    for (const pos of [1, 2, 3, 4, 5]) {
+      const meioDosPais = (centros.get(pos * 2)! + centros.get(pos * 2 + 1)!) / 2;
+      expect(
+        Math.abs(centros.get(pos)! - meioDosPais),
+        `o card da posição ${pos} não está no meio dos dois pais`,
+      ).toBeLessThanOrEqual(1);
+    }
+
+    // 2. ESCADA REGULAR — é esta que pega o defeito relatado. As quatro faixas
+    //    da 2ª geração têm de ter a MESMA altura, então os centros ficam
+    //    igualmente espaçados. Com a subárvore materna encolhida ao tamanho
+    //    natural, os avós maternos ficavam mais juntos que os paternos.
+    const gen2 = [4, 5, 6, 7].map((pos) => centros.get(pos)!);
+    const passos = [gen2[1]! - gen2[0]!, gen2[2]! - gen2[1]!, gen2[3]! - gen2[2]!];
+    for (const passo of passos) {
+      expect(
+        Math.abs(passo - passos[0]!),
+        `a 2ª geração não está em escada regular: ${passos.map(Math.round).join(", ")}`,
+      ).toBeLessThanOrEqual(1);
+    }
+  });
+});
+
+/**
+ * ============================================================================
  * Data de nascimento digitável — dd/mm/aaaa, teclado numérico, sem obrigar o
  * seletor mês a mês.
  * ============================================================================

@@ -171,20 +171,32 @@ export function UnknownSlot({
   pos,
   width,
   showPath = false,
+  compact = false,
 }: {
   pos: number;
   /** Ausente = `w-full` (lista do mobile). Ver `sizing`. */
   width?: number;
   showPath?: boolean;
+  /**
+   * Densidade do `CompactCard`, para a geração funda da árvore em colunas.
+   *
+   * Não é estética: numa grade uniforme a altura da LINHA é ditada pelo item
+   * que ocupa uma linha só, e na 5ª geração esse item é o card compacto (~24px).
+   * Uma lacuna com o `p-2.5` do padrão mede ~38px e estica as 32 linhas de uma
+   * vez — a árvore inteira ganhava um terço de altura por causa de um único
+   * "Não informado". Quem liga é `pedigree-tree.tsx`, pela MESMA regra que
+   * decide card com ou sem foto (`GenerationSpec.photo`).
+   */
+  compact?: boolean;
 }) {
   const box = sizing(width);
 
   return (
     <div
       style={box.style}
-      className={`border-border/60 text-fg-faint rounded-card flex items-center gap-2 border border-dashed p-2.5 text-xs ${
-        showPath ? "" : "justify-center text-center"
-      } ${box.className}`}
+      className={`border-border/60 text-fg-faint rounded-card flex items-center gap-2 border border-dashed text-xs ${
+        compact ? "px-1.5 py-0.5" : "p-2.5"
+      } ${showPath ? "" : "justify-center text-center"} ${box.className}`}
     >
       {showPath ? (
         <span className="font-mono text-[0.6rem]">{pathLabel(pos)}</span>
