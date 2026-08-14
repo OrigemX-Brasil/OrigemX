@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import { notFound } from "next/navigation";
 
+import Link from "next/link";
+
 import { BackLink } from "@/components/back-link";
 import { getAuthUser } from "@/modules/auth/queries";
 import { softDeleteKennel } from "@/modules/kennels/actions";
@@ -16,6 +18,8 @@ import { FounderBadge, FounderChecklist } from "@/modules/kennels/components/fou
 import { KennelForm } from "@/modules/kennels/components/kennel-form";
 import { founderEligibility } from "@/modules/kennels/founder";
 import { countKennelDogs, getManageableKennelById } from "@/modules/kennels/queries";
+import { LitterCard } from "@/modules/litters/components/litter-card";
+import { getKennelLitters } from "@/modules/litters/queries";
 import { QrCard } from "@/modules/qr/components/qr-card";
 
 export const metadata: Metadata = { title: "Meu canil" };
@@ -31,9 +35,10 @@ export default async function EditarCanilPage({ params }: { params: Promise<{ id
   const kennel = await getManageableKennelById(id, user.id);
   if (!kennel) notFound();
 
-  const [logo, dogCount] = await Promise.all([
+  const [logo, dogCount, litters] = await Promise.all([
     getKennelLogo(kennel.id),
     countKennelDogs(kennel.id),
+    getKennelLitters(kennel.id),
   ]);
 
   const founder = founderEligibility({
@@ -132,6 +137,42 @@ export default async function EditarCanilPage({ params }: { params: Promise<{ id
           </section>
 
           <KennelForm kennel={kennel} />
+
+          {/*
+            SÓ a lista, nunca o formulário: cadastrar, editar foto e
+            publicar moram na página própria da ninhada
+            (`/painel/canis/[id]/ninhadas/[litterId]`). É o que mantém esta
+            tela do mesmo tamanho não importa se o canil tem 1 ou 12
+            ninhadas.
+          */}
+          <section className="border-border flex flex-col gap-4 border-t pt-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-col gap-1">
+                <h2 className="font-display text-base font-semibold">Ninhadas</h2>
+                <p className="text-fg-muted text-sm">
+                  Descrição e fotos, sem preço nem disponibilidade — conteúdo informativo.
+                </p>
+              </div>
+              <Link
+                href={`/painel/canis/${kennel.id}/ninhadas/novo`}
+                className="border-border-strong text-fg hover:bg-surface-hover rounded-control border px-4 py-2 text-sm font-medium transition-colors"
+              >
+                Cadastrar nova ninhada
+              </Link>
+            </div>
+
+            {litters.length === 0 ? (
+              <p className="text-fg-muted text-sm">Nenhuma ninhada cadastrada ainda.</p>
+            ) : (
+              <ul className="flex flex-col gap-3">
+                {litters.map((litter) => (
+                  <li key={litter.id}>
+                    <LitterCard kennelId={kennel.id} litter={litter} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
         </div>
 
         {/* `xl:sticky`: o QR acompanha a rolagem — é o que o criador confere

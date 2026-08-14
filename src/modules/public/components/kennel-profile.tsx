@@ -5,10 +5,12 @@ import { notFound } from "next/navigation";
 import { BackLink } from "@/components/back-link";
 import { SignupInvite } from "@/modules/capture/components/signup-invite";
 import { FounderBadge } from "@/modules/kennels/components/founder-badge";
+import { previewDescription } from "@/modules/litters/constraints";
 import { PhotoTrigger, PublicGallery } from "@/modules/public/components/photo-lightbox";
 import { PublicImage } from "@/modules/public/components/public-image";
 import {
   getPublicKennelBySlug,
+  getPublicLitters,
   getPublicMedia,
   listPublicDogsOfKennel,
 } from "@/modules/public/queries";
@@ -35,9 +37,13 @@ export async function KennelProfile({ slug, cursor }: { slug: string; cursor?: s
   const kennel = await getPublicKennelBySlug(slug);
   if (!kennel) notFound();
 
-  const [media, dogs] = await Promise.all([
+  const [media, dogs, litters] = await Promise.all([
     getPublicMedia({ kennelId: kennel.id }),
     listPublicDogsOfKennel(kennel.id, { cursor }),
+    // Só na primeira página: a lista de ninhadas não pagina, então repeti-la
+    // em `/c/[slug]/p/[cursor]` seria a mesma seção mostrada de novo debaixo
+    // de uma página de CÃES diferente — informação repetida, não nova.
+    cursor ? Promise.resolve([]) : getPublicLitters(kennel.id),
   ]);
 
   // Cursor apontando para o nada devolve lista vazia. Na primeira página isso é
@@ -225,6 +231,66 @@ export async function KennelProfile({ slug, cursor }: { slug: string; cursor?: s
                 </>
               )}
             </section>
+
+            {/* Ausência completa quando não há ninhada publicada, não uma
+                frase vazia como "Cães" usa: diferente de cães, ninhada é
+                conteúdo opcional de verdade — muitos canis nunca terão uma. */}
+            {litters.length > 0 ? (
+              <section className="border-border flex flex-col gap-4 border-t pt-8">
+                <h2 className="font-display text-lg font-semibold tracking-tight">
+                  Ninhadas disponíveis
+                </h2>
+
+                <ul className="flex flex-col gap-3 xl:grid xl:grid-cols-3 xl:gap-4">
+                  {litters.map((litter, i) => {
+                    const [capa] = litter.photos;
+                    const resumo = previewDescription(litter.description);
+                    // Só fotos com URL resolvida entram no modal — clicar num
+                    // placeholder sem imagem não abriria nada. Mesmo filtro
+                    // que `/d/[public_id]` já aplica ao mosaico do cão.
+                    const fotosDoModal = litter.photos
+                      .filter((p): p is typeof p & { url: string } => Boolean(p.url))
+                      .map((p) => ({ url: p.url, alt: p.alt ?? "" }));
+
+                    return (
+                      <li key={litter.id}>
+                        {/* PublicGallery PRÓPRIA por ninhada, aninhada dentro
+                            da PublicGallery de página (a do logo, acima):
+                            Context isolado por provider — o modal desta
+                            ninhada nunca reage a clique em outra. */}
+                        <PublicGallery photos={fotosDoModal} description={litter.description}>
+                          <PhotoTrigger
+                            index={0}
+                            label={`Ver detalhes da ninhada ${i + 1}`}
+                            className="border-border bg-surface hover:bg-surface-hover focus-visible:outline-ring rounded-card flex w-full gap-4 border p-4 text-left transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2"
+                          >
+                            <div className="bg-surface-hover rounded-control text-fg-faint flex size-16 shrink-0 items-center justify-center overflow-hidden">
+                              {capa?.thumbUrl ? (
+                                <Image
+                                  src={capa.thumbUrl}
+                                  alt=""
+                                  width={64}
+                                  height={64}
+                                  className="size-16 object-cover"
+                                  unoptimized
+                                />
+                              ) : (
+                                <span className="text-[11px]">Sem foto</span>
+                              )}
+                            </div>
+                            {resumo ? (
+                              <p className="text-fg-muted min-w-0 text-sm whitespace-pre-line">
+                                {resumo}
+                              </p>
+                            ) : null}
+                          </PhotoTrigger>
+                        </PublicGallery>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            ) : null}
 
             <SignupInvite source="perfil-canil" />
           </div>

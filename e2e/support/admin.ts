@@ -142,6 +142,10 @@ export async function limparUsuario(userId: string): Promise<void> {
   await admin.from("dogs").update({ sire_id: null, dam_id: null }).eq("owner_id", userId);
   await admin.from("dogs").delete().eq("created_by", userId);
   await admin.from("dogs").delete().eq("owner_id", userId);
+  // Antes dos canis, pelo mesmo motivo do dog_videos acima:
+  // `kennel_litters.kennel_id` também é RESTRICT. `created_by`, não
+  // `owner_id` — a tabela não tem coluna de posse própria (ver a migration).
+  await admin.from("kennel_litters").delete().eq("created_by", userId);
   await admin.from("kennels").delete().eq("owner_id", userId);
   await admin.auth.admin.deleteUser(userId);
 }

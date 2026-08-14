@@ -149,4 +149,47 @@ export async function dogMediaRows(client: Client, dogId: string) {
   return (data ?? []) as MediaLocationRow[];
 }
 
+/** Mídia de UMA ninhada. Usada por `publishLitter`/`unpublishLitter`. */
+export async function litterMediaRows(client: Client, litterId: string) {
+  const { data } = await client
+    .from("media")
+    .select("id, bucket_id, storage_path, thumb_path")
+    .eq("litter_id", litterId)
+    .is("deleted_at", null);
+  return (data ?? []) as MediaLocationRow[];
+}
+
+/**
+ * Mídia de TODAS as ninhadas de um canil — o lado do cascade que
+ * `publishKennel`/`unpublishKennel` precisam, e que `litterMediaRows` (acima,
+ * escopada a UMA ninhada) não cobre.
+ *
+ * `onlyPublished`: ao PUBLICAR o canil, só a foto de ninhada que JÁ está com
+ * `published_at` preenchido deve ir ao público — uma ninhada em rascunho
+ * continua invisível pela regra dupla (`kennel_litters_select`), e mover a
+ * foto dela seria expor um arquivo que nenhuma página RLS deixa alguém
+ * enxergar. Ao DESPUBLICAR o canil, a chamada omite o filtro: TODA ninhada
+ * fica invisível pela mesma regra, publicada ou não, então toda foto volta ao
+ * privado.
+ */
+export async function litterMediaRowsForKennel(
+  client: Client,
+  kennelId: string,
+  options?: { onlyPublished?: boolean },
+) {
+  let littersQuery = client.from("kennel_litters").select("id").eq("kennel_id", kennelId).is("deleted_at", null);
+  if (options?.onlyPublished) littersQuery = littersQuery.not("published_at", "is", null);
+
+  const { data: litters } = await littersQuery;
+  const litterIds = (litters ?? []).map((l) => l.id);
+  if (litterIds.length === 0) return [] as MediaLocationRow[];
+
+  const { data } = await client
+    .from("media")
+    .select("id, bucket_id, storage_path, thumb_path")
+    .in("litter_id", litterIds)
+    .is("deleted_at", null);
+  return (data ?? []) as MediaLocationRow[];
+}
+
 export { targetBucketFor };

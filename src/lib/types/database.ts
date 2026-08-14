@@ -312,6 +312,54 @@ export type Database = {
           },
         ]
       }
+      kennel_litters: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          description: string | null
+          id: string
+          kennel_id: string
+          published_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          id?: string
+          kennel_id: string
+          published_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          id?: string
+          kennel_id?: string
+          published_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kennel_litters_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kennel_litters_kennel_id_fkey"
+            columns: ["kennel_id"]
+            isOneToOne: false
+            referencedRelation: "kennels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       kennels: {
         Row: {
           city: string | null
@@ -429,6 +477,7 @@ export type Database = {
           height: number | null
           id: string
           kennel_id: string | null
+          litter_id: string | null
           mime: string
           owner_id: string
           position: number
@@ -451,6 +500,7 @@ export type Database = {
           height?: number | null
           id?: string
           kennel_id?: string | null
+          litter_id?: string | null
           mime: string
           owner_id: string
           position?: number
@@ -473,6 +523,7 @@ export type Database = {
           height?: number | null
           id?: string
           kennel_id?: string | null
+          litter_id?: string | null
           mime?: string
           owner_id?: string
           position?: number
@@ -504,6 +555,13 @@ export type Database = {
             columns: ["kennel_id"]
             isOneToOne: false
             referencedRelation: "kennels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_litter_id_fkey"
+            columns: ["litter_id"]
+            isOneToOne: false
+            referencedRelation: "kennel_litters"
             referencedColumns: ["id"]
           },
           {

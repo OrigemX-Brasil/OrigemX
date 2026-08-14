@@ -2323,6 +2323,427 @@ async function main() {
   }
 
   // ---------------------------------------------------------------------------
+  // Cenário 19 — ninhadas do canil: posse via CANIL (sem owner_id próprio),
+  // publicação ENCADEADA (ninhada e canil, as duas), e o teto de 4 fotos
+  // garantido pelo banco por índice único parcial, não por contagem.
+  //
+  // Canil PRÓPRIO para este cenário. `kennelA` está excluído desde o cenário 8
+  // e `kennelMedia` foi apagado ao fim do cenário 10 — a vaga de A está livre,
+  // mesmo raciocínio já registrado lá.
+  //
+  // `kennel_litters` não tem `owner_id`: toda posse passa por
+  // `private.owns_kennel(kennel_id)`. Por isso os dois lados do teste de posse
+  // cruzada usam CANIS diferentes (o de A e o de B, ambos vivos), não o mesmo
+  // canil com um "owner_id" forjado — não existe coluna para forjar.
+  // ---------------------------------------------------------------------------
+
+  const { data: kennelLitters, error: kennelLittersError } = await A.client
+    .from("kennels")
+    .insert({
+      owner_id: A.id,
+      created_by: A.id,
+      name: "Canil Ninhadas",
+      slug: `rls-${RUN}-canil-ninhadas`,
+      published_at: new Date().toISOString(),
+    })
+    .select("id")
+    .single();
+  record(
+    "19. Ninhadas",
+    "A cria o canil deste cenário (a vaga estava livre desde o cenário 10)",
+    "1 linha",
+    kennelLittersError ? `erro: ${kennelLittersError.message}` : "1 linha",
+    !kennelLittersError && !!kennelLitters,
+  );
+  if (!kennelLitters) throw new Error("fixture obrigatória falhou: canil de ninhadas");
+
+  const { data: litterA, error: litterAError } = await A.client
+    .from("kennel_litters")
+    .insert({
+      kennel_id: kennelLitters.id,
+      description: "Ninhada de outubro, quatro filhotes.",
+      created_by: A.id,
+    })
+    .select("id")
+    .single();
+  record(
+    "19. Ninhadas",
+    "A cria ninhada RASCUNHO no próprio canil",
+    "criada",
+    litterAError ? `erro ${litterAError.code}: ${litterAError.message}` : "criada",
+    !litterAError && !!litterA,
+  );
+
+  // B tentando criar ninhada no canil de A — sem owner_id na tabela, quem nega
+  // é exclusivamente `private.owns_kennel(kennel_id)`.
+  const litterForjada = await B.client
+    .from("kennel_litters")
+    .insert({ kennel_id: kennelLitters.id, description: "forjada", created_by: B.id })
+    .select("id");
+  record(
+    "19. Ninhadas",
+    "B cria ninhada no canil de A",
+    "negado (42501)",
+    describe(litterForjada.error, litterForjada.data ?? undefined),
+    litterForjada.error?.code === "42501",
+  );
+
+  // Agora B usa o PRÓPRIO canil (kennelB, dono de verdade) mas forja
+  // `created_by` como A. `kennel_litters_insert` compara com `auth.uid()`, e
+  // isto isola a checagem de identidade da checagem de posse do canil.
+  const litterCreatedByForjado = await B.client
+    .from("kennel_litters")
+    .insert({ kennel_id: kennelB.id, description: "identidade forjada", created_by: A.id })
+    .select("id");
+  record(
+    "19. Ninhadas",
+    "B cria ninhada no PRÓPRIO canil forjando created_by de A",
+    "negado (42501)",
+    describe(litterCreatedByForjado.error, litterCreatedByForjado.data ?? undefined),
+    litterCreatedByForjado.error?.code === "42501",
+  );
+
+  if (litterA) {
+    // B — AUTENTICADO, não anônimo — lendo a ninhada RASCUNHO de A. A
+    // policy trata `anon` e `authenticated` na MESMA cláusula pública
+    // (`kennel_litters_select` não abre uma exceção para "qualquer
+    // logado"), mas isso é fato sobre o SQL, não sobre o comportamento
+    // observado — este é o teste que mede o comportamento em vez de
+    // confiar na leitura da policy.
+    const litterReadB = await B.client.from("kennel_litters").select("id").eq("id", litterA.id);
+    record(
+      "19. Ninhadas",
+      "B (autenticado, não dono) lê a ninhada RASCUNHO de A",
+      "0 linhas",
+      describe(litterReadB.error, litterReadB.data ?? undefined),
+      !litterReadB.error && (litterReadB.data ?? []).length === 0,
+    );
+
+    // UPDATE recusado pela RLS não devolve erro — devolve sucesso com ZERO
+    // linha. O critério é a CONTAGEM, mesma classe de falha silenciosa já
+    // registrada em `media`/`dog_videos`.
+    const litterUpdateB = await B.client
+      .from("kennel_litters")
+      .update({ description: "sabotagem" })
+      .eq("id", litterA.id)
+      .select("id");
+    record(
+      "19. Ninhadas",
+      "B altera a descrição da ninhada de A",
+      "0 linhas",
+      describe(litterUpdateB.error, litterUpdateB.data ?? undefined),
+      !litterUpdateB.error && (litterUpdateB.data ?? []).length === 0,
+    );
+
+    const publicaLitterA = await A.client
+      .from("kennel_litters")
+      .update({ published_at: new Date().toISOString() })
+      .eq("id", litterA.id)
+      .select("id");
+    record(
+      "19. Ninhadas",
+      "A publica a própria ninhada",
+      "1 linha",
+      describe(publicaLitterA.error, publicaLitterA.data ?? undefined),
+      !publicaLitterA.error && (publicaLitterA.data ?? []).length === 1,
+    );
+
+    const anonLitterPub = await anon.from("kennel_litters").select("id").eq("id", litterA.id);
+    record(
+      "19. Ninhadas",
+      "anônimo lê ninhada publicada, com canil publicado",
+      "1 linha",
+      describe(anonLitterPub.error, anonLitterPub.data ?? undefined),
+      !anonLitterPub.error && (anonLitterPub.data ?? []).length === 1,
+    );
+
+    // O ENCADEAMENTO — a razão de existir de kennel_litters_select ter DUAS
+    // condições, não uma. Despublica o CANIL (a ninhada continua com
+    // `published_at` preenchido) e confirma que a visibilidade cai junto,
+    // mesmo sem tocar na ninhada. Sem este teste, um `exists` sem checar
+    // `published_at` do canil passaria despercebido — o mesmo tipo de furo
+    // que a delegação de `dog_videos_select` para `dogs` evita, aqui do lado
+    // que `dogs_select` nem precisa considerar (cão não tem uma segunda
+    // publicação "por cima").
+    await A.client
+      .from("kennels")
+      .update({ published_at: null })
+      .eq("id", kennelLitters.id);
+
+    const anonLitterCanilRascunho = await anon
+      .from("kennel_litters")
+      .select("id")
+      .eq("id", litterA.id);
+    record(
+      "19. Ninhadas",
+      "ninhada PUBLICADA some da leitura anônima quando o CANIL volta a rascunho",
+      "0 linhas",
+      describe(anonLitterCanilRascunho.error, anonLitterCanilRascunho.data ?? undefined),
+      !anonLitterCanilRascunho.error && (anonLitterCanilRascunho.data ?? []).length === 0,
+    );
+
+    const donoAindaVe = await A.client.from("kennel_litters").select("id").eq("id", litterA.id);
+    record(
+      "19. Ninhadas",
+      "o DONO continua vendo a própria ninhada com o canil em rascunho",
+      "1 linha",
+      describe(donoAindaVe.error, donoAindaVe.data ?? undefined),
+      !donoAindaVe.error && (donoAindaVe.data ?? []).length === 1,
+    );
+
+    // Republica o canil — o resto do cenário (fotos, exclusão lógica) espera a
+    // visibilidade pública normal.
+    await A.client
+      .from("kennels")
+      .update({ published_at: new Date().toISOString() })
+      .eq("id", kennelLitters.id);
+  }
+
+  // A SEGUNDA ninhada — fica em rascunho de propósito, é o fixture dos testes
+  // de foto abaixo (posse e o teto de 4 não dependem de publicação).
+  const { data: litterFotos, error: litterFotosError } = await A.client
+    .from("kennel_litters")
+    .insert({ kennel_id: kennelLitters.id, description: "Ninhada com fotos", created_by: A.id })
+    .select("id")
+    .single();
+  record(
+    "19. Ninhadas",
+    "A cria uma SEGUNDA ninhada no mesmo canil — sem unicidade entre ninhadas",
+    "criada",
+    litterFotosError ? `erro: ${litterFotosError.message}` : "criada",
+    !litterFotosError && !!litterFotos,
+  );
+
+  if (litterFotos) {
+    // Quatro fotos, posições 1 a 4 — todas devem caber.
+    const posicoes = [1, 2, 3, 4];
+    const resultados = await Promise.all(
+      posicoes.map((pos) =>
+        A.client
+          .from("media")
+          .insert({
+            bucket_id: BUCKET,
+            storage_path: `${A.id}/ninhadas/${litterFotos.id}/foto-${pos}-${RUN}.webp`,
+            litter_id: litterFotos.id,
+            role: "litter_gallery",
+            position: pos,
+            mime: "image/webp",
+            size_bytes: 12345,
+            owner_id: A.id,
+            created_by: A.id,
+          })
+          .select("id"),
+      ),
+    );
+    const todasCriadas = resultados.every((r) => !r.error && (r.data ?? []).length === 1);
+    record(
+      "19. Ninhadas",
+      "A grava as 4 fotos da ninhada, uma por posição",
+      "4 criadas",
+      `${resultados.filter((r) => !r.error).length} criada(s)`,
+      todasCriadas,
+    );
+
+    // A 5ª foto: nem posição fora do intervalo, nem repetir uma ocupada,
+    // conseguem entrar. É o CHECK e o índice único fazendo o teto sozinhos —
+    // nenhuma consulta de contagem roda para isto.
+    const quintaForaDoIntervalo = await A.client
+      .from("media")
+      .insert({
+        bucket_id: BUCKET,
+        storage_path: `${A.id}/ninhadas/${litterFotos.id}/foto-5-${RUN}.webp`,
+        litter_id: litterFotos.id,
+        role: "litter_gallery",
+        position: 5,
+        mime: "image/webp",
+        size_bytes: 12345,
+        owner_id: A.id,
+        created_by: A.id,
+      })
+      .select();
+    record(
+      "19. Ninhadas",
+      "5ª foto em position=5 (fora do intervalo 1-4)",
+      "erro CHECK media_litter_position_valid",
+      describe(quintaForaDoIntervalo.error, quintaForaDoIntervalo.data ?? []),
+      quintaForaDoIntervalo.error?.code === "23514",
+    );
+
+    const quintaRepetida = await A.client
+      .from("media")
+      .insert({
+        bucket_id: BUCKET,
+        storage_path: `${A.id}/ninhadas/${litterFotos.id}/foto-1b-${RUN}.webp`,
+        litter_id: litterFotos.id,
+        role: "litter_gallery",
+        position: 1,
+        mime: "image/webp",
+        size_bytes: 12345,
+        owner_id: A.id,
+        created_by: A.id,
+      })
+      .select();
+    record(
+      "19. Ninhadas",
+      "5ª foto reaproveitando position=1, já ocupada por linha viva",
+      "erro em media_litter_position_uk",
+      describe(quintaRepetida.error, quintaRepetida.data ?? []),
+      Boolean(quintaRepetida.error?.message.includes("media_litter_position_uk")),
+    );
+
+    // B tentando gravar foto na ninhada de A — dois saltos
+    // (media.litter_id → kennel_litters.kennel_id → kennels.owner_id), quem
+    // nega é `private.owns_litter()`.
+    const fotoForjada = await B.client
+      .from("media")
+      .insert({
+        bucket_id: BUCKET,
+        storage_path: `${A.id}/ninhadas/${litterFotos.id}/forjada-${RUN}.webp`,
+        litter_id: litterFotos.id,
+        role: "litter_gallery",
+        position: 1,
+        mime: "image/webp",
+        size_bytes: 12345,
+        owner_id: B.id,
+        created_by: B.id,
+      })
+      .select();
+    record(
+      "19. Ninhadas",
+      "B grava foto na ninhada de A",
+      "negado (42501)",
+      describe(fotoForjada.error, fotoForjada.data ?? []),
+      fotoForjada.error?.code === "42501",
+    );
+
+    // Foto ainda em RASCUNHO (a ninhada não foi publicada): invisível para
+    // anônimo, mesmo o canil estando publicado.
+    const anonFotoRascunho = await anon
+      .from("media")
+      .select("id")
+      .eq("litter_id", litterFotos.id);
+    record(
+      "19. Ninhadas",
+      "anônimo lê fotos de ninhada em RASCUNHO",
+      "0 linhas",
+      describe(anonFotoRascunho.error, anonFotoRascunho.data ?? undefined),
+      !anonFotoRascunho.error && (anonFotoRascunho.data ?? []).length === 0,
+    );
+
+    // Exclui logicamente a foto da posição 1 e confirma que a vaga reabre —
+    // é o que faz o índice único parcial (`where deleted_at is null`) diferente
+    // de um índice único cru, e é o mecanismo que permite substituir uma foto
+    // sem esbarrar no teto.
+    const fotoPos1 = await A.client
+      .from("media")
+      .select("id")
+      .eq("litter_id", litterFotos.id)
+      .eq("position", 1)
+      .single();
+    if (fotoPos1.data) {
+      const excluiPos1 = await A.client
+        .from("media")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", fotoPos1.data.id)
+        .select("id");
+      record(
+        "19. Ninhadas",
+        "A exclui logicamente a foto da posição 1",
+        "1 linha",
+        describe(excluiPos1.error, excluiPos1.data ?? undefined),
+        !excluiPos1.error && (excluiPos1.data ?? []).length === 1,
+      );
+
+      const novaPos1 = await A.client
+        .from("media")
+        .insert({
+          bucket_id: BUCKET,
+          storage_path: `${A.id}/ninhadas/${litterFotos.id}/foto-1-nova-${RUN}.webp`,
+          litter_id: litterFotos.id,
+          role: "litter_gallery",
+          position: 1,
+          mime: "image/webp",
+          size_bytes: 12345,
+          owner_id: A.id,
+          created_by: A.id,
+        })
+        .select("id");
+      record(
+        "19. Ninhadas",
+        "A grava outra foto na posição 1, depois de excluir a anterior",
+        "criada",
+        describe(novaPos1.error, novaPos1.data ?? undefined),
+        !novaPos1.error && (novaPos1.data ?? []).length === 1,
+      );
+    }
+
+    // Publica a ninhada e confirma que as fotos vivas ficam visíveis —
+    // fechando o encadeamento media → kennel_litters → kennels do lado
+    // positivo (o lado negativo já foi provado acima, em rascunho).
+    await A.client
+      .from("kennel_litters")
+      .update({ published_at: new Date().toISOString() })
+      .eq("id", litterFotos.id);
+
+    const anonFotoPublicada = await anon
+      .from("media")
+      .select("id")
+      .eq("litter_id", litterFotos.id);
+    record(
+      "19. Ninhadas",
+      "anônimo lê as fotos depois de a ninhada ser publicada",
+      "4 linhas",
+      describe(anonFotoPublicada.error, anonFotoPublicada.data ?? undefined),
+      !anonFotoPublicada.error && (anonFotoPublicada.data ?? []).length === 4,
+    );
+  }
+
+  if (litterA) {
+    // A EXCLUSÃO LÓGICA PELO PRÓPRIO DONO — o caso que `media`/`dog_videos` já
+    // pagaram uma vez cada: `owns_kennel()` na cláusula do dono nem MENCIONA
+    // `deleted_at` da ninhada, então não há como esta policy repetir o bug.
+    const litterSoftDelete = await A.client
+      .from("kennel_litters")
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("id", litterA.id)
+      .is("deleted_at", null)
+      .select("id");
+    record(
+      "19. Ninhadas",
+      "A exclui logicamente a PRÓPRIA ninhada (RETURNING precisa voltar a linha)",
+      "1 linha",
+      describe(litterSoftDelete.error, litterSoftDelete.data ?? undefined),
+      !litterSoftDelete.error && (litterSoftDelete.data ?? []).length === 1,
+    );
+
+    const anonLitterRemovida = await anon
+      .from("kennel_litters")
+      .select("id")
+      .eq("id", litterA.id);
+    record(
+      "19. Ninhadas",
+      "anônimo lê ninhada já excluída logicamente",
+      "0 linhas",
+      describe(anonLitterRemovida.error, anonLitterRemovida.data ?? undefined),
+      !anonLitterRemovida.error && (anonLitterRemovida.data ?? []).length === 0,
+    );
+
+    // Sem GRANT de DELETE para ninguém — exclusão é sempre lógica.
+    const litterDelete = await A.client
+      .from("kennel_litters")
+      .delete()
+      .eq("id", litterA.id)
+      .select();
+    record(
+      "19. Ninhadas",
+      "A apaga fisicamente a própria ninhada",
+      "negado (42501)",
+      describe(litterDelete.error, litterDelete.data ?? undefined),
+      litterDelete.error?.code === "42501",
+    );
+  }
+
+  // ---------------------------------------------------------------------------
   // Limpeza
   //
   // POR POSSE, não por padrão de slug — e esta distinção não é estilo.
@@ -2397,6 +2818,13 @@ async function main() {
   );
   // Cinto: cão de slug do lote que não tenha caído nos filtros acima.
   await limpar("dogs (slug)", () => admin.from("dogs").delete().like("slug", `rls-${RUN}-%`));
+
+  // `kennel_litters.kennel_id` também é ON DELETE RESTRICT — mesma classe de
+  // problema que `dog_videos` já documenta acima. `created_by`, não
+  // `owner_id`: a tabela não tem coluna de posse própria.
+  await limpar("kennel_litters", () =>
+    admin.from("kennel_litters").delete().in("created_by", ids),
+  );
 
   await limpar("kennels", () => admin.from("kennels").delete().in("owner_id", ids));
 

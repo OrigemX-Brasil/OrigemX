@@ -14,7 +14,7 @@ export type SupabaseClientLike = SupabaseClient<Database>;
 /** Acesso a dados de mídia. Todo `.from("media")` do app passa por aqui. */
 
 const COLUMNS =
-  "id, bucket_id, storage_path, thumb_path, kennel_id, dog_id, role, mime, size_bytes, width, height, thumb_bytes, alt, caption, position, owner_id, created_at";
+  "id, bucket_id, storage_path, thumb_path, kennel_id, dog_id, litter_id, role, mime, size_bytes, width, height, thumb_bytes, alt, caption, position, owner_id, created_at";
 
 export type MediaItem = {
   id: string;
@@ -23,6 +23,7 @@ export type MediaItem = {
   thumb_path: string | null;
   kennel_id: string | null;
   dog_id: string | null;
+  litter_id: string | null;
   role: string;
   mime: string;
   size_bytes: number;
@@ -151,6 +152,60 @@ export async function countDogGallery(dogId: string): Promise<number> {
     .is("deleted_at", null);
 
   return count ?? 0;
+}
+
+/**
+ * Fotos da ninhada, ordenadas por posição — a MESMA coluna que o índice único
+ * `media_litter_position_uk` usa para garantir o teto de 4. Sem `.limit`
+ * explícito: o próprio banco nunca deixa passar de 4 linhas vivas.
+ */
+export async function getLitterGallery(litterId: string): Promise<ResolvedMedia[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("media")
+    .select(COLUMNS)
+    .eq("litter_id", litterId)
+    .eq("role", "litter_gallery")
+    .is("deleted_at", null)
+    .order("position", { ascending: true });
+
+  return resolveMediaUrls((data ?? []) as MediaItem[]);
+}
+
+/**
+ * A capa de cada ninhada em `litterIds` — a foto de `position = 1`, mesma
+ * convenção de "capa = posição mais baixa" que a galeria do cão já usa.
+ * Devolve um Map por não garantir que toda ninhada tenha foto.
+ */
+export async function getLitterCovers(
+  litterIds: readonly string[],
+): Promise<Map<string, ResolvedMedia>> {
+  if (litterIds.length === 0) return new Map();
+
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("media")
+    .select(COLUMNS)
+    .in("litter_id", litterIds)
+    .eq("role", "litter_gallery")
+    .eq("position", 1)
+    .is("deleted_at", null);
+
+  const resolved = await resolveMediaUrls((data ?? []) as MediaItem[]);
+  return new Map(resolved.filter((m) => m.litter_id).map((m) => [m.litter_id as string, m]));
+}
+
+/** As posições (1-4) já ocupadas por foto viva — usada para achar o menor slot livre. */
+export async function litterPhotoPositions(litterId: string): Promise<number[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("media")
+    .select("position")
+    .eq("litter_id", litterId)
+    .eq("role", "litter_gallery")
+    .is("deleted_at", null);
+
+  return (data ?? []).map((row) => row.position);
 }
 
 /** Bytes já ocupados pelo usuário. Alimenta a checagem de quota. */

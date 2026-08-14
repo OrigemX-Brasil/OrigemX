@@ -29,7 +29,7 @@ export type MediaActionState = {
   mediaId?: string;
 };
 
-type ParentPublishState = {
+export type ParentPublishState = {
   isPublished: boolean;
   /** Caminho da página pública da entidade, só quando publicada. */
   publicPath: string | null;
@@ -49,7 +49,7 @@ type ParentPublishState = {
  * `publicPath` sai da mesma consulta para não pagar um segundo round-trip só
  * para saber o que revalidar depois do move.
  */
-async function parentPublishState(
+export async function parentPublishState(
   supabase: SupabaseClientLike,
   role: MediaRole,
   entityId: string,
@@ -66,6 +66,23 @@ async function parentPublishState(
     };
   }
 
+  if (role === "litter_gallery") {
+    // REGRA DUPLA: a foto só é pública se a NINHADA e o CANIL dela estiverem
+    // publicados — ver `kennel_litters_select` na migration. Mover a foto ao
+    // bucket público com só metade da regra satisfeita exporia um arquivo que
+    // nenhuma página RLS deixa alguém enxergar.
+    const { data } = await supabase
+      .from("kennel_litters")
+      .select("published_at, kennels(published_at, slug)")
+      .eq("id", entityId)
+      .maybeSingle();
+    const kennel = kennelJoinOf(data?.kennels);
+    return {
+      isPublished: Boolean(data?.published_at) && Boolean(kennel?.published_at),
+      publicPath: kennel?.slug ? `/c/${kennel.slug}` : null,
+    };
+  }
+
   const { data } = await supabase
     .from("dogs")
     .select("published_at, public_id")
@@ -75,6 +92,14 @@ async function parentPublishState(
     isPublished: Boolean(data?.published_at),
     publicPath: data?.public_id ? `/d/${data.public_id}` : null,
   };
+}
+
+/** O join do PostgREST vem como objeto ou array conforme a cardinalidade. */
+function kennelJoinOf(
+  k: { published_at: string | null; slug: string } | { published_at: string | null; slug: string }[] | null | undefined,
+) {
+  if (!k) return null;
+  return Array.isArray(k) ? (k[0] ?? null) : k;
 }
 
 /**
@@ -255,7 +280,7 @@ export async function deleteMedia(formData: FormData): Promise<void> {
 
   const { data } = await supabase
     .from("media")
-    .select("id, bucket_id, storage_path, thumb_path, kennel_id, dog_id")
+    .select("id, bucket_id, storage_path, thumb_path, kennel_id, dog_id, litter_id")
     .eq("id", id)
     .eq("owner_id", user.id)
     .is("deleted_at", null)
@@ -290,13 +315,40 @@ export async function deleteMedia(formData: FormData): Promise<void> {
   }
   if (data.dog_id) revalidatePath(`/painel/caes/${data.dog_id}`);
 
+  // A foto de ninhada não carrega o `kennel_id` na própria linha (é um pulo a
+  // mais: media → kennel_litters → kennels) — sem esta consulta, apagar a
+  // capa de uma ninhada não atualizaria nem a própria tela da ninhada nem a
+  // lista de ninhadas do canil.
+  let litterKennelId: string | null = null;
+  if (data.litter_id) {
+    const { data: litter } = await supabase
+      .from("kennel_litters")
+      .select("kennel_id")
+      .eq("id", data.litter_id)
+      .maybeSingle();
+    litterKennelId = litter?.kennel_id ?? null;
+
+    if (litterKennelId) {
+      revalidatePath(`/painel/canis/${litterKennelId}/ninhadas/${data.litter_id}`);
+      revalidatePath(`/painel/canis/${litterKennelId}`);
+    }
+  }
+
   // Sem isto, remover o logo/foto de uma entidade JÁ PUBLICADA some no painel
   // mas o perfil público continua com a versão antiga até o ISR de 300s vencer
   // sozinho — a mesma classe de bug que `registerMedia` já trata do lado do
-  // upload, só que faltando aqui do lado da remoção.
-  const role = data.kennel_id ? "kennel_logo" : "dog_gallery";
-  const entityId = data.kennel_id ?? data.dog_id;
-  if (entityId) {
+  // upload, só que faltando aqui do lado da remoção. Antes desta correção, uma
+  // foto de ninhada (kennel_id e dog_id os dois nulos) caía no `else` e virava
+  // "dog_gallery" com entityId nulo — a revalidação era pulada em silêncio.
+  const role: MediaRole | null = data.kennel_id
+    ? "kennel_logo"
+    : data.dog_id
+      ? "dog_gallery"
+      : data.litter_id
+        ? "litter_gallery"
+        : null;
+  const entityId = data.kennel_id ?? data.dog_id ?? data.litter_id;
+  if (role && entityId) {
     const parent = await parentPublishState(supabase, role, entityId);
     if (parent.isPublished && parent.publicPath) revalidatePath(parent.publicPath);
   }

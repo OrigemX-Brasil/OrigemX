@@ -29,9 +29,18 @@ const GalleryContext = createContext<GalleryContextValue | null>(null);
 
 export function PublicGallery({
   photos,
+  description,
   children,
 }: {
   photos: readonly LightboxPhoto[];
+  /**
+   * Bloco de texto fixo no topo do diálogo, visível em QUALQUER foto (ou
+   * sem foto nenhuma) — diferente de `caption`, que é por foto. Existe para
+   * a ninhada: a "ficha" dela é a descrição completa, não uma legenda presa
+   * a uma imagem específica. Os dois usos antigos (logo, mosaico do cão) não
+   * passam isto — comportamento idêntico ao de antes.
+   */
+  description?: string | null;
   children: React.ReactNode;
 }) {
   const [index, setIndex] = useState<number | null>(null);
@@ -57,7 +66,10 @@ export function PublicGallery({
     [photos.length],
   );
 
-  const photo = index !== null ? photos[index] : null;
+  // `?? null`: com `description` e SEM foto (ninhada sem nenhuma), `index`
+  // abre em 0 mas `photos` está vazio — `photos[0]` é `undefined`, não
+  // `null`, e o restante do arquivo testa contra `null`/falsy.
+  const photo = index !== null ? (photos[index] ?? null) : null;
 
   return (
     <GalleryContext.Provider value={{ open: setIndex }}>
@@ -89,59 +101,83 @@ export function PublicGallery({
         aria-label={photo?.alt}
         className="fixed inset-0 m-0 h-dvh max-h-none w-dvw max-w-none border-0 bg-transparent p-4 backdrop:bg-bg/90 sm:p-8"
       >
-        {photo ? (
-          <div className="relative flex h-full w-full items-center justify-center">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={photo.url}
-              alt={photo.alt}
-              className="max-h-full max-w-full rounded-card object-contain"
-            />
-
+        {/*
+          Condicionado a "diálogo ABERTO" (`index !== null`), não a "existe
+          foto": uma ninhada sem foto nenhuma é estado válido (foto não é
+          obrigatória), e antes disso o diálogo abriria vazio, sem sequer o
+          botão de fechar — ele vivia DENTRO do bloco condicionado a `photo`.
+          Só a ÁREA DE FOTO (com setas e contador) continua condicionada a
+          `photo` existir.
+        */}
+        {index !== null ? (
+          <div className="relative flex h-full w-full flex-col items-center justify-center gap-4">
             <button
               type="button"
               onClick={close}
               aria-label="Fechar"
-              className="bg-bg/70 text-fg hover:bg-bg/90 focus-visible:outline-ring absolute top-3 right-3 flex size-10 items-center justify-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
+              className="bg-bg/70 text-fg hover:bg-bg/90 focus-visible:outline-ring absolute top-3 right-3 z-10 flex size-10 items-center justify-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
             >
               <CloseIcon />
             </button>
 
-            {photos.length > 1 ? (
-              <>
-                <button
-                  type="button"
-                  onClick={prev}
-                  aria-label="Foto anterior"
-                  className="bg-bg/70 text-fg hover:bg-bg/90 focus-visible:outline-ring absolute top-1/2 left-2 flex size-10 -translate-y-1/2 items-center justify-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 sm:left-4"
-                >
-                  <ChevronIcon direction="left" />
-                </button>
-                <button
-                  type="button"
-                  onClick={next}
-                  aria-label="Próxima foto"
-                  className="bg-bg/70 text-fg hover:bg-bg/90 focus-visible:outline-ring absolute top-1/2 right-2 flex size-10 -translate-y-1/2 items-center justify-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 sm:right-4"
-                >
-                  <ChevronIcon direction="right" />
-                </button>
-              </>
+            {description ? (
+              // `pr-14`: sem isto, o texto passa por baixo do botão de
+              // fechar em telas estreitas — o botão é `absolute` sobre o
+              // wrapper, não sabe da largura do parágrafo, e um parágrafo
+              // comprido ocupa quase toda a largura disponível. Achado
+              // testando em 360px: o texto ficava ilegível atrás do ×.
+              <p className="bg-bg/70 text-fg rounded-card max-h-[30vh] w-full max-w-prose overflow-y-auto py-3 pr-14 pl-4 text-sm whitespace-pre-line">
+                {description}
+              </p>
             ) : null}
 
-            {/* Legenda e contador na MESMA pilha inferior — os dois brigavam
-                por `bottom-3 left-1/2` quando soltos. A legenda aparece
-                mesmo com uma única foto; o contador só com mais de uma. */}
-            {photo.caption || photos.length > 1 ? (
-              <div className="absolute inset-x-0 bottom-3 flex flex-col items-center gap-2 px-4">
-                {photo.caption ? (
-                  <p className="bg-bg/70 text-fg rounded-card max-w-prose px-3 py-1.5 text-center text-sm">
-                    {photo.caption}
-                  </p>
-                ) : null}
+            {photo ? (
+              <div className="relative flex min-h-0 w-full flex-1 items-center justify-center">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={photo.url}
+                  alt={photo.alt}
+                  className="max-h-full max-w-full rounded-card object-contain"
+                />
+
                 {photos.length > 1 ? (
-                  <span className="bg-bg/70 text-fg-muted rounded-full px-3 py-1 font-mono text-xs tabular-nums">
-                    {index! + 1} / {photos.length}
-                  </span>
+                  <>
+                    <button
+                      type="button"
+                      onClick={prev}
+                      aria-label="Foto anterior"
+                      className="bg-bg/70 text-fg hover:bg-bg/90 focus-visible:outline-ring absolute top-1/2 left-2 flex size-10 -translate-y-1/2 items-center justify-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 sm:left-4"
+                    >
+                      <ChevronIcon direction="left" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={next}
+                      aria-label="Próxima foto"
+                      className="bg-bg/70 text-fg hover:bg-bg/90 focus-visible:outline-ring absolute top-1/2 right-2 flex size-10 -translate-y-1/2 items-center justify-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 sm:right-4"
+                    >
+                      <ChevronIcon direction="right" />
+                    </button>
+                  </>
+                ) : null}
+
+                {/* Legenda e contador na MESMA pilha inferior — os dois
+                    brigavam por `bottom-3 left-1/2` quando soltos. A legenda
+                    aparece mesmo com uma única foto; o contador só com mais
+                    de uma. */}
+                {photo.caption || photos.length > 1 ? (
+                  <div className="absolute inset-x-0 bottom-3 flex flex-col items-center gap-2 px-4">
+                    {photo.caption ? (
+                      <p className="bg-bg/70 text-fg rounded-card max-w-prose px-3 py-1.5 text-center text-sm">
+                        {photo.caption}
+                      </p>
+                    ) : null}
+                    {photos.length > 1 ? (
+                      <span className="bg-bg/70 text-fg-muted rounded-full px-3 py-1 font-mono text-xs tabular-nums">
+                        {index! + 1} / {photos.length}
+                      </span>
+                    ) : null}
+                  </div>
                 ) : null}
               </div>
             ) : null}

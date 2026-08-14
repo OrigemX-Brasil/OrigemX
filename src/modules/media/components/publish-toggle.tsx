@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
+import { publishLitter, unpublishLitter } from "@/modules/litters/actions";
+
 import {
   publishDog,
   publishKennel,
@@ -19,31 +21,42 @@ import {
  * publicar move os arquivos para um endereço público permanente, e é isso que
  * torna o QR impresso viável. O usuário precisa saber disso antes de clicar.
  */
+const ACTIONS = {
+  kennel: { publish: publishKennel, unpublish: unpublishKennel },
+  dog: { publish: publishDog, unpublish: unpublishDog },
+  litter: { publish: publishLitter, unpublish: unpublishLitter },
+} as const;
+
+const LABEL = { kennel: "canil", dog: "cão", litter: "ninhada" } as const;
+
 export function PublishToggle({
   kind,
   id,
   publicPath,
   isPublished,
+  kennelPublished,
 }: {
-  kind: "kennel" | "dog";
+  kind: "kennel" | "dog" | "litter";
   id: string;
   publicPath: string;
   isPublished: boolean;
+  /**
+   * Só faz sentido para `kind === "litter"` — se o CANIL da ninhada também
+   * está publicado. A regra é dupla (`kennel_litters_select`), então
+   * `isPublished` sozinho não diz se a ninhada está REALMENTE visível.
+   * Ausente/`false` faz o texto tratar como "ainda não" — o lado seguro
+   * quando o chamador não informa.
+   */
+  kennelPublished?: boolean;
 }) {
-  const action = isPublished
-    ? kind === "kennel"
-      ? unpublishKennel
-      : unpublishDog
-    : kind === "kennel"
-      ? publishKennel
-      : publishDog;
+  const action = isPublished ? ACTIONS[kind].unpublish : ACTIONS[kind].publish;
 
   const [state, formAction] = useActionState<PublishState, FormData>(
     async (_prev, formData) => action(formData),
     {},
   );
 
-  const label = kind === "kennel" ? "canil" : "cão";
+  const label = LABEL[kind];
 
   return (
     <section className="border-border bg-surface rounded-card flex flex-col gap-4 border p-5">
@@ -53,11 +66,20 @@ export function PublishToggle({
         </h2>
         <p className="text-fg-muted text-sm">
           {isPublished ? (
-            <>
-              Qualquer pessoa pode abrir{" "}
-              <code className="text-fg-faint font-mono text-xs">{publicPath}</code>. As imagens
-              estão num endereço público permanente.
-            </>
+            kind === "litter" && !kennelPublished ? (
+              <>
+                Esta ninhada está publicada. Ela aparece em{" "}
+                <code className="text-fg-faint font-mono text-xs">{publicPath}</code> assim que o
+                canil TAMBÉM estiver publicado — a regra é das duas publicações juntas, não só
+                desta ninhada.
+              </>
+            ) : (
+              <>
+                Qualquer pessoa pode abrir{" "}
+                <code className="text-fg-faint font-mono text-xs">{publicPath}</code>. As imagens
+                estão num endereço público permanente.
+              </>
+            )
           ) : (
             <>
               Este {label} não aparece para o público. Publicar move as imagens para um endereço

@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/client";
 
-import { registerMedia } from "./actions";
+import { registerMedia, type MediaActionState } from "./actions";
 import {
   BUCKET_PRIVATE,
   buildStoragePath,
@@ -31,12 +31,26 @@ import { compressImage } from "./resize";
  * do navegador direto ao Storage.
  */
 
+export type RegisterAction = (
+  prev: MediaActionState,
+  formData: FormData,
+) => Promise<MediaActionState>;
+
 export type UploadOneParams = {
   file: File;
   role: MediaRole;
   entityId: string;
   ownerId: string;
   onStatus?: (status: string) => void;
+  /**
+   * Qual Server Action registra a metadata, no passo 3. Default `registerMedia`
+   * — o comportamento de sempre, para quem não passa nada (logo, galeria do
+   * cão). A galeria da ninhada passa `registerLitterPhoto`
+   * (`src/modules/litters/actions.ts`): `registerMedia` nunca calcula
+   * `position`, e o teto de 4 fotos da ninhada depende de gravar no menor
+   * slot livre — ver o comentário completo lá.
+   */
+  registerAction?: RegisterAction;
 };
 
 export type UploadOneResult = { ok: true; mediaId: string } | { ok: false; error: string };
@@ -47,6 +61,7 @@ export async function uploadOneImage({
   entityId,
   ownerId,
   onStatus,
+  registerAction = registerMedia,
 }: UploadOneParams): Promise<UploadOneResult> {
   const check = validateInputFile(file);
   if (!check.ok) return { ok: false, error: check.reason };
@@ -102,7 +117,7 @@ export async function uploadOneImage({
   fd.set("width", String(full.width));
   fd.set("height", String(full.height));
 
-  const result = await registerMedia({}, fd);
+  const result = await registerAction({}, fd);
   if (result.error || !result.mediaId) {
     return { ok: false, error: result.error ?? "Não foi possível registrar a imagem." };
   }

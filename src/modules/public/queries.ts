@@ -203,7 +203,7 @@ export const getPublicRegistrations = cache(async (dogId: string) => {
 });
 
 const MEDIA_COLUMNS =
-  "id, bucket_id, storage_path, thumb_path, kennel_id, dog_id, role, mime, size_bytes, width, height, thumb_bytes, alt, caption, position, owner_id, created_at";
+  "id, bucket_id, storage_path, thumb_path, kennel_id, dog_id, litter_id, role, mime, size_bytes, width, height, thumb_bytes, alt, caption, position, owner_id, created_at";
 
 /**
  * Mídia pública. NUNCA levanta: se falhar, a página renderiza sem imagem.
@@ -230,6 +230,69 @@ export const getPublicMedia = cache(
     }
   },
 );
+
+export type PublicLitter = {
+  id: string;
+  description: string | null;
+  /** Ordenadas por posição (1-4). `photos[0]`, quando existe, é a capa —
+   * mesma extração `[principal, ...resto]` que `/d/[public_id]` já faz para
+   * o mosaico do cão. */
+  photos: ResolvedMedia[];
+};
+
+/**
+ * Ninhadas publicadas do canil, com TODAS as fotos vivas resolvidas (não só
+ * a capa) — o modal em `KennelProfile` precisa das até 4 para navegar.
+ *
+ * SEM filtro explícito de `published_at` — quem decide isso é
+ * `kennel_litters_select`, a REGRA DUPLA (a ninhada e o canil publicados os
+ * dois). Rederivar a regra aqui em TypeScript é exatamente o tipo de
+ * duplicação que diverge no primeiro ajuste; o client anônimo já só enxerga
+ * o que a policy deixa passar.
+ *
+ * NUNCA LEVANTA, como `getPublicMedia`. Foto e descrição de ninhada são tão
+ * dispensáveis quanto o resto desta página: quem escaneou o QR precisa do
+ * nome, da raça e do pedigree.
+ */
+export const getPublicLitters = cache(async (kennelId: string): Promise<PublicLitter[]> => {
+  try {
+    const supabase = createPublicClient();
+    const { data } = await supabase
+      .from("kennel_litters")
+      .select("id, description")
+      .eq("kennel_id", kennelId)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    const litters = data ?? [];
+    if (litters.length === 0) return [];
+
+    // Uma consulta em lote para TODAS as ninhadas da página, não uma por
+    // ninhada — mesmo princípio que já evita N+1 no resto do arquivo.
+    const litterIds = litters.map((l) => l.id);
+    const { data: media } = await supabase
+      .from("media")
+      .select(MEDIA_COLUMNS)
+      .in("litter_id", litterIds)
+      .eq("role", "litter_gallery")
+      .is("deleted_at", null)
+      .order("position", { ascending: true });
+
+    const resolved = await resolveMediaUrls((media ?? []) as MediaItem[], supabase);
+    const photosByLitter = new Map<string, ResolvedMedia[]>();
+    for (const item of resolved) {
+      if (!item.litter_id) continue;
+      const list = photosByLitter.get(item.litter_id) ?? [];
+      list.push(item);
+      photosByLitter.set(item.litter_id, list);
+    }
+
+    return litters.map((litter) => ({ ...litter, photos: photosByLitter.get(litter.id) ?? [] }));
+  } catch {
+    return [];
+  }
+});
 
 /**
  * O vídeo PRONTO do cão, ou `null`.

@@ -76,7 +76,7 @@ export const MAX_GALLERY_ITEMS = 30;
  */
 export const GALLERY_UPLOAD_CONCURRENCY = 3;
 
-export type MediaRole = "kennel_logo" | "dog_gallery";
+export type MediaRole = "kennel_logo" | "dog_gallery" | "litter_gallery";
 
 /** Teto da legenda. Espelha o CHECK `media_caption_len`. */
 export const MAX_CAPTION_LENGTH = 140;
@@ -200,6 +200,12 @@ export function computeTargetSize(source: Size, maxDimension: number): Size {
  * `storage.objects` compara com `auth.uid()`. Mudar esta função sem mudar a
  * policy faz todo upload passar a ser negado.
  */
+const STORAGE_SCOPE: Record<MediaRole, string> = {
+  kennel_logo: "canis",
+  dog_gallery: "caes",
+  litter_gallery: "ninhadas",
+};
+
 export function buildStoragePath(params: {
   ownerId: string;
   role: MediaRole;
@@ -207,7 +213,7 @@ export function buildStoragePath(params: {
   fileId: string;
   extension: string;
 }): string {
-  const scope = params.role === "kennel_logo" ? "canis" : "caes";
+  const scope = STORAGE_SCOPE[params.role];
   return `${params.ownerId}/${scope}/${params.entityId}/${params.fileId}.${params.extension}`;
 }
 

@@ -69,6 +69,11 @@ begin
   delete from public.dogs            where id = any (v_caes);
   get diagnostics n_caes = row_count;
 
+  -- `kennel_litters.kennel_id` também é ON DELETE RESTRICT. A tabela não tem
+  -- `owner_id` próprio — posse é sempre via canil — então o filtro é só por
+  -- `kennel_id`, não por dono.
+  delete from public.kennel_litters where kennel_id = any (v_canis);
+
   delete from public.kennels where id = any (v_canis);
   get diagnostics n_canis = row_count;
 

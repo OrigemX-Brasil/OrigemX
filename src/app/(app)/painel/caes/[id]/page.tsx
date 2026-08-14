@@ -133,6 +133,8 @@ export default async function EditarCaoPage({ params }: { params: Promise<{ id: 
             <GalleryUploader
               entityId={dog.id}
               ownerId={user.id}
+              role="dog_gallery"
+              maxItems={MAX_GALLERY_ITEMS}
               remaining={MAX_GALLERY_ITEMS - gallery.length}
             />
           </section>

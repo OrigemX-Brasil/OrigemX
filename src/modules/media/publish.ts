@@ -6,7 +6,12 @@ import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/modules/auth/queries";
 
 import { BUCKET_PRIVATE, BUCKET_PUBLIC } from "./constraints";
-import { dogMediaRows, kennelMediaRows, reconcileMediaBucket } from "./sync";
+import {
+  dogMediaRows,
+  kennelMediaRows,
+  litterMediaRowsForKennel,
+  reconcileMediaBucket,
+} from "./sync";
 
 /**
  * ============================================================================
@@ -55,9 +60,15 @@ export async function publishKennel(formData: FormData): Promise<PublishState> {
     .maybeSingle();
   if (!kennel) return { error: "Canil não encontrado." };
 
-  // 1. Move primeiro.
-  const rows = await kennelMediaRows(supabase, id);
-  const sync = await reconcileMediaBucket(supabase, rows, BUCKET_PUBLIC);
+  // 1. Move primeiro — o logo do canil E a foto de ninhada que JÁ está
+  // publicada. Ninhada em rascunho continua invisível pela regra dupla
+  // (`kennel_litters_select` exige as duas publicações), então a foto dela
+  // fica no privado até a própria ninhada ser publicada.
+  const [kennelRows, litterRows] = await Promise.all([
+    kennelMediaRows(supabase, id),
+    litterMediaRowsForKennel(supabase, id, { onlyPublished: true }),
+  ]);
+  const sync = await reconcileMediaBucket(supabase, [...kennelRows, ...litterRows], BUCKET_PUBLIC);
 
   if (sync.failed.length > 0) {
     return {
@@ -110,9 +121,15 @@ export async function unpublishKennel(formData: FormData): Promise<PublishState>
   // 2. Purga o cache antes de mexer em arquivo.
   revalidateKennel(kennel.slug, id);
 
-  // 3. Devolve os arquivos ao privado.
-  const rows = await kennelMediaRows(supabase, id);
-  const sync = await reconcileMediaBucket(supabase, rows, BUCKET_PRIVATE);
+  // 3. Devolve os arquivos ao privado — o logo E TODA foto de TODA ninhada
+  // deste canil, publicada ou não: a regra dupla já esconde a ninhada
+  // inteira assim que o canil sai do ar, então nenhuma foto dela pode
+  // continuar acessível no bucket público.
+  const [kennelRows, litterRows] = await Promise.all([
+    kennelMediaRows(supabase, id),
+    litterMediaRowsForKennel(supabase, id),
+  ]);
+  const sync = await reconcileMediaBucket(supabase, [...kennelRows, ...litterRows], BUCKET_PRIVATE);
 
   if (sync.failed.length > 0) {
     return {

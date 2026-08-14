@@ -2,13 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import {
-  ACCEPTED_INPUT_MIMES,
-  GALLERY_UPLOAD_CONCURRENCY,
-  MAX_GALLERY_ITEMS,
-} from "../constraints";
+import { ACCEPTED_INPUT_MIMES, GALLERY_UPLOAD_CONCURRENCY, type MediaRole } from "../constraints";
 import { runWithConcurrency, splitByGalleryLimit } from "../upload-queue";
-import { uploadOneImage, type UploadOneResult } from "../upload-one";
+import { uploadOneImage, type RegisterAction, type UploadOneResult } from "../upload-one";
 
 type Phase = "aguardando" | "processando" | "concluida" | "falhou";
 
@@ -23,18 +19,24 @@ type QueueItem = {
 
 /**
  * ============================================================================
- * Upload em lote da galeria do cão.
+ * Upload em lote de uma galeria — do cão OU de uma ninhada.
  * ============================================================================
  *
  * NÃO substitui `image-uploader.tsx`, que continua servindo o logo do canil —
  * 1:1, sem seleção múltipla, fora do que este componente resolve.
  *
- * O LIMITE DE {MAX_GALLERY_ITEMS} tem duas camadas, e só uma é nova aqui:
+ * `role`/`maxItems`/`registerAction` nasceram fixos em "galeria do cão" e
+ * viraram prop quando a ninhada precisou do mesmo pipeline de compressão e
+ * fila com um destino e um teto diferentes — ver o comentário de
+ * `registerAction` em `upload-one.ts` para o porquê de `registerMedia` não
+ * servir para ninhada.
+ *
+ * O LIMITE DE {maxItems} tem duas camadas, e só uma é nova aqui:
  *
  *   cliente (`remaining`, abaixo)  → corta a seleção para caber, avisa o
  *                                    resto — conveniência, evita disparar
  *                                    upload que o servidor recusaria.
- *   servidor (`registerMedia`)     → confere de novo, por arquivo, e é quem
+ *   servidor (`registerAction`)    → confere de novo, por arquivo, e é quem
  *                                    decide de verdade. Intocado.
  *
  * `remaining` é lido DIRETO do prop a cada seleção, nunca copiado para um
@@ -50,11 +52,17 @@ type QueueItem = {
 export function GalleryUploader({
   entityId,
   ownerId,
+  role,
   remaining,
+  maxItems,
+  registerAction,
 }: {
   entityId: string;
   ownerId: string;
+  role: MediaRole;
   remaining: number;
+  maxItems: number;
+  registerAction?: RegisterAction;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [queue, setQueue] = useState<QueueItem[]>([]);
@@ -86,10 +94,11 @@ export function GalleryUploader({
     try {
       const result = await uploadOneImage({
         file: item.file,
-        role: "dog_gallery",
+        role,
         entityId,
         ownerId,
         onStatus: (status) => updateItem(item.key, { label: status }),
+        registerAction,
       });
       updateItem(
         item.key,
@@ -118,7 +127,7 @@ export function GalleryUploader({
     if (aceitos.length === 0) {
       setNotice(
         remaining <= 0
-          ? `A galeria já está no limite de ${MAX_GALLERY_ITEMS} fotos.`
+          ? `A galeria já está no limite de ${maxItems} fotos.`
           : "Nenhuma foto pôde ser adicionada.",
       );
       if (inputRef.current) inputRef.current.value = "";
@@ -128,7 +137,7 @@ export function GalleryUploader({
     setNotice(
       recusados.length > 0
         ? `Só ${aceitos.length === 1 ? "cabia" : "cabiam"} mais ${aceitos.length} ` +
-            `foto${aceitos.length === 1 ? "" : "s"} (limite de ${MAX_GALLERY_ITEMS}). ` +
+            `foto${aceitos.length === 1 ? "" : "s"} (limite de ${maxItems}). ` +
             `${recusados.length} ${recusados.length === 1 ? "não foi enviada" : "não foram enviadas"}.`
         : null,
     );
@@ -191,7 +200,7 @@ export function GalleryUploader({
         </>
       ) : (
         <p className="text-fg-muted text-sm">
-          Limite de {MAX_GALLERY_ITEMS} imagens atingido. Remova uma para enviar outra.
+          Limite de {maxItems} imagens atingido. Remova uma para enviar outra.
         </p>
       )}
 
