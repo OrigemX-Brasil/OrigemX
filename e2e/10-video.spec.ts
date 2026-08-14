@@ -165,6 +165,53 @@ test("o painel mostra o vídeo em processamento e o dono pode sair da página", 
   await expect(page.getByText(/Processando o vídeo/)).toBeVisible();
 });
 
+test("o dono remove o vídeo pela tela, e a vaga volta a ficar livre", async ({
+  page,
+  criador,
+  admin,
+}) => {
+  const canil = await criarCanil(admin, criador.id);
+  const cao = await criarCao(admin, criador.id, { kennel_id: canil.id });
+  await semearVideo(admin, { dogId: cao.id, ownerId: criador.id, status: "ready" });
+
+  await page.goto(`/painel/caes/${cao.id}`);
+
+  const secao = page
+    .locator("section")
+    .filter({ has: page.getByRole("heading", { name: "Vídeo", exact: true }) });
+
+  await page.getByRole("button", { name: "Remover vídeo" }).click();
+
+  // ESPERA UM ESTADO FINAL POSITIVO antes de qualquer asserção de ausência.
+  // Sem isto o teste passa por acaso: logo depois do clique a ação ainda está
+  // em voo, o botão já virou "Removendo…" e a mensagem de erro ainda não
+  // renderizou — então tanto `toHaveCount(0)` do botão quanto o do erro
+  // passariam mesmo com a remoção falhando. Só o estado de repouso distingue.
+  //
+  // A alternância é a mesma do teste de seção vazia: sem `CLOUDFLARE_*` volta
+  // a nota de indisponível, com credencial volta o campo de envio.
+  await expect(secao).toContainText(/Adicionar vídeo|não está disponível/);
+
+  // Sem credencial do Cloudflare no ambiente de teste, o DELETE remoto falha e
+  // é LOGADO — mas a operação continua bem sucedida de propósito: prender o
+  // dono a um vídeo que ele mandou remover porque um terceiro está fora do ar
+  // seria pior que o custo do órfão.
+  await expect(page.getByText("Não foi possível remover o vídeo.")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Remover vídeo" })).toHaveCount(0);
+
+  // O banco é quem prova. A linha sai por exclusão LÓGICA — o registro fica.
+  const { data } = await admin
+    .from("dog_videos")
+    .select("id, deleted_at")
+    .eq("dog_id", cao.id)
+    .single();
+  expect(data?.deleted_at).not.toBeNull();
+
+  // E a vaga do índice único parcial volta: sem isto, "trocar o vídeo" seria
+  // impossível mesmo com a remoção aparentando ter funcionado.
+  await semearVideo(admin, { dogId: cao.id, ownerId: criador.id, status: "ready" });
+});
+
 test("a seção de vídeo do painel nunca renderiza vazia, com ou sem credencial", async ({
   page,
   criador,

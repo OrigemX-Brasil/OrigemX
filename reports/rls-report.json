@@ -1,7 +1,7 @@
 {
-  "when": "2026-08-14T05:38:55.779Z",
+  "when": "2026-08-14T08:05:32.774Z",
   "project": "https://lcqhnfdsrioufwvnrqnt.supabase.co",
-  "run": "mssincli",
+  "run": "mssnvtsd",
   "fatal": null,
   "checks": [
     {
@@ -393,14 +393,14 @@
       "cenario": "11b. Selo Fundador (concorrência)",
       "verificacao": "nenhum número emitido abaixo de 100",
       "esperado": "todos >= 100",
-      "obtido": "min 555019, max 555023",
+      "obtido": "min 555024, max 555028",
       "status": "PASS"
     },
     {
       "cenario": "11b. Selo Fundador (concorrência)",
       "verificacao": "exclusão lógica não devolve o número ao pool",
       "esperado": "número permanece",
-      "obtido": "nº 555020",
+      "obtido": "nº 555024",
       "status": "PASS"
     },
     {
@@ -449,7 +449,7 @@
       "cenario": "12. Bucket público",
       "verificacao": "URL pública não carrega token nem expiração",
       "esperado": "sem ?token= e sem expires",
-      "obtido": "/storage/v1/object/public/kennel-media-public/3bf40cbc-ed7e-4425-b8be-09b0cb9b769c/canis/publico-mssincli.png",
+      "obtido": "/storage/v1/object/public/kennel-media-public/3705b563-ef2c-441e-9bcf-9b8009770f5b/canis/publico-mssnvtsd.png",
       "status": "PASS"
     },
     {
@@ -560,8 +560,8 @@
     {
       "cenario": "14. Superfície admin_*",
       "verificacao": "admin chama admin_get_profile_email para B",
-      "esperado": "rls-mssincli-b@origemx.test",
-      "obtido": "rls-mssincli-b@origemx.test",
+      "esperado": "rls-mssnvtsd-b@origemx.test",
+      "obtido": "rls-mssnvtsd-b@origemx.test",
       "status": "PASS"
     },
     {
@@ -701,14 +701,14 @@
       "cenario": "17. Corrigir número do selo",
       "verificacao": "admin tenta atribuir a um canil o número que já pertence a outro",
       "esperado": "erro — número já pertence a outro canil",
-      "obtido": "erro: o número 555023 já pertence a outro canil",
+      "obtido": "erro: o número 555028 já pertence a outro canil",
       "status": "PASS"
     },
     {
       "cenario": "17. Corrigir número do selo",
       "verificacao": "número do canil-alvo não mudou depois da tentativa de duplicidade",
-      "esperado": "nº 555019",
-      "obtido": "nº 555019",
+      "esperado": "nº 555025",
+      "obtido": "nº 555025",
       "status": "PASS"
     },
     {
@@ -728,15 +728,15 @@
     {
       "cenario": "17. Corrigir número do selo",
       "verificacao": "audit_log grava as duas correções, de→para corretos",
-      "esperado": "2 linhas: {de:555022,para:null} e {de:null,para:555022}",
-      "obtido": "2 linha(s): [{\"de\":555022,\"para\":null},{\"de\":null,\"para\":555022}]",
+      "esperado": "2 linhas: {de:555026,para:null} e {de:null,para:555026}",
+      "obtido": "2 linha(s): [{\"de\":555026,\"para\":null},{\"de\":null,\"para\":555026}]",
       "status": "PASS"
     },
     {
       "cenario": "17. Corrigir número do selo",
       "verificacao": "canil termina com o número original — round-trip fechado",
-      "esperado": "nº 555022",
-      "obtido": "nº 555022",
+      "esperado": "nº 555026",
+      "obtido": "nº 555026",
       "status": "PASS"
     },
     {
@@ -801,6 +801,27 @@
       "esperado": "0 linhas do rascunho",
       "obtido": "0 linha(s)",
       "status": "PASS"
+    },
+    {
+      "cenario": "18. Vídeo",
+      "verificacao": "A exclui logicamente o PRÓPRIO vídeo (RETURNING precisa voltar a linha)",
+      "esperado": "1 linha",
+      "obtido": "erro 42501: new row violates row-level security policy for table \"dog_videos\"",
+      "status": "FAIL"
+    },
+    {
+      "cenario": "18. Vídeo",
+      "verificacao": "anônimo lê vídeo já excluído logicamente",
+      "esperado": "0 linhas",
+      "obtido": "1 linha(s)",
+      "status": "FAIL"
+    },
+    {
+      "cenario": "18. Vídeo",
+      "verificacao": "A envia outro vídeo depois de remover o anterior",
+      "esperado": "criado",
+      "obtido": "erro 23505: duplicate key value violates unique constraint \"dog_videos_one_per_dog\"",
+      "status": "FAIL"
     }
   ]
 }

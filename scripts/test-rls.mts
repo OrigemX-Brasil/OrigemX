@@ -2264,6 +2264,64 @@ async function main() {
     vazados.length === 0,
   );
 
+  // A EXCLUSÃO LÓGICA PELO PRÓPRIO DONO.
+  //
+  // Este caso existe porque o projeto já foi mordido por ele uma vez, em
+  // `media` (migration `fix_media_select_soft_delete`): toda mutação do
+  // PostgREST vira `UPDATE ... RETURNING`, e o Postgres exige que a linha
+  // RESULTANTE ainda satisfaça a policy de SELECT. Uma policy que começa com
+  // `deleted_at is null`, sem exceção para o dono, torna a linha invisível no
+  // instante em que ela é marcada como excluída — e aí o próprio UPDATE que a
+  // exclui volta com ZERO linha.
+  //
+  // O critério é a CONTAGEM, não o `error`: a RLS não devolve erro nesse caso,
+  // devolve sucesso vazio. Foi exatamente assim que a falha passou despercebida
+  // até produção da primeira vez.
+  if (videoA) {
+    const videoSoftDelete = await A.client
+      .from("dog_videos")
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("id", videoA.id)
+      .is("deleted_at", null)
+      .select("id");
+    record(
+      "18. Vídeo",
+      "A exclui logicamente o PRÓPRIO vídeo (RETURNING precisa voltar a linha)",
+      "1 linha",
+      describe(videoSoftDelete.error, videoSoftDelete.data ?? undefined),
+      !videoSoftDelete.error && (videoSoftDelete.data ?? []).length === 1,
+    );
+
+    const anonVideoRemovido = await anon.from("dog_videos").select("id").eq("id", videoA.id);
+    record(
+      "18. Vídeo",
+      "anônimo lê vídeo já excluído logicamente",
+      "0 linhas",
+      describe(anonVideoRemovido.error, anonVideoRemovido.data ?? undefined),
+      !anonVideoRemovido.error && (anonVideoRemovido.data ?? []).length === 0,
+    );
+
+    // A vaga do índice único parcial volta — é o que faz "trocar o vídeo"
+    // funcionar sem apagar histórico.
+    const videoSubstituto = await A.client
+      .from("dog_videos")
+      .insert({
+        dog_id: dogAPub.id,
+        provider_uid: `rls-${RUN}-video-substituto`,
+        status: "pendingupload",
+        owner_id: A.id,
+        created_by: A.id,
+      })
+      .select("id");
+    record(
+      "18. Vídeo",
+      "A envia outro vídeo depois de remover o anterior",
+      "criado",
+      describe(videoSubstituto.error, videoSubstituto.data ?? undefined),
+      !videoSubstituto.error && (videoSubstituto.data ?? []).length === 1,
+    );
+  }
+
   // ---------------------------------------------------------------------------
   // Limpeza
   //
