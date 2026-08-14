@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import Image from "next/image";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { BackLink } from "@/components/back-link";
 import { getAuthUser } from "@/modules/auth/queries";
 import { softDeleteKennel } from "@/modules/kennels/actions";
 import { deleteMedia } from "@/modules/media/actions";
@@ -53,12 +53,7 @@ export default async function EditarCanilPage({ params }: { params: Promise<{ id
       <div className="flex flex-col gap-2">
         {/* Aponta para `/painel`, não para `/painel/canis`: aquela rota
             redireciona para cá quando existe canil, e o link viraria um laço. */}
-        <Link
-          href="/painel"
-          className="text-fg-muted hover:text-fg self-start text-sm transition-colors"
-        >
-          ← Painel
-        </Link>
+        <BackLink href="/painel" label="Painel" />
         <h1 className="font-display text-2xl font-semibold tracking-tight">{kennel.name}</h1>
         <p className="text-fg-faint font-mono text-xs">/c/{kennel.slug}</p>
       </div>

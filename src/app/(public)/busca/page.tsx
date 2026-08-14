@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 
+import { BackLink } from "@/components/back-link";
 import { publicMetadata } from "@/modules/public/metadata";
 import {
   countPublishedDogsByKennel,
@@ -69,6 +70,10 @@ export default async function BuscaPage({
       </header>
 
       <main className="mx-auto w-full max-w-3xl flex-1 px-5 py-10 lg:px-8">
+        <div className="mb-8">
+          <BackLink href="/" label="Início" variant="link" />
+        </div>
+
         {/* Funciona sem JavaScript: GET simples pra própria página. */}
         <form action="/busca" className="mb-8 flex gap-2">
           {/*

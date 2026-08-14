@@ -3,6 +3,8 @@
 import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 
+import { FormMessage } from "@/components/form-message";
+
 import { createDog, updateDog, type DogFormState } from "../actions";
 import type { AncestorCandidate } from "../ancestors";
 import { DOG_FORM_FIELDS, type DogField } from "../fields";
@@ -136,11 +138,15 @@ export function DogForm({
   kennel,
   sire,
   dam,
+  ownerId,
 }: {
   dog?: (Partial<Record<string, string | null>> & { id?: string }) | null;
   kennel: KennelOption | null;
   sire?: AncestorCandidate | null;
   dam?: AncestorCandidate | null;
+  /** Sessão atual — repassado ao `ParentPicker` para o upload de foto de um
+   *  ancestral fantasma recém-criado (prefixo do caminho no Storage). */
+  ownerId: string;
 }) {
   const isEdit = Boolean(dog?.id);
   const [state, formAction] = useActionState<DogFormState, FormData>(
@@ -268,6 +274,7 @@ export function DogForm({
         <ParentPicker
           slot="sire"
           dogId={dog?.id}
+          ownerId={ownerId}
           selected={selectedSire}
           otherParentId={selectedDam?.id}
           error={state.parentError?.sire_id}
@@ -277,6 +284,7 @@ export function DogForm({
         <ParentPicker
           slot="dam"
           dogId={dog?.id}
+          ownerId={ownerId}
           selected={selectedDam}
           otherParentId={selectedSire?.id}
           error={state.parentError?.dam_id}
@@ -284,7 +292,10 @@ export function DogForm({
         />
       </section>
 
-      <Submit label={isEdit ? "Salvar alterações" : "Cadastrar cão"} />
+      <div className="flex flex-wrap items-center gap-3">
+        <Submit label={isEdit ? "Salvar alterações" : "Cadastrar cão"} />
+        {state.ok ? <FormMessage message="Alterações salvas." /> : null}
+      </div>
     </form>
   );
 }

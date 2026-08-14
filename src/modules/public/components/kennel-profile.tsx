@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { BackLink } from "@/components/back-link";
 import { SignupInvite } from "@/modules/capture/components/signup-invite";
 import { FounderBadge } from "@/modules/kennels/components/founder-badge";
 import { PhotoTrigger, PublicGallery } from "@/modules/public/components/photo-lightbox";
@@ -91,6 +92,17 @@ export async function KennelProfile({ slug, cursor }: { slug: string; cursor?: s
       <main className="mx-auto w-full max-w-2xl flex-1 px-5 py-8 lg:px-8">
         <PublicGallery photos={logoPhotos}>
           <div className="flex flex-col gap-8">
+            {cursor ? (
+              <BackLink
+                href={`/c/${kennel.slug}`}
+                label="Início da lista"
+                variant="link"
+                prefetch={false}
+              />
+            ) : (
+              <BackLink href="/" label="Início" variant="link" prefetch={false} />
+            )}
+
             {/* Lado a lado em TODA largura, não só a partir de `sm`. Empilhado, o
                 nome do canil começava abaixo da dobra em celular estreito — e é
                 por celular que quase todo mundo chega, vindo do QR impresso. */}
@@ -199,13 +211,12 @@ export async function KennelProfile({ slug, cursor }: { slug: string; cursor?: s
                   ) : null}
 
                   {cursor ? (
-                    <Link
+                    <BackLink
                       href={`/c/${kennel.slug}`}
+                      label="Voltar ao início da lista"
+                      variant="link"
                       prefetch={false}
-                      className="text-link hover:text-link-hover self-start text-sm underline underline-offset-4 transition-colors"
-                    >
-                      ← Voltar ao início da lista
-                    </Link>
+                    />
                   ) : null}
                 </>
               )}

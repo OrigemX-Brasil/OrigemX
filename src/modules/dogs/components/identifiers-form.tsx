@@ -3,6 +3,8 @@
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
+import { FormMessage } from "@/components/form-message";
+
 import { updateDogIdentifiers, type IdentifierFormState } from "../actions";
 import type { DogIdentifiers } from "../queries";
 
@@ -142,8 +144,9 @@ export function IdentifiersForm({
           ) : null}
         </div>
 
-        <div>
+        <div className="flex flex-wrap items-center gap-3">
           <Submit />
+          {state.ok ? <FormMessage message="Alterações salvas." /> : null}
         </div>
       </form>
     </section>

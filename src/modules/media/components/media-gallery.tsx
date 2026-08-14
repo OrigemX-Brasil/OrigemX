@@ -3,11 +3,12 @@ import Image from "next/image";
 import { deleteMedia, setDogGalleryCover } from "../actions";
 import { aspectOf, formatBytes, MAX_GALLERY_ITEMS, MAX_USER_BYTES } from "../constraints";
 import type { ResolvedMedia } from "../queries";
+import { CaptionDialog } from "./caption-dialog";
 
 /**
  * Galeria do cão e prévia do logo.
  *
- * REGRA: a listagem usa SEMPRE `thumbUrl`. Uma galeria de 12 fotos em tamanho
+ * REGRA: a listagem usa SEMPRE `thumbUrl`. Uma galeria de 30 fotos em tamanho
  * cheio baixaria alguns MB; nos thumbnails, dezenas de KB. Se `thumbUrl` for
  * nulo, o item aparece sem imagem em vez de cair para o arquivo cheio — o
  * fallback silencioso é justamente o que faz a regra se perder com o tempo.
@@ -84,7 +85,22 @@ export function MediaGallery({
                     Capa
                   </span>
                 ) : null}
+                {/* Só a galeria do cão — logo de canil é marca, não foto a
+                    narrar. Mesmo critério que "Tornar capa" já usa abaixo. */}
+                {item.dog_id ? (
+                  <CaptionDialog
+                    mediaId={item.id}
+                    caption={item.caption}
+                    photoNumber={index + 1}
+                  />
+                ) : null}
               </div>
+
+              {/* O criador vê o que escreveu sem abrir o diálogo — e é
+                  também a confirmação visual de que salvou. */}
+              {item.caption ? (
+                <p className="text-fg-muted text-xs break-words">{item.caption}</p>
+              ) : null}
 
               <div className="flex items-center justify-between gap-2">
                 <span className="text-fg-faint font-mono text-xs">

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { BackLink } from "@/components/back-link";
 import { getAuthUser } from "@/modules/auth/queries";
 import { isGhostAncestor } from "@/modules/dogs/ancestors";
 import { listMyDogs } from "@/modules/dogs/queries";
@@ -38,12 +39,7 @@ export default async function CaesPage({
 
   return (
     <div className="flex flex-col gap-8">
-      <Link
-        href="/painel"
-        className="text-fg-muted hover:text-fg self-start text-sm transition-colors"
-      >
-        ← Painel
-      </Link>
+      <BackLink href="/painel" label="Painel" />
 
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-2">

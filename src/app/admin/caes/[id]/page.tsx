@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { BackLink } from "@/components/back-link";
 import { HideEntityDialog } from "@/modules/admin/components/hide-entity-dialog";
 import { StatusChip } from "@/modules/admin/components/status-chip";
 import { formatDateTime } from "@/modules/admin/format";
@@ -31,12 +32,7 @@ export default async function AdminDogDetailPage({
 
   return (
     <div className="flex flex-col gap-8">
-      <Link
-        href="/admin/caes"
-        className="text-fg-muted hover:text-fg self-start text-sm transition-colors"
-      >
-        ← Cães
-      </Link>
+      <BackLink href="/admin/caes" label="Cães" />
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex flex-col gap-2">

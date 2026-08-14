@@ -2,9 +2,10 @@
 
 import { useActionState, useState } from "react";
 
+import { FormMessage } from "@/components/form-message";
 import { signUp, type ActionState } from "@/modules/auth/actions";
 
-import { Field, FormMessage, PasswordField, SubmitButton } from "./form";
+import { Field, PasswordField, SubmitButton } from "./form";
 
 /**
  * `source` é a origem da campanha, resolvida no servidor pela página. Vai como

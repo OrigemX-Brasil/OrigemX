@@ -14,7 +14,7 @@ export type SupabaseClientLike = SupabaseClient<Database>;
 /** Acesso a dados de mídia. Todo `.from("media")` do app passa por aqui. */
 
 const COLUMNS =
-  "id, bucket_id, storage_path, thumb_path, kennel_id, dog_id, role, mime, size_bytes, width, height, thumb_bytes, alt, position, owner_id, created_at";
+  "id, bucket_id, storage_path, thumb_path, kennel_id, dog_id, role, mime, size_bytes, width, height, thumb_bytes, alt, caption, position, owner_id, created_at";
 
 export type MediaItem = {
   id: string;
@@ -30,6 +30,8 @@ export type MediaItem = {
   height: number | null;
   thumb_bytes: number | null;
   alt: string | null;
+  /** Texto visível escrito pelo dono. Distinto de `alt` — ver comment da coluna. */
+  caption: string | null;
   position: number;
   owner_id: string;
   created_at: string;
@@ -57,7 +59,7 @@ export type ResolvedMedia = MediaItem & {
  * não pode cair porque o Storage teve um soluço — nome, raça, registro e
  * pedigree valem mais que a foto.
  *
- * Assina em lote, não uma por vez: uma galeria de 12 fotos faria 24 chamadas.
+ * Assina em lote, não uma por vez: uma galeria de 30 fotos faria 60 chamadas.
  */
 export async function resolveMediaUrls(
   items: MediaItem[],

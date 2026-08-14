@@ -1,6 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
+
+import { ImageUploader } from "@/modules/media/components/image-uploader";
 
 import {
   createGhostAncestor,
@@ -10,6 +13,7 @@ import {
 } from "../actions";
 import {
   describeCandidate,
+  isGhostAncestor,
   SLOT_LABEL,
   type AncestorCandidate,
   type ParentSlot,
@@ -39,6 +43,7 @@ const EMPTY_SEARCH: AncestorSearchState = {
 export function ParentPicker({
   slot,
   dogId,
+  ownerId,
   selected,
   otherParentId,
   error,
@@ -46,6 +51,9 @@ export function ParentPicker({
 }: {
   slot: ParentSlot;
   dogId?: string | null;
+  /** Dono da SESSÃO (não do ancestral — o fantasma não tem dono). Prefixo do
+   *  caminho no Storage, exigido pela policy de `storage.objects`. */
+  ownerId: string;
   selected: AncestorCandidate | null;
   otherParentId?: string | null;
   error?: string;
@@ -56,6 +64,8 @@ export function ParentPicker({
   const [search, setSearch] = useState<AncestorSearchState>({ ...EMPTY_SEARCH, slot });
   const [ghostOpen, setGhostOpen] = useState(false);
   const [ghostError, setGhostError] = useState<DogFormState>({});
+  const [photoOpen, setPhotoOpen] = useState(false);
+  const [photoAdded, setPhotoAdded] = useState(false);
   const [pending, startTransition] = useTransition();
 
   const fieldName = slot === "sire" ? "sire_id" : "dam_id";
@@ -86,6 +96,10 @@ export function ParentPicker({
         setGhostOpen(false);
         setOpen(false);
         setGhostError({});
+        // Fantasma recém-criado nunca tem foto — abre a foto direto, para o
+        // "cadastrar → adicionar foto" ser um gesto só, sem clique extra.
+        setPhotoOpen(true);
+        setPhotoAdded(false);
       } else {
         setGhostError(result);
       }
@@ -101,7 +115,11 @@ export function ParentPicker({
         {selected ? (
           <button
             type="button"
-            onClick={() => onChange(null)}
+            onClick={() => {
+              onChange(null);
+              setPhotoOpen(false);
+              setPhotoAdded(false);
+            }}
             className="text-fg-muted hover:text-fg rounded-control text-xs transition-colors"
           >
             Remover
@@ -110,18 +128,72 @@ export function ParentPicker({
       </div>
 
       {selected ? (
-        <div className="border-border-strong bg-surface rounded-control flex items-center justify-between gap-3 border px-3 py-2.5">
-          <span className="flex flex-col">
-            <span className="text-fg text-sm">{selected.name}</span>
-            <span className="text-fg-faint font-mono text-xs">{describeCandidate(selected)}</span>
-          </span>
-          <button
-            type="button"
-            onClick={() => setOpen(true)}
-            className="text-link hover:text-link-hover text-xs underline underline-offset-4 transition-colors"
-          >
-            Trocar
-          </button>
+        <div className="flex flex-col gap-2">
+          <div className="border-border-strong bg-surface rounded-control flex items-center justify-between gap-3 border px-3 py-2.5">
+            <span className="flex flex-col">
+              <span className="text-fg text-sm">{selected.name}</span>
+              <span className="text-fg-faint font-mono text-xs">
+                {describeCandidate(selected)}
+              </span>
+            </span>
+            <button
+              type="button"
+              onClick={() => setOpen(true)}
+              className="text-link hover:text-link-hover text-xs underline underline-offset-4 transition-colors"
+            >
+              Trocar
+            </button>
+          </div>
+
+          {/*
+            Só ancestral fantasma ganha esta oferta: um cão gerenciável de
+            verdade já tem ficha e galeria próprias, e quem o selecionou aqui
+            não é necessariamente quem o administra — RLS (`can_manage_dog`)
+            recusaria o upload em silêncio na maioria dos casos. O fantasma é
+            diferente: quem o criou (`created_by`) sempre pode gravar mídia
+            nele, para sempre — não só no instante da criação.
+          */}
+          {isGhostAncestor(selected) ? (
+            photoAdded ? (
+              <p className="text-fg-muted text-xs">
+                Foto adicionada.{" "}
+                <Link
+                  href={`/painel/caes/${selected.id}`}
+                  className="text-link hover:text-link-hover underline underline-offset-4"
+                >
+                  Editar ficha do ancestral
+                </Link>
+              </p>
+            ) : photoOpen ? (
+              <div className="border-border rounded-control border border-dashed p-3">
+                <ImageUploader
+                  role="dog_gallery"
+                  entityId={selected.id}
+                  ownerId={ownerId}
+                  label="Foto do ancestral"
+                  onUploaded={() => {
+                    setPhotoOpen(false);
+                    setPhotoAdded(true);
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setPhotoOpen(false)}
+                  className="text-fg-muted hover:text-fg mt-2 text-xs transition-colors"
+                >
+                  Cancelar
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setPhotoOpen(true)}
+                className="text-link hover:text-link-hover self-start text-xs underline underline-offset-4 transition-colors"
+              >
+                Adicionar foto
+              </button>
+            )
+          ) : null}
         </div>
       ) : (
         <button
@@ -179,6 +251,8 @@ export function ParentPicker({
                       onClick={() => {
                         onChange(candidate);
                         setOpen(false);
+                        setPhotoOpen(false);
+                        setPhotoAdded(false);
                       }}
                       className="border-border hover:bg-surface-hover rounded-control flex w-full flex-col items-start gap-0.5 border px-3 py-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                     >

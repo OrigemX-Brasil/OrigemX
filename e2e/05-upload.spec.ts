@@ -315,7 +315,7 @@ function fileIdOf(storagePath: string): string {
 
 /**
  * ============================================================================
- * Seleção múltipla — o limite de 12 e a troca de capa.
+ * Seleção múltipla — o limite de 30 e a troca de capa.
  * ============================================================================
  */
 
@@ -327,10 +327,10 @@ test("selecionar mais fotos do que cabe aceita só até o limite, e avisa o rest
   const canil = await criarCanil(admin, criador.id);
   const cao = await criarCao(admin, criador.id, { kennel_id: canil.id });
 
-  // 10 linhas fixture direto no banco — o que se testa é o CLIENTE cortando a
-  // seleção para caber, não o upload dessas 10 (isso já está coberto alhures).
+  // 28 linhas fixture direto no banco — o que se testa é o CLIENTE cortando a
+  // seleção para caber, não o upload dessas 28 (isso já está coberto alhures).
   await admin.from("media").insert(
-    Array.from({ length: 10 }, (_, i) => ({
+    Array.from({ length: 28 }, (_, i) => ({
       bucket_id: "kennel-media",
       storage_path: `${criador.id}/caes/${cao.id}/seed-${i}.webp`,
       role: "dog_gallery" as const,
@@ -344,7 +344,7 @@ test("selecionar mais fotos do que cabe aceita só até o limite, e avisa o rest
   );
 
   await page.goto(`/painel/caes/${cao.id}`);
-  // Restam 2 dos 12 — a tela precisa oferecer o input, não a mensagem de
+  // Restam 2 dos 30 — a tela precisa oferecer o input, não a mensagem de
   // limite atingido.
   await expect(page.getByLabel("Adicionar fotos")).toBeVisible();
 
@@ -370,8 +370,8 @@ test("selecionar mais fotos do que cabe aceita só até o limite, e avisa o rest
     .eq("dog_id", cao.id)
     .is("deleted_at", null);
 
-  // 10 do fixture + exatamente 2 do lote — nunca 12+3, nunca menos que 12.
-  expect(count).toBe(12);
+  // 28 do fixture + exatamente 2 do lote — nunca 30+3, nunca menos que 30.
+  expect(count).toBe(30);
 });
 
 test("trocar a capa muda a foto principal do perfil público", async ({ page, criador, admin }) => {
@@ -447,4 +447,97 @@ test("trocar a capa muda a foto principal do perfil público", async ({ page, cr
   const principalDepois = (await page.locator("main img").first().getAttribute("src")) ?? "";
   expect(principalDepois).toContain(fileIdOf(segundaAntes.storage_path));
   expect(principalDepois).not.toBe(principalAntes);
+});
+
+/**
+ * ============================================================================
+ * Legenda por foto — botão dentro da imagem, modal, e o campo vazio remove.
+ * ============================================================================
+ */
+
+test("legenda: adiciona pela tela, aparece no perfil público (mosaico e lightbox), e o campo vazio remove", async ({
+  page,
+  criador,
+  admin,
+}) => {
+  const canil = await criarCanil(admin, criador.id);
+  const cao = await criarCao(admin, criador.id, { kennel_id: canil.id, published: true });
+  await publicar(admin, { kennelId: canil.id });
+
+  await page.goto(`/painel/caes/${cao.id}`);
+
+  await page.getByLabel("Adicionar fotos").setInputFiles({
+    name: "capa.png",
+    mimeType: MIME,
+    buffer: await pngDeTeste("capa", 700),
+  });
+  await expect(page.getByTestId("media-gallery").locator("img")).toHaveCount(1, {
+    timeout: 30_000,
+  });
+
+  await page.getByLabel("Adicionar fotos").setInputFiles({
+    name: "segunda.png",
+    mimeType: MIME,
+    buffer: await pngDeTeste("segunda", 700),
+  });
+  await expect(page.getByTestId("media-gallery").locator("img")).toHaveCount(2, {
+    timeout: 30_000,
+  });
+
+  // A legenda vai na SEGUNDA foto, não na capa: a capa vira o avatar do
+  // perfil público (`principal`), que fica fora do mosaico — só quem está em
+  // `restante` aparece lá, e é isso que a parte pública deste teste afirma.
+  // `exact: true` é obrigatório aqui: por padrão `getByRole` casa por
+  // SUBSTRING, e a tela também tem "Adicionar fotos" (o input de arquivo,
+  // exposto como `role="button"` via o `<label>` associado) — sem `exact`,
+  // "Adicionar" bate nos dois botões e o clique falha por ambiguidade.
+  await page.getByRole("button", { name: "Legenda da foto 2", exact: true }).click();
+  await page.getByRole("textbox", { name: "Legenda", exact: true }).fill("Campeão Brasileiro 2024");
+  await page.getByRole("button", { name: "Adicionar", exact: true }).click();
+
+  // A legenda aparecendo no cartão prova o ciclo inteiro: gravou, e a página
+  // revalidou sozinha — sem reload manual.
+  await expect(page.getByTestId("media-gallery")).toContainText("Campeão Brasileiro 2024");
+
+  const { data: linhas } = await admin
+    .from("media")
+    .select("id, caption")
+    .eq("dog_id", cao.id)
+    .is("deleted_at", null)
+    .order("position", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  expect(linhas).toHaveLength(2);
+  expect(linhas![0].caption, "a capa não foi tocada").toBeNull();
+  expect(linhas![1].caption).toBe("Campeão Brasileiro 2024");
+
+  // Perfil público: a legenda tem de aparecer no MOSAICO (figcaption) e no
+  // LIGHTBOX (ao ampliar) — os dois, não só um dos dois.
+  await page.goto(`/d/${cao.public_id}`);
+  await expect(page.getByText("Campeão Brasileiro 2024")).toBeVisible();
+
+  // O AVATAR (a capa) também é um `PhotoTrigger` — "Ampliar foto 1 de 2".
+  // Quem tem a legenda é a segunda foto, a do mosaico: preciso do rótulo
+  // exato, não de "o primeiro botão de ampliar" (que abriria a capa, sem
+  // legenda nenhuma).
+  await page
+    .getByRole("button", { name: `Ampliar foto 2 de 2 de ${cao.name}`, exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toContainText("Campeão Brasileiro 2024");
+
+  // Campo vazio REMOVE — não existe um botão separado para apagar a legenda.
+  // `exact: true` de novo: a tela também tem "Salvar identificação" e
+  // "Salvar alterações" (outros formulários da mesma página).
+  await page.goto(`/painel/caes/${cao.id}`);
+  await page.getByRole("button", { name: "Legenda da foto 2", exact: true }).click();
+  await page.getByRole("textbox", { name: "Legenda", exact: true }).fill("");
+  await page.getByRole("button", { name: "Salvar", exact: true }).click();
+  await expect(page.getByTestId("media-gallery")).not.toContainText("Campeão Brasileiro 2024");
+
+  const { data: depois } = await admin
+    .from("media")
+    .select("caption")
+    .eq("id", linhas![1].id)
+    .single();
+  expect(depois!.caption).toBeNull();
 });

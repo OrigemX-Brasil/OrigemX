@@ -62,6 +62,9 @@ begin
    where id = any (v_caes);
 
   delete from public.media           where dog_id = any (v_caes) or kennel_id = any (v_canis) or owner_id = any (v_donos);
+  -- `dog_videos.dog_id` é ON DELETE RESTRICT: sem esta linha, o delete de
+  -- `dogs` abaixo apanha e a transação inteira volta.
+  delete from public.dog_videos      where dog_id = any (v_caes) or owner_id = any (v_donos);
   delete from public.dog_identifiers where dog_id = any (v_caes);
   delete from public.dogs            where id = any (v_caes);
   get diagnostics n_caes = row_count;

@@ -1,4 +1,5 @@
 import { alerta, criarCanil, criarCao, expect, publicar, test } from "./support/fixtures";
+import { MIME, pngDeTeste } from "./support/imagem";
 
 /**
  * ============================================================================
@@ -94,6 +95,76 @@ test("vincula pai e mãe pela BUSCA e o pedigree aparece no perfil público", as
   // 4 de 6 ancestrais possíveis em 2 gerações — o avô materno e a avó materna
   // não existem, e a contagem tem que dizer a verdade.
   await expect(arvore).toContainText("4 de 6 ancestrais");
+});
+
+test("cadastra o pai como ancestral direto na tela do filho, com foto", async ({
+  page,
+  criador,
+  admin,
+}) => {
+  await criarCanil(admin, criador.id);
+  const token = Date.now().toString(36);
+
+  await page.goto("/painel/caes/novo");
+  await page.getByLabel("Nome", { exact: false }).first().fill(`Filho com Ancestral ${token}`);
+  await page.getByLabel("Sexo").selectOption("male");
+
+  // "Não encontrei" — cadastra o pai ali mesmo, sem sair da tela do filho.
+  await page.getByRole("button", { name: /Buscar o pai/ }).click();
+  await page.getByRole("button", { name: "Não encontrei — cadastrar como ancestral" }).click();
+
+  // Escopado ao `<fieldset>` do ancestral: a esta altura a tela tem DOIS
+  // campos "Nome" visíveis — o do filho (já preenchido acima) e o do
+  // fantasma — e `getByLabel("Nome")` sem escopo bateria nos dois. Sem
+  // `exact`: o `<label>` engloba "Nome (obrigatório)" inteiro (rótulo +
+  // marcador), então o nome acessível não é "Nome" sozinho.
+  const painelAncestral = page.getByRole("group", { name: "Cadastrar ancestral" });
+  await painelAncestral.getByLabel("Nome").fill(`Ancestral Foto ${token}`);
+  await painelAncestral.getByRole("button", { name: "Criar ancestral" }).click();
+
+  // O fantasma vira o pai selecionado, e — é o que este teste prova — a
+  // foto já aparece pronta para subir, sem precisar de um clique extra em
+  // "Adicionar foto": `photoOpen` abre sozinho ao criar.
+  await expect(page.getByText(`Ancestral Foto ${token}`)).toBeVisible();
+  const campoFoto = page.getByLabel("Foto do ancestral");
+  await expect(campoFoto).toBeVisible();
+
+  await campoFoto.setInputFiles({
+    name: "ancestral.png",
+    mimeType: MIME,
+    buffer: await pngDeTeste("ancestral", 700),
+  });
+
+  await expect(page.getByText("Foto adicionada.")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("link", { name: "Editar ficha do ancestral" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Cadastrar cão" }).click();
+  await page.waitForURL(/\/painel\/caes\/[0-9a-f-]{36}/);
+
+  const { data: filho } = await admin
+    .from("dogs")
+    .select("sire_id")
+    .eq("name", `Filho com Ancestral ${token}`)
+    .single();
+  expect(filho?.sire_id, "o filho referencia o fantasma criado inline").toBeTruthy();
+
+  const { data: fantasma } = await admin
+    .from("dogs")
+    .select("id, owner_id, kennel_id")
+    .eq("id", filho!.sire_id!)
+    .single();
+  // Confirma que é DE FATO um fantasma — sem dono, sem canil — e não um
+  // cão gerenciável qualquer que por acaso bateu o nome.
+  expect(fantasma?.owner_id).toBeNull();
+  expect(fantasma?.kennel_id).toBeNull();
+
+  const { data: foto } = await admin
+    .from("media")
+    .select("id, role")
+    .eq("dog_id", fantasma!.id)
+    .is("deleted_at", null)
+    .single();
+  expect(foto?.role, "a foto foi gravada como galeria do fantasma").toBe("dog_gallery");
 });
 
 test("linebreeding: o mesmo ancestral aparece nos dois caminhos", async ({

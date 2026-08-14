@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 
+import { BackLink } from "@/components/back-link";
 import { getAuthUser } from "@/modules/auth/queries";
 import { DogForm } from "@/modules/dogs/components/dog-form";
 import { getMyKennel } from "@/modules/kennels/queries";
@@ -16,16 +16,11 @@ export default async function NovoCaoPage() {
   return (
     <div className="flex flex-col gap-8">
       <div className="flex flex-col gap-2">
-        <Link
-          href="/painel/caes"
-          className="text-fg-muted hover:text-fg self-start text-sm transition-colors"
-        >
-          ← Cães
-        </Link>
+        <BackLink href="/painel/caes" label="Cães" />
         <h1 className="font-display text-2xl font-semibold tracking-tight">Novo cão</h1>
       </div>
 
-      <DogForm kennel={kennel && { id: kennel.id, name: kennel.name }} />
+      <DogForm kennel={kennel && { id: kennel.id, name: kennel.name }} ownerId={user.id} />
     </div>
   );
 }

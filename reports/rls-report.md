@@ -2,10 +2,10 @@
 
 | | |
 |---|---|
-| Data | 2026-08-11T01:09:46.868Z |
+| Data | 2026-08-14T05:38:55.779Z |
 | Projeto | `https://lcqhnfdsrioufwvnrqnt.supabase.co` |
-| Execução | `msnypp0j` |
-| Resultado | **APROVADO** — 99/99 PASS |
+| Execução | `mssincli` |
+| Resultado | **APROVADO** — 114/114 PASS |
 
 
 ## Método
@@ -82,18 +82,24 @@ falha. O que a RLS isola é:
 | 10. Mídia | B grava metadata no canil de A | erro de permissão | erro 42501: new row violates row-level security policy for table "media" | **PASS** |
 | 10. Mídia | mime fora da lista de imagem | erro CHECK media_mime_valid | erro 23514: new row for relation "media" violates check constraint "media_mime_valid" | **PASS** |
 | 10. Mídia | arquivo acima do teto do banco | erro CHECK media_size_positive | erro 23514: new row for relation "media" violates check constraint "media_size_positive" | **PASS** |
+| 10. Mídia | B escreve legenda na mídia de A | 0 linhas afetadas | 0 linha(s) | **PASS** |
+| 10. Mídia | legenda de A permanece intacta após a tentativa de B | null | null | **PASS** |
+| 10. Mídia | A escreve legenda na própria mídia | 1 linha, legenda gravada | 1 linha(s) | **PASS** |
 | 10. Mídia | quota do usuário soma o que ele gravou | pelo menos 12345 bytes | 12345 | **PASS** |
+| 10. Mídia | A cria um ancestral fantasma (sem dono, sem canil) | criado | criado | **PASS** |
+| 10. Mídia | A (criador do fantasma) grava foto nele | criado | 1 linha(s) | **PASS** |
+| 10. Mídia | B (não é quem criou o fantasma) tenta gravar foto nele | erro de permissão | erro 42501: new row violates row-level security policy for table "media" | **PASS** |
 | 11b. Selo Fundador (concorrência) | canil sem cão não recebe selo | todos sem número | 0 com número | **PASS** |
 | 11b. Selo Fundador (concorrência) | 5 atribuições CONCORRENTES não geram número duplicado | 5 números distintos | 5 atribuídos, 5 distintos | **PASS** |
-| 11b. Selo Fundador (concorrência) | nenhum número emitido abaixo de 100 | todos >= 100 | min 555004, max 555008 | **PASS** |
-| 11b. Selo Fundador (concorrência) | exclusão lógica não devolve o número ao pool | número permanece | nº 555004 | **PASS** |
+| 11b. Selo Fundador (concorrência) | nenhum número emitido abaixo de 100 | todos >= 100 | min 555019, max 555023 | **PASS** |
+| 11b. Selo Fundador (concorrência) | exclusão lógica não devolve o número ao pool | número permanece | nº 555020 | **PASS** |
 | 11a. Selo Fundador (autorização) | usuário grava founder_number no PRÓPRIO canil | erro de permissão de coluna | erro 42501: permission denied for table kennels | **PASS** |
 | 11a. Selo Fundador (autorização) | usuário grava founder_number no canil de OUTRO | erro de permissão | erro 42501: permission denied for table kennels | **PASS** |
 | 11a. Selo Fundador (autorização) | após as duas tentativas, o número no banco não mudou | continua nulo | nulo | **PASS** |
 | 12. Bucket público | A grava no próprio prefixo do bucket público | sucesso | sucesso | **PASS** |
 | 12. Bucket público | B grava no prefixo de A no bucket público | erro de permissão | erro: new row violates row-level security policy | **PASS** |
 | 12. Bucket público | anônimo grava no bucket público | erro de permissão | erro: new row violates row-level security policy | **PASS** |
-| 12. Bucket público | URL pública não carrega token nem expiração | sem ?token= e sem expires | /storage/v1/object/public/kennel-media-public/b95ed138-dee1-4624-8c90-ae7dcd53e9e0/canis/publico-msnypp0j.png | **PASS** |
+| 12. Bucket público | URL pública não carrega token nem expiração | sem ?token= e sem expires | /storage/v1/object/public/kennel-media-public/3bf40cbc-ed7e-4425-b8be-09b0cb9b769c/canis/publico-mssincli.png | **PASS** |
 | 12. Bucket público | anônimo BAIXA o objeto pela URL pública, sem sessão | HTTP 200 | HTTP 200 | **PASS** |
 | 12. Bucket público | A move o objeto de volta ao bucket privado (despublicar) | sucesso | sucesso | **PASS** |
 | 12. Bucket público | objeto sai do bucket público ao despublicar (fonte: Storage) | não está mais lá | removido | **PASS** |
@@ -109,7 +115,7 @@ falha. O que a RLS isola é:
 | 14. Superfície admin_* | usuário comum chama admin_set_dog_hidden | erro — insufficient_privilege | erro: apenas um admin pode ocultar ou reativar um cão | **PASS** |
 | 14. Superfície admin_* | estado de B, do canil e do cão após as quatro tentativas | nada mudou | nada mudou | **PASS** |
 | 14. Superfície admin_* | usuário comum chama admin_get_profile_email | erro — insufficient_privilege | erro: apenas um admin pode ler o e-mail de um usuário | **PASS** |
-| 14. Superfície admin_* | admin chama admin_get_profile_email para B | rls-msnypp0j-b@origemx.test | rls-msnypp0j-b@origemx.test | **PASS** |
+| 14. Superfície admin_* | admin chama admin_get_profile_email para B | rls-mssincli-b@origemx.test | rls-mssincli-b@origemx.test | **PASS** |
 | 15. Ciclo de suspensão | admin suspende B de verdade, pela RPC | sucesso | sucesso | **PASS** |
 | 15. Ciclo de suspensão | audit_log tem exatamente 1 linha para esta suspensão | 1 linha | 1 linha(s) | **PASS** |
 | 15. Ciclo de suspensão | B (já suspenso) tenta escrever com a sessão que já tinha aberta | 0 linhas | 0 linha(s) | **PASS** |
@@ -129,9 +135,18 @@ falha. O que a RLS isola é:
 | 16. Ciclo de ocultar canil e cão | audit_log tem exatamente 1 linha para cada reativação | 2 linhas | 2 linha(s) | **PASS** |
 | 16. Ciclo de ocultar canil e cão | sessão anônima volta a ver o canil, reativado | 1 linha | 1 linha(s) | **PASS** |
 | 16. Ciclo de ocultar canil e cão | sessão anônima volta a ver o cão, reativado | 1 linha | 1 linha(s) | **PASS** |
-| 17. Corrigir número do selo | admin tenta atribuir a um canil o número que já pertence a outro | erro — número já pertence a outro canil | erro: o número 555005 já pertence a outro canil | **PASS** |
-| 17. Corrigir número do selo | número do canil-alvo não mudou depois da tentativa de duplicidade | nº 555008 | nº 555008 | **PASS** |
+| 17. Corrigir número do selo | admin tenta atribuir a um canil o número que já pertence a outro | erro — número já pertence a outro canil | erro: o número 555023 já pertence a outro canil | **PASS** |
+| 17. Corrigir número do selo | número do canil-alvo não mudou depois da tentativa de duplicidade | nº 555019 | nº 555019 | **PASS** |
 | 17. Corrigir número do selo | admin libera o número do canil (correção real, primeira metade) | sucesso | sucesso | **PASS** |
 | 17. Corrigir número do selo | admin devolve o número certo (correção real, segunda metade) | sucesso | sucesso | **PASS** |
-| 17. Corrigir número do selo | audit_log grava as duas correções, de→para corretos | 2 linhas: {de:555006,para:null} e {de:null,para:555006} | 2 linha(s): [{"de":555006,"para":null},{"de":null,"para":555006}] | **PASS** |
-| 17. Corrigir número do selo | canil termina com o número original — round-trip fechado | nº 555006 | nº 555006 | **PASS** |
+| 17. Corrigir número do selo | audit_log grava as duas correções, de→para corretos | 2 linhas: {de:555022,para:null} e {de:null,para:555022} | 2 linha(s): [{"de":555022,"para":null},{"de":null,"para":555022}] | **PASS** |
+| 17. Corrigir número do selo | canil termina com o número original — round-trip fechado | nº 555022 | nº 555022 | **PASS** |
+| 18. Vídeo | A registra o vídeo do próprio cão | criado | criado | **PASS** |
+| 18. Vídeo | B registra vídeo no cão de A | negado (42501) | erro 42501: new row violates row-level security policy for table "dog_videos" | **PASS** |
+| 18. Vídeo | B registra vídeo forjando owner_id de A | negado (42501) | erro 42501: new row violates row-level security policy for table "dog_videos" | **PASS** |
+| 18. Vídeo | B altera o status do vídeo de A | 0 linhas | 0 linha(s) | **PASS** |
+| 18. Vídeo | A apaga fisicamente o próprio vídeo | negado (42501) | erro 42501: permission denied for table dog_videos | **PASS** |
+| 18. Vídeo | A registra um SEGUNDO vídeo no mesmo cão | negado (23505) | erro 23505: duplicate key value violates unique constraint "dog_videos_one_per_dog" | **PASS** |
+| 18. Vídeo | anônimo lê o vídeo de cão PUBLICADO | 1 linha | 1 linha(s) | **PASS** |
+| 18. Vídeo | anônimo lê o vídeo de cão em RASCUNHO | 0 linhas | 0 linha(s) | **PASS** |
+| 18. Vídeo | listagem anônima sem filtro traz vídeo de rascunho | 0 linhas do rascunho | 0 linha(s) | **PASS** |

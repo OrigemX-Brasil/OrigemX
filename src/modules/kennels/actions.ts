@@ -22,6 +22,7 @@ export type KennelFormState = {
   errors?: FieldErrors;
   formError?: string;
   values?: KennelInput;
+  ok?: boolean;
 };
 
 /** Mensagem de "você já tem um canil" quando a checagem prévia pega o caso. */
@@ -186,7 +187,7 @@ export async function updateKennel(
   // Sem isto, instagram/RG salvos ficavam invisíveis na página pública por até
   // 5 minutos.
   if (values.slug) revalidatePath(`/c/${values.slug}`);
-  return { values: input };
+  return { ok: true, values: input };
 }
 
 /**

@@ -9,6 +9,7 @@ import {
   BUCKET_PRIVATE,
   BUCKET_PUBLIC,
   MAX_GALLERY_ITEMS,
+  normalizeCaption,
   pathBelongsTo,
   targetBucketFor,
   validateQuota,
@@ -359,4 +360,78 @@ export async function setDogGalleryCover(formData: FormData): Promise<void> {
 
   const parent = await parentPublishState(supabase, "dog_gallery", dogId);
   if (parent.isPublished && parent.publicPath) revalidatePath(parent.publicPath);
+}
+
+export type CaptionState = {
+  error?: string;
+  ok?: boolean;
+};
+
+/**
+ * Grava (ou remove) a legenda de uma foto.
+ *
+ * QUEM AUTORIZA É O BANCO — e só ele. `media_update` já exige
+ * `owner_id = auth.uid()` OU admin, E `not private.is_suspended()`, nas duas
+ * pontas (`using` e `with check`). Por isso o UPDATE não repete
+ * `.eq("owner_id", ...)`: uma segunda definição de "dono" aqui só divergiria
+ * da primeira no dia em que a policy mudasse.
+ *
+ * O que esta função PRECISA fazer é falhar alto. Um UPDATE que a RLS recusa
+ * não devolve erro pelo PostgREST: devolve sucesso com ZERO linha. Sem o
+ * `.select()` + `if (!data)` abaixo, uma sessão suspensa, ou um id de foto
+ * alheia, veria o diálogo fechar como se tivesse salvo — a mesma classe de
+ * falha silenciosa que o log de `deleteMedia`, acima, existe para não deixar
+ * passar batido de novo.
+ *
+ * O `select` também devolve `kennel_id`/`dog_id` na MESMA ida ao banco — é o
+ * que decide o que revalidar, sem um segundo round-trip.
+ */
+export async function setMediaCaption(formData: FormData): Promise<CaptionState> {
+  await requireUser("/painel");
+
+  const id = String(formData.get("id") ?? "");
+  if (!id) return { error: "Foto não identificada." };
+
+  const caption = normalizeCaption(String(formData.get("caption") ?? ""));
+  if (!caption.ok) return { error: caption.reason };
+
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("media")
+    .update({ caption: caption.value })
+    .eq("id", id)
+    .is("deleted_at", null)
+    .select("id, kennel_id, dog_id")
+    .maybeSingle();
+
+  if (error) {
+    // O usuário só vê "não foi possível"; o motivo real (CHECK de tamanho,
+    // id malformado) só existe aqui.
+    console.error(`[media:setMediaCaption] UPDATE falhou para media id=${id}:`, error.message);
+    return { error: "Não foi possível salvar a legenda." };
+  }
+
+  // Zero linha: a policy recusou (não é sua, ou você está suspenso) ou a foto
+  // já foi removida. Mensagem única de propósito — distinguir os casos
+  // contaria a um estranho que aquele id existe.
+  if (!data) return { error: "Não foi possível salvar a legenda desta foto." };
+
+  if (data.kennel_id) {
+    revalidatePath(`/painel/canis/${data.kennel_id}`);
+    revalidatePath("/painel/canis");
+  }
+  if (data.dog_id) revalidatePath(`/painel/caes/${data.dog_id}`);
+
+  // Sem isto, a legenda aparece no painel e o perfil público segue sem ela
+  // por até 300s (o ISR de `/d/[public_id]`) — a mesma classe de bug que
+  // `registerMedia`/`deleteMedia` já tratam do lado deles.
+  const role = data.kennel_id ? "kennel_logo" : "dog_gallery";
+  const entityId = data.kennel_id ?? data.dog_id;
+  if (entityId) {
+    const parent = await parentPublishState(supabase, role, entityId);
+    if (parent.isPublished && parent.publicPath) revalidatePath(parent.publicPath);
+  }
+
+  return { ok: true };
 }

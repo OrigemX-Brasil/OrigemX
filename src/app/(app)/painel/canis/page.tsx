@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { BackLink } from "@/components/back-link";
 import { getAuthUser } from "@/modules/auth/queries";
 import { getMyKennel } from "@/modules/kennels/queries";
 
@@ -30,12 +31,7 @@ export default async function CanisPage() {
   return (
     <div className="flex flex-col gap-8">
       <div className="flex flex-col gap-2">
-        <Link
-          href="/painel"
-          className="text-fg-muted hover:text-fg self-start text-sm transition-colors"
-        >
-          ← Painel
-        </Link>
+        <BackLink href="/painel" label="Painel" />
         <span className="text-fg-faint font-mono text-xs tracking-[0.2em] uppercase">Canil</span>
         <h1 className="font-display text-2xl font-semibold tracking-tight">Meu canil</h1>
       </div>

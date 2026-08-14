@@ -10,6 +10,7 @@ modules/
   kennels/     canil
   dogs/        cão — identidade canônica
   media/       upload, redimensionamento e publicação de imagem
+  video/       vídeo do cão hospedado no Cloudflare Stream — ver nota abaixo
   pedigree/    montagem e render da árvore de 5 gerações
   qr/          QR Code do cão e do canil
   alerts/      alertas in-app baseados em regras (Anexo I.8)
@@ -122,6 +123,26 @@ Nesta rodada o módulo é só LEITURA — as seis seções do painel. Suspender,
 ocultar e corrigir número do canil são Server Actions futuras, que entram
 neste mesmo módulo chamando `requireAdmin()` como primeira linha, do jeito que
 `dogs/`, `kennels/` e `media/` já chamam `requireUser` hoje.
+
+**`video/` é módulo próprio, e não uma pasta dentro de `media/`.** As duas
+palavras parecem o mesmo domínio e não são: `media/` é Storage do Supabase —
+bucket privado e público, compressão em canvas, miniatura, quota em bytes,
+reconciliação ao publicar. Nada disso se aplica a um arquivo que mora no
+Cloudflare e do qual guardamos só um identificador e o estado da
+transcodificação. Fundir os dois obrigaria metade das colunas de `media` a ser
+nula e metade das funções a desviar por `if (role === 'video')`.
+
+O módulo tem dois arquivos que os outros não têm, e ambos por causa do
+terceiro:
+
+| Arquivo        | Por quê                                                                                                                                                |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `stream.ts`    | Cliente HTTP do Cloudflare. Só servidor, **nunca levanta**, e sem credencial desliga o recurso em vez de quebrar. Mesmo molde de `src/lib/notify`.      |
+| `sync.ts`      | O status muda sozinho depois do upload. Um lugar só para gravá-lo, chamado pelo polling do navegador E pela abertura da página do painel.               |
+
+A consulta ANÔNIMA do vídeo (`getPublicDogVideo`) não mora aqui: vive em
+`public/queries.ts`, junto de `getPublicMedia`, porque o que a define é o
+client anônimo, não o domínio. A regra é a mesma que `media/` já segue.
 
 **Autorização não mora aqui.** Quem decide o que o usuário vê é a RLS, em
 `supabase/migrations/`. Filtro em `queries.ts` é para a _consulta_ estar certa,

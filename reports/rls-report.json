@@ -1,7 +1,7 @@
 {
-  "when": "2026-08-11T01:09:46.868Z",
+  "when": "2026-08-14T05:38:55.779Z",
   "project": "https://lcqhnfdsrioufwvnrqnt.supabase.co",
-  "run": "msnypp0j",
+  "run": "mssincli",
   "fatal": null,
   "checks": [
     {
@@ -328,9 +328,51 @@
     },
     {
       "cenario": "10. Mídia",
+      "verificacao": "B escreve legenda na mídia de A",
+      "esperado": "0 linhas afetadas",
+      "obtido": "0 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "10. Mídia",
+      "verificacao": "legenda de A permanece intacta após a tentativa de B",
+      "esperado": "null",
+      "obtido": "null",
+      "status": "PASS"
+    },
+    {
+      "cenario": "10. Mídia",
+      "verificacao": "A escreve legenda na própria mídia",
+      "esperado": "1 linha, legenda gravada",
+      "obtido": "1 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "10. Mídia",
       "verificacao": "quota do usuário soma o que ele gravou",
       "esperado": "pelo menos 12345 bytes",
       "obtido": "12345",
+      "status": "PASS"
+    },
+    {
+      "cenario": "10. Mídia",
+      "verificacao": "A cria um ancestral fantasma (sem dono, sem canil)",
+      "esperado": "criado",
+      "obtido": "criado",
+      "status": "PASS"
+    },
+    {
+      "cenario": "10. Mídia",
+      "verificacao": "A (criador do fantasma) grava foto nele",
+      "esperado": "criado",
+      "obtido": "1 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "10. Mídia",
+      "verificacao": "B (não é quem criou o fantasma) tenta gravar foto nele",
+      "esperado": "erro de permissão",
+      "obtido": "erro 42501: new row violates row-level security policy for table \"media\"",
       "status": "PASS"
     },
     {
@@ -351,14 +393,14 @@
       "cenario": "11b. Selo Fundador (concorrência)",
       "verificacao": "nenhum número emitido abaixo de 100",
       "esperado": "todos >= 100",
-      "obtido": "min 555004, max 555008",
+      "obtido": "min 555019, max 555023",
       "status": "PASS"
     },
     {
       "cenario": "11b. Selo Fundador (concorrência)",
       "verificacao": "exclusão lógica não devolve o número ao pool",
       "esperado": "número permanece",
-      "obtido": "nº 555004",
+      "obtido": "nº 555020",
       "status": "PASS"
     },
     {
@@ -407,7 +449,7 @@
       "cenario": "12. Bucket público",
       "verificacao": "URL pública não carrega token nem expiração",
       "esperado": "sem ?token= e sem expires",
-      "obtido": "/storage/v1/object/public/kennel-media-public/b95ed138-dee1-4624-8c90-ae7dcd53e9e0/canis/publico-msnypp0j.png",
+      "obtido": "/storage/v1/object/public/kennel-media-public/3bf40cbc-ed7e-4425-b8be-09b0cb9b769c/canis/publico-mssincli.png",
       "status": "PASS"
     },
     {
@@ -518,8 +560,8 @@
     {
       "cenario": "14. Superfície admin_*",
       "verificacao": "admin chama admin_get_profile_email para B",
-      "esperado": "rls-msnypp0j-b@origemx.test",
-      "obtido": "rls-msnypp0j-b@origemx.test",
+      "esperado": "rls-mssincli-b@origemx.test",
+      "obtido": "rls-mssincli-b@origemx.test",
       "status": "PASS"
     },
     {
@@ -659,14 +701,14 @@
       "cenario": "17. Corrigir número do selo",
       "verificacao": "admin tenta atribuir a um canil o número que já pertence a outro",
       "esperado": "erro — número já pertence a outro canil",
-      "obtido": "erro: o número 555005 já pertence a outro canil",
+      "obtido": "erro: o número 555023 já pertence a outro canil",
       "status": "PASS"
     },
     {
       "cenario": "17. Corrigir número do selo",
       "verificacao": "número do canil-alvo não mudou depois da tentativa de duplicidade",
-      "esperado": "nº 555008",
-      "obtido": "nº 555008",
+      "esperado": "nº 555019",
+      "obtido": "nº 555019",
       "status": "PASS"
     },
     {
@@ -686,15 +728,78 @@
     {
       "cenario": "17. Corrigir número do selo",
       "verificacao": "audit_log grava as duas correções, de→para corretos",
-      "esperado": "2 linhas: {de:555006,para:null} e {de:null,para:555006}",
-      "obtido": "2 linha(s): [{\"de\":555006,\"para\":null},{\"de\":null,\"para\":555006}]",
+      "esperado": "2 linhas: {de:555022,para:null} e {de:null,para:555022}",
+      "obtido": "2 linha(s): [{\"de\":555022,\"para\":null},{\"de\":null,\"para\":555022}]",
       "status": "PASS"
     },
     {
       "cenario": "17. Corrigir número do selo",
       "verificacao": "canil termina com o número original — round-trip fechado",
-      "esperado": "nº 555006",
-      "obtido": "nº 555006",
+      "esperado": "nº 555022",
+      "obtido": "nº 555022",
+      "status": "PASS"
+    },
+    {
+      "cenario": "18. Vídeo",
+      "verificacao": "A registra o vídeo do próprio cão",
+      "esperado": "criado",
+      "obtido": "criado",
+      "status": "PASS"
+    },
+    {
+      "cenario": "18. Vídeo",
+      "verificacao": "B registra vídeo no cão de A",
+      "esperado": "negado (42501)",
+      "obtido": "erro 42501: new row violates row-level security policy for table \"dog_videos\"",
+      "status": "PASS"
+    },
+    {
+      "cenario": "18. Vídeo",
+      "verificacao": "B registra vídeo forjando owner_id de A",
+      "esperado": "negado (42501)",
+      "obtido": "erro 42501: new row violates row-level security policy for table \"dog_videos\"",
+      "status": "PASS"
+    },
+    {
+      "cenario": "18. Vídeo",
+      "verificacao": "B altera o status do vídeo de A",
+      "esperado": "0 linhas",
+      "obtido": "0 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "18. Vídeo",
+      "verificacao": "A apaga fisicamente o próprio vídeo",
+      "esperado": "negado (42501)",
+      "obtido": "erro 42501: permission denied for table dog_videos",
+      "status": "PASS"
+    },
+    {
+      "cenario": "18. Vídeo",
+      "verificacao": "A registra um SEGUNDO vídeo no mesmo cão",
+      "esperado": "negado (23505)",
+      "obtido": "erro 23505: duplicate key value violates unique constraint \"dog_videos_one_per_dog\"",
+      "status": "PASS"
+    },
+    {
+      "cenario": "18. Vídeo",
+      "verificacao": "anônimo lê o vídeo de cão PUBLICADO",
+      "esperado": "1 linha",
+      "obtido": "1 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "18. Vídeo",
+      "verificacao": "anônimo lê o vídeo de cão em RASCUNHO",
+      "esperado": "0 linhas",
+      "obtido": "0 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "18. Vídeo",
+      "verificacao": "listagem anônima sem filtro traz vídeo de rascunho",
+      "esperado": "0 linhas do rascunho",
+      "obtido": "0 linha(s)",
       "status": "PASS"
     }
   ]

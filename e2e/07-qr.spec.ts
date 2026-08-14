@@ -54,6 +54,8 @@ test("trocar o nome do cão NÃO muda o QR — é o ponto do identificador está
   // Troca pela TELA, como o criador faria.
   await page.getByLabel("Nome").fill("Nome Totalmente Outro");
   await page.getByRole("button", { name: "Salvar alterações" }).click();
+  // Confirmação visual do salvamento — perto do botão, sem precisar rolar.
+  await expect(page.getByText("Alterações salvas.")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Nome Totalmente Outro" })).toBeVisible();
 
   const depois = await page
@@ -68,6 +70,23 @@ test("trocar o nome do cão NÃO muda o QR — é o ponto do identificador está
   const { data } = await admin.from("dogs").select("public_id, name").eq("id", cao.id).single();
   expect(data?.name).toBe("Nome Totalmente Outro");
   expect(data?.public_id).toBe(cao.public_id);
+});
+
+test("editar um canil já existente mostra a confirmação 'Alterações salvas'", async ({
+  page,
+  criador,
+  admin,
+}) => {
+  const canil = await criarCanil(admin, criador.id);
+
+  await page.goto(`/painel/canis/${canil.id}`);
+  await page.getByLabel("Cidade").fill("Uberlândia");
+  await page.getByRole("button", { name: "Salvar alterações" }).click();
+
+  await expect(page.getByText("Alterações salvas.")).toBeVisible();
+
+  const { data } = await admin.from("kennels").select("city").eq("id", canil.id).single();
+  expect(data?.city).toBe("Uberlândia");
 });
 
 test("o QR do canil aponta para /c/{slug}", async ({ page, criador, admin }) => {

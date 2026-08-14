@@ -3,16 +3,16 @@
 ## Estado atual: VERIFICADO em projeto de desenvolvimento
 
 Aplicado e verificado contra o projeto de desenvolvimento
-`lcqhnfdsrioufwvnrqnt` (Postgres 17.6). Última verificação: 2026-08-10, depois
-da tela de detalhe de canil/cão no painel (ocultar/reativar pela UI, sobre
-`admin_set_kennel_hidden`/`admin_set_dog_hidden` — a peça de banco já existia,
-faltava só a Server Action e as duas páginas).
+`lcqhnfdsrioufwvnrqnt` (Postgres 17.6). Última verificação: 2026-08-14, depois
+do vídeo do cão (`dog_videos`, migration `video_do_cao` — tabela nova para o
+vídeo hospedado no Cloudflare Stream, com um vídeo vivo por cão e RLS no mesmo
+recorte de `media`).
 
 | Verificação                                                       | Resultado                             |
 | ----------------------------------------------------------------- | ------------------------------------- |
 | `db reset --linked` — aplicação do zero, em banco vazio, na ordem | sem erro (2026-07-31)                 |
-| Bateria SQL (`tests/battery.sql`)                                 | **57 PASS, 0 FAIL**                   |
-| Evidência pela API (`npm run test:rls`)                           | **93 PASS, 0 FAIL**                   |
+| Bateria SQL (`tests/battery.sql`)                                 | **68 PASS, 0 FAIL**                   |
+| Evidência pela API (`npm run test:rls`)                           | **114 PASS, 0 FAIL**                  |
 | `db advisors --linked --type security`                            | 12 WARN, todos aceitos e justificados |
 | Comparativo antes/depois (`evidence:compare`)                     | **0 divergência não explicada**       |
 | `db push` incremental                                             | sem erro                              |
@@ -41,7 +41,7 @@ npx supabase db advisors --linked --type security
 
 ## Bateria de verificação
 
-`tests/battery.sql` roda os 27 casos numa transação, imprime PASS/FAIL e limpa
+`tests/battery.sql` roda os 68 casos numa transação, imprime PASS/FAIL e limpa
 as próprias fixtures. Casos que **devem falhar** rodam dentro de bloco com
 `EXCEPTION`: um caso que não levante erro é marcado FAIL em vez de derrubar a
 execução.

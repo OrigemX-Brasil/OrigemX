@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { BackLink } from "@/components/back-link";
 import { SignupInvite } from "@/modules/capture/components/signup-invite";
 import { aspectOf } from "@/modules/media/constraints";
 import { PedigreeTree } from "@/modules/pedigree/components/pedigree-tree";
@@ -15,11 +16,13 @@ import { excerpt, publicMetadata } from "@/modules/public/metadata";
 import {
   getPublicDogByPublicId,
   getPublicDogThumbs,
+  getPublicDogVideo,
   getPublicKennelById,
   getPublicMedia,
   type PublicDog,
 } from "@/modules/public/queries";
 import { KennelSearch } from "@/modules/search/components/kennel-search";
+import { DogVideo } from "@/modules/video/components/dog-video";
 
 /**
  * Perfil público do cão — o alvo do QR Code impresso.
@@ -95,12 +98,15 @@ export default async function CaoPublicoPage({
   // `dog_identifiers` barra o anônimo por completo, então ela devolveria zero
   // linhas em toda regeneração de ISR. Volta no dia em que o cliente decidir
   // expor número de registro — ver o comentário na própria função.
-  const [kennel, media, pedigree] = await Promise.all([
+  const [kennel, media, pedigree, video] = await Promise.all([
     dog.kennel_id ? getPublicKennelById(dog.kennel_id) : Promise.resolve(null),
     getPublicMedia({ dogId: dog.id }),
     // Uma consulta para a árvore inteira, em paralelo com o resto. Entra no
     // mesmo ISR da página porque usa o mesmo client anônimo.
     getPedigree(dog.id),
+    // Mesmo client anônimo das outras, então continua dentro do ISR — e ela
+    // NÃO fala com o Cloudflare, só com o nosso banco.
+    getPublicDogVideo(dog.id),
   ]);
 
   // Segunda onda, e é inerente: não dá para saber os `dog_id` dos ancestrais
@@ -119,7 +125,7 @@ export default async function CaoPublicoPage({
   // índices se a lista de mídia bruta fosse usada direto.
   const photos = media
     .filter((item): item is typeof item & { url: string } => Boolean(item.url))
-    .map((item) => ({ url: item.url, alt: item.alt ?? dog.name }));
+    .map((item) => ({ url: item.url, alt: item.alt ?? dog.name, caption: item.caption }));
   const photoIndex = new Map(
     media.filter((item) => item.url).map((item, i) => [item.id, i] as const),
   );
@@ -187,16 +193,14 @@ export default async function CaoPublicoPage({
                 </h1>
                 <p className="text-fg-muted text-sm">{describeDog(dog)}</p>
                 {kennel ? (
-                  <Link
-                    href={`/c/${kennel.slug}`}
-                    // Mesma razão dos links da árvore: página de leitura, saída
-                    // improvável, 4G disputado. Ver pedigree-tree.tsx.
-                    prefetch={false}
-                    className="text-link hover:text-link-hover self-start text-sm underline underline-offset-4 transition-colors"
-                  >
-                    ← {kennel.name}
-                  </Link>
-                ) : null}
+                  // Mesma razão dos links da árvore: página de leitura, saída
+                  // improvável, 4G disputado. Ver pedigree-tree.tsx.
+                  <BackLink href={`/c/${kennel.slug}`} label={kennel.name} variant="link" prefetch={false} />
+                ) : (
+                  // Ancestral fantasma ou dono ainda sem canil: sem página-pai
+                  // nenhuma para apontar.
+                  <BackLink href="/" label="Início" variant="link" prefetch={false} />
+                )}
               </div>
             </div>
 
@@ -214,6 +218,24 @@ export default async function CaoPublicoPage({
               thumbs={thumbs}
               subjectPhotoUrl={principal?.thumbUrl ?? principal?.url ?? undefined}
             />
+
+            {/* Sem vídeo pronto, a seção NÃO EXISTE — nem título órfão nem
+                caixa vazia. Mesmo padrão do `restante.length > 0` logo abaixo.
+                E "pronto" é `status='ready'` no nosso banco: a página nunca
+                consulta o Cloudflare, então o serviço fora do ar não muda nada
+                aqui. */}
+            {video ? (
+              <section className="flex flex-col gap-3">
+                <h2 className="font-display text-lg font-semibold tracking-tight">Vídeo</h2>
+                <DogVideo
+                  providerUid={video.provider_uid}
+                  playbackOrigin={video.playback_origin}
+                  thumbnailUrl={video.thumbnail_url}
+                  durationSeconds={video.duration_seconds}
+                  dogName={dog.name}
+                />
+              </section>
+            ) : null}
 
             {restante.length > 0 ? (
               <section className="flex flex-col gap-3">
@@ -250,17 +272,33 @@ export default async function CaoPublicoPage({
                         key={item.id}
                         className="border-border rounded-card mb-3 break-inside-avoid overflow-hidden border"
                       >
-                        {photoIndex.has(item.id) ? (
-                          <PhotoTrigger
-                            index={photoIndex.get(item.id)!}
-                            label={`Ampliar foto ${photoIndex.get(item.id)! + 1} de ${photos.length} de ${dog.name}`}
-                            className="focus-visible:outline-ring block w-full focus-visible:outline-2 focus-visible:-outline-offset-2"
-                          >
-                            {image}
-                          </PhotoTrigger>
-                        ) : (
-                          image
-                        )}
+                        {/* `<figure>`/`<figcaption>` é o HTML correto para
+                            imagem com legenda — sai de graça em acessibilidade.
+                            A legenda fica FORA do `PhotoTrigger`: `<button>`
+                            só aceita conteúdo de fraseado, e entrar no botão
+                            também poluiria o nome acessível dele. */}
+                        <figure>
+                          {photoIndex.has(item.id) ? (
+                            <PhotoTrigger
+                              index={photoIndex.get(item.id)!}
+                              label={`Ampliar foto ${photoIndex.get(item.id)! + 1} de ${photos.length} de ${dog.name}`}
+                              className="focus-visible:outline-ring block w-full focus-visible:outline-2 focus-visible:-outline-offset-2"
+                            >
+                              {image}
+                            </PhotoTrigger>
+                          ) : (
+                            image
+                          )}
+                          {item.caption ? (
+                            // `line-clamp-2`: no mosaico a legenda é rótulo,
+                            // não texto corrido — sem o recorte, uma legenda
+                            // longa estica o cartão e desmonta o equilíbrio
+                            // das colunas. O texto inteiro está no lightbox.
+                            <figcaption className="text-fg-muted line-clamp-2 px-2.5 py-2 text-xs">
+                              {item.caption}
+                            </figcaption>
+                          ) : null}
+                        </figure>
                       </li>
                     );
                   })}

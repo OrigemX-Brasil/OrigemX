@@ -134,6 +134,10 @@ export async function limparUsuario(userId: string): Promise<void> {
   const admin = adminClient();
 
   await admin.from("media").delete().eq("owner_id", userId);
+  // Antes dos cães: `dog_videos.dog_id` é ON DELETE RESTRICT, então uma linha
+  // de vídeo sobrevivente faria o `delete` de `dogs` falhar em silêncio (estes
+  // `.delete()` não checam erro) e o `deleteUser` apanhar logo depois.
+  await admin.from("dog_videos").delete().eq("owner_id", userId);
   await admin.from("dogs").update({ sire_id: null, dam_id: null }).eq("created_by", userId);
   await admin.from("dogs").update({ sire_id: null, dam_id: null }).eq("owner_id", userId);
   await admin.from("dogs").delete().eq("created_by", userId);

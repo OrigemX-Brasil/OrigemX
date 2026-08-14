@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { BackLink } from "@/components/back-link";
 import { EmptyState } from "@/modules/admin/components/empty-state";
 import { countFounderKennels, listKennels, ownerName } from "@/modules/admin/queries";
 import { FounderBadge } from "@/modules/kennels/components/founder-badge";
@@ -30,6 +31,8 @@ export default async function AdminFounderPage({
 
   return (
     <div className="flex flex-col gap-8">
+      <BackLink href="/admin" label="Visão geral" />
+
       <div className="flex flex-col gap-2">
         <span className="text-fg-faint font-mono text-xs tracking-[0.2em] uppercase">Admin</span>
         <h1 className="font-display text-2xl font-semibold tracking-tight">Selo Fundador</h1>

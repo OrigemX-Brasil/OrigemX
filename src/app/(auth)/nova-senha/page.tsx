@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { BackLink } from "@/components/back-link";
 import { NewPasswordForm } from "@/modules/auth/components/new-password-form";
 import { getAuthUser } from "@/modules/auth/queries";
 
@@ -20,6 +21,7 @@ export default async function NovaSenhaPage() {
   if (!user) {
     return (
       <div className="flex flex-col gap-6">
+        <BackLink href="/login" label="Voltar para o login" variant="link" />
         <h1 className="font-display text-2xl font-semibold tracking-tight">Link expirado</h1>
         <p className="text-fg-muted text-sm">
           O link para redefinir a senha vale por uma hora e só pode ser usado uma vez.
@@ -36,6 +38,7 @@ export default async function NovaSenhaPage() {
 
   return (
     <div className="flex flex-col gap-8">
+      <BackLink href="/" label="Início" variant="link" />
       <div className="flex flex-col gap-2">
         <h1 className="font-display text-2xl font-semibold tracking-tight">Nova senha</h1>
         <p className="text-fg-muted text-sm">

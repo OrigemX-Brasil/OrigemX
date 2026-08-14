@@ -137,6 +137,79 @@ export type Database = {
           },
         ]
       }
+      dog_videos: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          dog_id: string
+          duration_seconds: number | null
+          error_reason: string | null
+          id: string
+          owner_id: string
+          playback_origin: string | null
+          provider: string
+          provider_uid: string
+          status: string
+          thumbnail_url: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          dog_id: string
+          duration_seconds?: number | null
+          error_reason?: string | null
+          id?: string
+          owner_id: string
+          playback_origin?: string | null
+          provider?: string
+          provider_uid: string
+          status?: string
+          thumbnail_url?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          dog_id?: string
+          duration_seconds?: number | null
+          error_reason?: string | null
+          id?: string
+          owner_id?: string
+          playback_origin?: string | null
+          provider?: string
+          provider_uid?: string
+          status?: string
+          thumbnail_url?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dog_videos_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dog_videos_dog_id_fkey"
+            columns: ["dog_id"]
+            isOneToOne: false
+            referencedRelation: "dogs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dog_videos_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dogs: {
         Row: {
           born_on: string | null
@@ -348,6 +421,7 @@ export type Database = {
         Row: {
           alt: string | null
           bucket_id: string
+          caption: string | null
           created_at: string
           created_by: string | null
           deleted_at: string | null
@@ -369,6 +443,7 @@ export type Database = {
         Insert: {
           alt?: string | null
           bucket_id?: string
+          caption?: string | null
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
@@ -390,6 +465,7 @@ export type Database = {
         Update: {
           alt?: string | null
           bucket_id?: string
+          caption?: string | null
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null

@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useActionState } from "react";
 
+import { FormMessage } from "@/components/form-message";
 import { signIn, type ActionState } from "@/modules/auth/actions";
 
-import { Field, FormMessage, PasswordField, SubmitButton } from "./form";
+import { Field, PasswordField, SubmitButton } from "./form";
 
 export function LoginForm({ next, initialError }: { next: string; initialError?: string }) {
   const [state, formAction] = useActionState<ActionState, FormData>(signIn, {

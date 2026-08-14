@@ -203,7 +203,7 @@ export const getPublicRegistrations = cache(async (dogId: string) => {
 });
 
 const MEDIA_COLUMNS =
-  "id, bucket_id, storage_path, thumb_path, kennel_id, dog_id, role, mime, size_bytes, width, height, thumb_bytes, alt, position, owner_id, created_at";
+  "id, bucket_id, storage_path, thumb_path, kennel_id, dog_id, role, mime, size_bytes, width, height, thumb_bytes, alt, caption, position, owner_id, created_at";
 
 /**
  * Mídia pública. NUNCA levanta: se falhar, a página renderiza sem imagem.
@@ -230,6 +230,56 @@ export const getPublicMedia = cache(
     }
   },
 );
+
+/**
+ * O vídeo PRONTO do cão, ou `null`.
+ *
+ * `.eq("status", "ready")` não é redundância com a RLS — é o que separa "existe
+ * uma linha" de "dá para assistir". `dog_videos_select` mostra a linha a quem
+ * enxerga o cão, inclusive enquanto o Cloudflare ainda transcodifica; renderizar
+ * a seção nesse estado produziria um player que não abre.
+ *
+ * `playback_origin` nulo faz a função devolver `null` mesmo com status `ready`.
+ * O CHECK `dog_videos_ready_has_playback` já impede essa combinação no banco;
+ * a guarda aqui existe porque este valor vira o `src` de um `<iframe>`, e o
+ * tipo gerado do Postgres continua dizendo `string | null`.
+ *
+ * NUNCA LEVANTA, como `getPublicMedia`. O vídeo é o item mais dispensável desta
+ * página: quem escaneou o QR na feira precisa do nome, da raça e do pedigree.
+ * E note que ela NÃO fala com o Cloudflare — só com o nosso banco. É por isso
+ * que o serviço de vídeo fora do ar não tem efeito nenhum aqui.
+ */
+export const getPublicDogVideo = cache(
+  async (dogId: string): Promise<PublicDogVideo | null> => {
+    try {
+      const supabase = createPublicClient();
+      const { data } = await supabase
+        .from("dog_videos")
+        .select("provider_uid, playback_origin, thumbnail_url, duration_seconds")
+        .eq("dog_id", dogId)
+        .eq("status", "ready")
+        .is("deleted_at", null)
+        .maybeSingle();
+
+      if (!data?.playback_origin) return null;
+      return {
+        provider_uid: data.provider_uid,
+        playback_origin: data.playback_origin,
+        thumbnail_url: data.thumbnail_url,
+        duration_seconds: data.duration_seconds,
+      };
+    } catch {
+      return null;
+    }
+  },
+);
+
+export type PublicDogVideo = {
+  provider_uid: string;
+  playback_origin: string;
+  thumbnail_url: string | null;
+  duration_seconds: number | null;
+};
 
 /** `%` e `_` são curingas no LIKE; sem escapar, "100%" viraria busca aberta. */
 function escapeLike(value: string): string {

@@ -2,9 +2,10 @@
 
 import { useActionState } from "react";
 
+import { FormMessage } from "@/components/form-message";
 import { requestPasswordReset, type ActionState } from "@/modules/auth/actions";
 
-import { Field, FormMessage, SubmitButton } from "./form";
+import { Field, SubmitButton } from "./form";
 
 export function ResetRequestForm() {
   const [state, formAction] = useActionState<ActionState, FormData>(requestPasswordReset, {});

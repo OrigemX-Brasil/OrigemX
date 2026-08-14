@@ -3,9 +3,8 @@
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
+import { FormMessage } from "@/components/form-message";
 import { signInWithGoogle, type ActionState } from "@/modules/auth/actions";
-
-import { FormMessage } from "./form";
 
 /**
  * Marca do Google estilizada, desenhada com traços — não é o logo oficial.

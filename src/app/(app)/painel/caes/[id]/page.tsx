@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { BackLink } from "@/components/back-link";
+import { createClient } from "@/lib/supabase/server";
 import { getAuthUser } from "@/modules/auth/queries";
 import { softDeleteDog } from "@/modules/dogs/actions";
 import { isGhostAncestor, type AncestorCandidate } from "@/modules/dogs/ancestors";
@@ -15,6 +16,10 @@ import { PublishToggle } from "@/modules/media/components/publish-toggle";
 import { MAX_GALLERY_ITEMS } from "@/modules/media/constraints";
 import { getDogGallery, getUsedBytes } from "@/modules/media/queries";
 import { QrCard } from "@/modules/qr/components/qr-card";
+import { VideoUploader } from "@/modules/video/components/video-uploader";
+import { getDogVideo } from "@/modules/video/queries";
+import { videoConfigurado } from "@/modules/video/stream";
+import { reconcileDogVideo } from "@/modules/video/sync";
 
 export const metadata: Metadata = { title: "Editar cão" };
 
@@ -29,13 +34,21 @@ export default async function EditarCaoPage({ params }: { params: Promise<{ id: 
   const dog = await getManageableDogById(id, user.id);
   if (!dog) notFound();
 
-  const [kennel, parents, gallery, usedBytes, identifiers] = await Promise.all([
+  const supabase = await createClient();
+  const [kennel, parents, gallery, usedBytes, identifiers, videoGravado] = await Promise.all([
     getMyKennel(user.id),
     getDogsByIds([dog.sire_id, dog.dam_id].filter((v): v is string => Boolean(v))),
     getDogGallery(dog.id),
     getUsedBytes(user.id),
     getDogIdentifiers(dog.id),
+    getDogVideo(dog.id, supabase),
   ]);
+
+  // Rede de segurança para quem fechou a aba no meio da transcodificação: o
+  // polling do navegador morreu junto com a aba, então quem põe o status em dia
+  // é a abertura da página. Vídeo já pronto (ou com erro) NÃO gera chamada
+  // nenhuma ao Cloudflare — `reconcileDogVideo` sai antes.
+  const video = videoGravado ? await reconcileDogVideo(supabase, videoGravado) : null;
 
   const toCandidate = (id: string | null): AncestorCandidate | null => {
     const found = parents.find((p) => p.id === id);
@@ -56,12 +69,7 @@ export default async function EditarCaoPage({ params }: { params: Promise<{ id: 
   return (
     <div className="flex flex-col gap-8">
       <div className="flex flex-col gap-2">
-        <Link
-          href="/painel/caes"
-          className="text-fg-muted hover:text-fg self-start text-sm transition-colors"
-        >
-          ← Cães
-        </Link>
+        <BackLink href="/painel/caes" label="Cães" />
         <h1 className="font-display text-2xl font-semibold tracking-tight">{dog.name}</h1>
         <p className="text-fg-faint font-mono text-xs">/d/{dog.public_id}</p>
       </div>
@@ -89,6 +97,7 @@ export default async function EditarCaoPage({ params }: { params: Promise<{ id: 
         kennel={kennel && { id: kennel.id, name: kennel.name }}
         sire={toCandidate(dog.sire_id)}
         dam={toCandidate(dog.dam_id)}
+        ownerId={user.id}
       />
 
       <IdentifiersForm dogId={dog.id} identifiers={identifiers} />
@@ -107,6 +116,23 @@ export default async function EditarCaoPage({ params }: { params: Promise<{ id: 
           entityId={dog.id}
           ownerId={user.id}
           remaining={MAX_GALLERY_ITEMS - gallery.length}
+        />
+      </section>
+
+      <section className="border-border flex flex-col gap-4 border-t pt-6">
+        <div className="flex flex-col gap-1">
+          <h2 className="font-display text-base font-semibold">Vídeo</h2>
+          <p className="text-fg-muted text-sm">
+            Um vídeo curto no perfil público — andamento, temperamento, o que a foto não conta.
+            Ele carrega só quando o visitante der play.
+          </p>
+        </div>
+
+        <VideoUploader
+          dogId={dog.id}
+          dogName={dog.name}
+          video={video}
+          habilitado={videoConfigurado()}
         />
       </section>
 

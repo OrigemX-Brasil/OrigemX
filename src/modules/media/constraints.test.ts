@@ -10,10 +10,12 @@ import {
   formatBytes,
   isPubliclyServable,
   targetBucketFor,
+  MAX_CAPTION_LENGTH,
   MAX_IMAGE_DIMENSION,
   MAX_INPUT_BYTES,
   MAX_STORED_BYTES,
   MAX_USER_BYTES,
+  normalizeCaption,
   pathBelongsTo,
   THUMB_DIMENSION,
   validateInputFile,
@@ -211,6 +213,61 @@ describe("targetBucketFor / isPubliclyServable", () => {
     for (const published of [true, false]) {
       expect([BUCKET_PRIVATE, BUCKET_PUBLIC]).toContain(targetBucketFor(published));
     }
+  });
+});
+
+describe("normalizeCaption", () => {
+  it("preserva texto normal", () => {
+    expect(normalizeCaption("Campeão Brasileiro 2024")).toEqual({
+      ok: true,
+      value: "Campeão Brasileiro 2024",
+    });
+  });
+
+  it("vazio, espaço ou quebra de linha viram null — é assim que se remove a legenda", () => {
+    expect(normalizeCaption("")).toEqual({ ok: true, value: null });
+    expect(normalizeCaption("   ")).toEqual({ ok: true, value: null });
+    expect(normalizeCaption("\n\t")).toEqual({ ok: true, value: null });
+  });
+
+  it("apara as bordas e colapsa espaços internos, sem colar palavras", () => {
+    expect(normalizeCaption("  primeiro  lugar  ")).toEqual({ ok: true, value: "primeiro lugar" });
+    expect(normalizeCaption("linha um\nlinha dois")).toEqual({
+      ok: true,
+      value: "linha um linha dois",
+    });
+  });
+
+  it("remove caracteres de controle e de formatação (ex.: override de direção)", () => {
+    // U+0000 é categoria Cc (controle); U+202E (RIGHT-TO-LEFT OVERRIDE) é
+    // Cf (formatação) e reordena texto na tela — vetor de spoofing conhecido,
+    // não só um caractere invisível qualquer.
+    expect(normalizeCaption("a b")).toEqual({ ok: true, value: "ab" });
+    expect(normalizeCaption("a‮b")).toEqual({ ok: true, value: "ab" });
+  });
+
+  it("aceita exatamente o teto e recusa um a mais, com mensagem em português", () => {
+    const noTeto = "x".repeat(MAX_CAPTION_LENGTH);
+    expect(normalizeCaption(noTeto)).toEqual({ ok: true, value: noTeto });
+
+    const acima = "x".repeat(MAX_CAPTION_LENGTH + 1);
+    const r = normalizeCaption(acima);
+    if (r.ok) throw new Error("deveria recusar");
+    expect(r.reason).toMatch(/140/);
+  });
+
+  it("conta PONTOS DE CÓDIGO, não unidades UTF-16 — casa com char_length do Postgres", () => {
+    // "🐕" é 1 ponto de código mas 2 unidades UTF-16 (par substituto). Se a
+    // contagem usasse `.length`, 140 emojis pareceriam 280 e seriam
+    // recusados aqui mesmo cabendo no CHECK do banco.
+    const emojis = "🐕".repeat(MAX_CAPTION_LENGTH);
+    expect(normalizeCaption(emojis)).toEqual({ ok: true, value: emojis });
+  });
+
+  it("o teto de exibição bate com o CHECK do banco (media_caption_len)", () => {
+    // Se este número um dia divergir do CHECK, a mensagem de erro do client
+    // mentiria sobre o que o servidor de fato aceita.
+    expect(MAX_CAPTION_LENGTH).toBe(140);
   });
 });
 

@@ -1410,6 +1410,182 @@ exception when others then
                       'ERRO: ' || sqlstate || ' ' || sqlerrm, false);
 end $$;
 
+-- 57-60. Legenda por foto — o CHECK `media_caption_len` (migration
+--        `legenda_de_foto`) é quem garante o contrato, não a aplicação.
+--        `MAX_CAPTION_LENGTH` em constraints.ts espelha o mesmo 140.
+do $$
+begin
+  insert into public.media (bucket_id, storage_path, dog_id, role, mime, size_bytes,
+                            owner_id, created_by, caption)
+  values ('kennel-media', 'battery/legenda-ok-' || gen_random_uuid() || '.webp',
+          'd1000000-0000-4000-8000-00000000000a', 'dog_gallery', 'image/webp', 1000,
+          'b1000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000001',
+          repeat('x', 140));
+  perform pg_temp.rec(57, 'legenda com exatamente 140 caracteres', 'aceita', 'aceita', true);
+exception when others then
+  perform pg_temp.rec(57, 'legenda com exatamente 140 caracteres', 'aceita',
+                      'ERRO: ' || sqlstate || ' ' || sqlerrm, false);
+end $$;
+
+-- Um caractere além do teto é recusado pelo CHECK, não só pela aplicação —
+-- a defesa não pode depender só do `maxLength` do campo HTML.
+do $$
+begin
+  insert into public.media (bucket_id, storage_path, dog_id, role, mime, size_bytes,
+                            owner_id, created_by, caption)
+  values ('kennel-media', 'battery/legenda-estoura-' || gen_random_uuid() || '.webp',
+          'd1000000-0000-4000-8000-00000000000a', 'dog_gallery', 'image/webp', 1000,
+          'b1000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000001',
+          repeat('x', 141));
+  perform pg_temp.rec(58, 'legenda com 141 caracteres', '23514 check_violation',
+                      'ACEITOU — passou do teto', false);
+exception when others then
+  perform pg_temp.rec(58, 'legenda com 141 caracteres', '23514 check_violation',
+                      sqlstate || ' ' || sqlerrm, sqlstate = '23514');
+end $$;
+
+-- Legenda só de espaço é recusada — "sem legenda" só existe como NULL,
+-- nunca como string vazia/em branco. É o que impede uma faixa vazia na
+-- página pública.
+do $$
+begin
+  insert into public.media (bucket_id, storage_path, dog_id, role, mime, size_bytes,
+                            owner_id, created_by, caption)
+  values ('kennel-media', 'battery/legenda-vazia-' || gen_random_uuid() || '.webp',
+          'd1000000-0000-4000-8000-00000000000a', 'dog_gallery', 'image/webp', 1000,
+          'b1000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000001',
+          '   ');
+  perform pg_temp.rec(59, 'legenda só de espaço', '23514 check_violation',
+                      'ACEITOU — string em branco virou legenda', false);
+exception when others then
+  perform pg_temp.rec(59, 'legenda só de espaço', '23514 check_violation',
+                      sqlstate || ' ' || sqlerrm, sqlstate = '23514');
+end $$;
+
+-- NULL segue livre — "sem legenda" continua barato de representar.
+do $$
+begin
+  insert into public.media (bucket_id, storage_path, dog_id, role, mime, size_bytes,
+                            owner_id, created_by, caption)
+  values ('kennel-media', 'battery/legenda-null-' || gen_random_uuid() || '.webp',
+          'd1000000-0000-4000-8000-00000000000a', 'dog_gallery', 'image/webp', 1000,
+          'b1000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000001',
+          null);
+  perform pg_temp.rec(60, 'legenda NULL', 'aceita', 'aceita', true);
+exception when others then
+  perform pg_temp.rec(60, 'legenda NULL', 'aceita', 'ERRO: ' || sqlstate || ' ' || sqlerrm, false);
+end $$;
+
+-- -----------------------------------------------------------------------------
+-- Grupo 9 — vídeo do cão (dog_videos)
+--
+-- Os CHECKs desta tabela não são higiene: `playback_origin` vira o `src` de um
+-- <iframe> na página pública, e `status = 'ready'` é exatamente a condição que
+-- faz a seção de vídeo aparecer lá. Cada caso abaixo fecha um jeito de a página
+-- pública renderizar um player que não abre — ou que aponta para fora.
+-- -----------------------------------------------------------------------------
+
+do $$
+begin
+  insert into public.dog_videos (dog_id, provider_uid, status, owner_id, created_by)
+  values ('d1000000-0000-4000-8000-00000000000a', 'battery-status-invalido', 'transcodificando',
+          'b1000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000001');
+  perform pg_temp.rec(61, 'status de vídeo fora da lista da API', '23514 check_violation',
+                      'aceitou', false);
+exception when others then
+  perform pg_temp.rec(61, 'status de vídeo fora da lista da API', '23514 check_violation',
+                      sqlstate || ' ' || sqlerrm, sqlstate = '23514');
+end $$;
+
+-- 'ready' sem poster e sem origem: a página pública renderizaria a seção e o
+-- player não teria para onde apontar.
+do $$
+begin
+  insert into public.dog_videos (dog_id, provider_uid, status, owner_id, created_by)
+  values ('d1000000-0000-4000-8000-00000000000a', 'battery-ready-vazio', 'ready',
+          'b1000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000001');
+  perform pg_temp.rec(62, 'vídeo ready sem poster nem origem', '23514 check_violation',
+                      'aceitou', false);
+exception when others then
+  perform pg_temp.rec(62, 'vídeo ready sem poster nem origem', '23514 check_violation',
+                      sqlstate || ' ' || sqlerrm, sqlstate = '23514');
+end $$;
+
+-- Origem forjada. É o caso que impede um iframe da página pública de apontar
+-- para um host de terceiro.
+do $$
+begin
+  insert into public.dog_videos (dog_id, provider_uid, status, thumbnail_url,
+                                 playback_origin, owner_id, created_by)
+  values ('d1000000-0000-4000-8000-00000000000a', 'battery-origem-forjada', 'ready',
+          'https://exemplo.test/t.jpg', 'https://customer-abc.cloudflarestream.com.exemplo.test',
+          'b1000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000001');
+  perform pg_temp.rec(63, 'playback_origin em host de terceiro', '23514 check_violation',
+                      'aceitou', false);
+exception when others then
+  perform pg_temp.rec(63, 'playback_origin em host de terceiro', '23514 check_violation',
+                      sqlstate || ' ' || sqlerrm, sqlstate = '23514');
+end $$;
+
+do $$
+begin
+  insert into public.dog_videos (dog_id, provider_uid, status, thumbnail_url,
+                                 playback_origin, duration_seconds, owner_id, created_by)
+  values ('d1000000-0000-4000-8000-00000000000a', 'battery-longo', 'ready',
+          'https://customer-battery1.cloudflarestream.com/x/thumbnails/thumbnail.jpg',
+          'https://customer-battery1.cloudflarestream.com', 240,
+          'b1000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000001');
+  perform pg_temp.rec(64, 'vídeo acima do teto de duração', '23514 check_violation',
+                      'aceitou', false);
+exception when others then
+  perform pg_temp.rec(64, 'vídeo acima do teto de duração', '23514 check_violation',
+                      sqlstate || ' ' || sqlerrm, sqlstate = '23514');
+end $$;
+
+-- Caminho feliz. Também é a fixture do caso 66 — precisa existir uma linha VIVA
+-- para o índice único parcial ter contra o que reclamar.
+do $$
+begin
+  insert into public.dog_videos (dog_id, provider_uid, status, thumbnail_url,
+                                 playback_origin, duration_seconds, owner_id, created_by)
+  values ('d1000000-0000-4000-8000-00000000000a', 'battery-ok', 'ready',
+          'https://customer-battery1.cloudflarestream.com/x/thumbnails/thumbnail.jpg',
+          'https://customer-battery1.cloudflarestream.com', 42.5,
+          'b1000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000001');
+  perform pg_temp.rec(65, 'vídeo pronto e bem formado', 'aceita', 'aceita', true);
+exception when others then
+  perform pg_temp.rec(65, 'vídeo pronto e bem formado', 'aceita',
+                      'ERRO: ' || sqlstate || ' ' || sqlerrm, false);
+end $$;
+
+-- Um vídeo por cão. Índice único PARCIAL: o excluído logicamente libera a vaga,
+-- que é o que torna "trocar o vídeo" possível sem apagar histórico.
+do $$
+begin
+  insert into public.dog_videos (dog_id, provider_uid, status, owner_id, created_by)
+  values ('d1000000-0000-4000-8000-00000000000a', 'battery-segundo', 'pendingupload',
+          'b1000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000001');
+  perform pg_temp.rec(66, 'segundo vídeo vivo no mesmo cão', '23505 unique_violation',
+                      'aceitou', false);
+exception when others then
+  perform pg_temp.rec(66, 'segundo vídeo vivo no mesmo cão', '23505 unique_violation',
+                      sqlstate || ' ' || sqlerrm, sqlstate = '23505');
+end $$;
+
+-- Excluir logicamente LIBERA a vaga — a assimetria que faz a troca funcionar.
+do $$
+begin
+  update public.dog_videos set deleted_at = now() where provider_uid = 'battery-ok';
+
+  insert into public.dog_videos (dog_id, provider_uid, status, owner_id, created_by)
+  values ('d1000000-0000-4000-8000-00000000000a', 'battery-substituto', 'pendingupload',
+          'b1000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000001');
+  perform pg_temp.rec(67, 'novo vídeo depois de excluir o anterior', 'aceita', 'aceita', true);
+exception when others then
+  perform pg_temp.rec(67, 'novo vídeo depois de excluir o anterior', 'aceita',
+                      'ERRO: ' || sqlstate || ' ' || sqlerrm, false);
+end $$;
+
 -- -----------------------------------------------------------------------------
 -- Limpeza. Vem ANTES do relatório de propósito: a Management API devolve o
 -- resultado do último statement, então o SELECT final tem de ser o último.
@@ -1423,6 +1599,8 @@ end $$;
 
 -- Mídia antes dos canis: media.kennel_id é FK RESTRICT.
 delete from public.media where storage_path like 'battery/%';
+-- Vídeo antes dos cães: dog_videos.dog_id é FK RESTRICT.
+delete from public.dog_videos where provider_uid like 'battery-%';
 delete from public.dog_identifiers
  where dog_id in (select id from public.dogs
                    where name like 'Battery%' or name = 'Rex do Dois');

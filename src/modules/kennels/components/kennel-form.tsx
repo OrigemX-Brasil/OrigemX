@@ -3,6 +3,8 @@
 import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 
+import { FormMessage } from "@/components/form-message";
+
 import { createKennel, updateKennel, type KennelFormState } from "../actions";
 import { KENNEL_FORM_FIELDS, type KennelField, type KennelFieldName } from "../fields";
 import { slugify, validateKennel, type FieldErrors, type KennelInput } from "../validation";
@@ -179,8 +181,9 @@ export function KennelForm({
         />
       ))}
 
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <Submit label={isEdit ? "Salvar alterações" : "Criar canil"} />
+        {state.ok ? <FormMessage message="Alterações salvas." /> : null}
       </div>
     </form>
   );

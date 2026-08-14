@@ -65,7 +65,7 @@ export const THUMB_DIMENSION = 320;
 export const MAX_USER_BYTES = 200 * 1024 * 1024;
 
 /** Teto de itens na galeria de um cão. */
-export const MAX_GALLERY_ITEMS = 12;
+export const MAX_GALLERY_ITEMS = 30;
 
 /**
  * Quantas fotos comprimem/sobem ao mesmo tempo num upload em lote.
@@ -77,6 +77,43 @@ export const MAX_GALLERY_ITEMS = 12;
 export const GALLERY_UPLOAD_CONCURRENCY = 3;
 
 export type MediaRole = "kennel_logo" | "dog_gallery";
+
+/** Teto da legenda. Espelha o CHECK `media_caption_len`. */
+export const MAX_CAPTION_LENGTH = 140;
+
+export type CaptionResult = { ok: true; value: string | null } | { ok: false; reason: string };
+
+/**
+ * Normaliza a legenda digitada. Roda no SERVIDOR contra o que o formulário
+ * mandou: `maxLength` no campo é conveniência do navegador, não regra — o
+ * mesmo raciocínio de `validateStoredFile`, que confere o Storage em vez de
+ * acreditar no client.
+ *
+ * VAZIO VIRA NULL, e é assim que se REMOVE uma legenda. Não existe ação
+ * separada de apagar: existe salvar em branco. O CHECK do banco recusa
+ * string vazia justamente para não haver dois jeitos de "não ter legenda".
+ *
+ * Conta PONTOS DE CÓDIGO (`[...value].length`), não unidades UTF-16
+ * (`value.length`): é o que `char_length` conta do lado do Postgres. Com
+ * `.length`, um emoji vale 2 aqui e 1 no banco, e o teto do app divergiria
+ * do teto do banco — sempre na direção mais rígida, mas divergiria.
+ */
+export function normalizeCaption(raw: string): CaptionResult {
+  const value = raw
+    // Colapsa PRIMEIRO: o campo é de uma linha, mas colar um bloco de texto
+    // entra por aqui, e "a\nb" tem de virar "a b", não "ab".
+    .replace(/\s+/gu, " ")
+    // Só então caem os invisíveis que sobraram — controle e formatação,
+    // incluindo o override de direção (U+202E), que reordena texto na tela.
+    .replace(/[\p{Cc}\p{Cf}]/gu, "")
+    .trim();
+
+  if (value.length === 0) return { ok: true, value: null };
+  if ([...value].length > MAX_CAPTION_LENGTH) {
+    return { ok: false, reason: `A legenda passa de ${MAX_CAPTION_LENGTH} caracteres.` };
+  }
+  return { ok: true, value };
+}
 
 // -----------------------------------------------------------------------------
 // Validação

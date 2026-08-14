@@ -31,6 +31,7 @@ export type DogFormState = {
   values?: DogInput;
   /** Preenchido só por `createGhostAncestor`, para o seletor já marcá-lo. */
   created?: AncestorCandidate;
+  ok?: boolean;
 };
 
 function readForm(formData: FormData, fields: readonly DogField[]): DogInput {
@@ -165,13 +166,14 @@ export async function updateDog(_prev: DogFormState, formData: FormData): Promis
 
   revalidatePath("/painel/caes");
   revalidatePath(`/painel/caes/${id}`);
-  return { values: input };
+  return { ok: true, values: input };
 }
 
 export type IdentifierFormState = {
   errors?: IdentifierErrors;
   formError?: string;
   values?: IdentifierInput;
+  ok?: boolean;
 };
 
 /**
@@ -243,7 +245,7 @@ export async function updateDogIdentifiers(
   if (microchipError) return { formError: microchipError, values: input };
 
   revalidatePath(`/painel/caes/${dogId}`);
-  return { values: input };
+  return { ok: true, values: input };
 }
 
 /**

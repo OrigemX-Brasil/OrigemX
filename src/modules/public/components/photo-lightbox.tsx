@@ -21,7 +21,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
  * o da imagem.
  */
 
-export type LightboxPhoto = { url: string; alt: string };
+export type LightboxPhoto = { url: string; alt: string; caption?: string | null };
 
 type GalleryContextValue = { open: (index: number) => void };
 
@@ -125,10 +125,25 @@ export function PublicGallery({
                 >
                   <ChevronIcon direction="right" />
                 </button>
-                <span className="bg-bg/70 text-fg-muted absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full px-3 py-1 font-mono text-xs tabular-nums">
-                  {index! + 1} / {photos.length}
-                </span>
               </>
+            ) : null}
+
+            {/* Legenda e contador na MESMA pilha inferior — os dois brigavam
+                por `bottom-3 left-1/2` quando soltos. A legenda aparece
+                mesmo com uma única foto; o contador só com mais de uma. */}
+            {photo.caption || photos.length > 1 ? (
+              <div className="absolute inset-x-0 bottom-3 flex flex-col items-center gap-2 px-4">
+                {photo.caption ? (
+                  <p className="bg-bg/70 text-fg rounded-card max-w-prose px-3 py-1.5 text-center text-sm">
+                    {photo.caption}
+                  </p>
+                ) : null}
+                {photos.length > 1 ? (
+                  <span className="bg-bg/70 text-fg-muted rounded-full px-3 py-1 font-mono text-xs tabular-nums">
+                    {index! + 1} / {photos.length}
+                  </span>
+                ) : null}
+              </div>
             ) : null}
           </div>
         ) : null}

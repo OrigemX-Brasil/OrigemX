@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 
+import { BackLink } from "@/components/back-link";
 import { publicMetadata } from "@/modules/public/metadata";
 
 /**
@@ -97,12 +98,7 @@ export default function PrivacidadePage() {
           </section>
         </div>
 
-        <Link
-          href="/"
-          className="text-fg-muted hover:text-fg self-start text-sm transition-colors"
-        >
-          ← Início
-        </Link>
+        <BackLink href="/" label="Início" />
       </main>
     </div>
   );

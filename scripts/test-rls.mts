@@ -957,6 +957,55 @@ async function main() {
   );
 
   if (mediaRow) {
+    // B tentando gravar LEGENDA na foto de A. `media_update` recusa pela
+    // LINHA (owner_id = auth.uid()), e o PostgREST não devolve erro nesse
+    // caso: devolve sucesso com ZERO linha afetada. É por isso que
+    // `setMediaCaption` (src/modules/media/actions.ts) confere `data` depois
+    // do UPDATE em vez de só o `.error` — a mesma classe de falha silenciosa
+    // que o log de `deleteMedia` já existe para não deixar passar batido.
+    const alheia = await B.client
+      .from("media")
+      .update({ caption: "legenda forjada" })
+      .eq("id", mediaRow.id)
+      .select("id");
+    record(
+      "10. Mídia",
+      "B escreve legenda na mídia de A",
+      "0 linhas afetadas",
+      describe(alheia.error, alheia.data ?? []),
+      !alheia.error && (alheia.data ?? []).length === 0,
+    );
+
+    // Não basta "0 linhas devolvidas" — tem de ser 0 linhas GRAVADAS.
+    const { data: aposTentativa } = await admin
+      .from("media")
+      .select("caption")
+      .eq("id", mediaRow.id)
+      .single();
+    record(
+      "10. Mídia",
+      "legenda de A permanece intacta após a tentativa de B",
+      "null",
+      aposTentativa?.caption ?? "null",
+      aposTentativa?.caption === null,
+    );
+
+    // A gravando a própria legenda — a mesma porta, agora com o dono certo.
+    const propria = await A.client
+      .from("media")
+      .update({ caption: "Campeão Brasileiro 2024" })
+      .eq("id", mediaRow.id)
+      .select("id, caption");
+    record(
+      "10. Mídia",
+      "A escreve legenda na própria mídia",
+      "1 linha, legenda gravada",
+      describe(propria.error, propria.data ?? []),
+      !propria.error &&
+        propria.data?.length === 1 &&
+        propria.data[0].caption === "Campeão Brasileiro 2024",
+    );
+
     const { data: used } = await A.client.rpc("media_used_bytes", { p_owner_id: A.id });
     record(
       "10. Mídia",
@@ -970,6 +1019,80 @@ async function main() {
   }
 
   await admin.from("kennels").delete().eq("id", kennelMedia.id);
+
+  // Mídia de um ANCESTRAL FANTASMA — sem dono, sem canil. Quem o criou
+  // (`created_by`) é quem pode gerenciá-lo, para sempre — é a suposição em
+  // que a foto inline do fantasma (`ParentPicker`, tela de cadastro do cão)
+  // se apoia inteira. Nenhuma policy nova para esta feature: só confirmar
+  // que `can_manage_dog` já cobre este caso, pela porta real.
+  const { data: photoGhost, error: photoGhostError } = await A.client
+    .from("dogs")
+    .insert({
+      name: "Fantasma RLS",
+      sex: "male",
+      owner_id: null,
+      kennel_id: null,
+      created_by: A.id,
+    })
+    .select("id")
+    .single();
+  record(
+    "10. Mídia",
+    "A cria um ancestral fantasma (sem dono, sem canil)",
+    "criado",
+    photoGhostError ? `erro ${photoGhostError.code}: ${photoGhostError.message}` : "criado",
+    !photoGhostError && !!photoGhost,
+  );
+
+  if (photoGhost) {
+    const propriaFoto = await A.client
+      .from("media")
+      .insert({
+        bucket_id: BUCKET,
+        storage_path: `${A.id}/caes/${photoGhost.id}/foto-${RUN}.webp`,
+        dog_id: photoGhost.id,
+        role: "dog_gallery",
+        mime: "image/webp",
+        size_bytes: 5000,
+        owner_id: A.id,
+        created_by: A.id,
+      })
+      .select("id");
+    record(
+      "10. Mídia",
+      "A (criador do fantasma) grava foto nele",
+      "criado",
+      describe(propriaFoto.error, propriaFoto.data ?? []),
+      !propriaFoto.error && (propriaFoto.data ?? []).length === 1,
+    );
+
+    // B é honesto sobre a própria identidade (owner_id/created_by = B) — o
+    // que está sob teste é `can_manage_dog`, não a checagem de forjar dono
+    // alheio, que já é coberta noutro caso.
+    const alheiaFoto = await B.client
+      .from("media")
+      .insert({
+        bucket_id: BUCKET,
+        storage_path: `${B.id}/caes/${photoGhost.id}/forjada-${RUN}.webp`,
+        dog_id: photoGhost.id,
+        role: "dog_gallery",
+        mime: "image/webp",
+        size_bytes: 100,
+        owner_id: B.id,
+        created_by: B.id,
+      })
+      .select("id");
+    record(
+      "10. Mídia",
+      "B (não é quem criou o fantasma) tenta gravar foto nele",
+      "erro de permissão",
+      describe(alheiaFoto.error, alheiaFoto.data ?? []),
+      !!alheiaFoto.error,
+    );
+
+    await admin.from("media").delete().eq("dog_id", photoGhost.id);
+    await admin.from("dogs").delete().eq("id", photoGhost.id);
+  }
 
   // ---------------------------------------------------------------------------
   // Cenário 11 — selo Criador Fundador
@@ -1973,6 +2096,175 @@ async function main() {
   }
 
   // ---------------------------------------------------------------------------
+  // Cenário 18 — vídeo do cão: posse na escrita, visibilidade herdada na leitura
+  //
+  // A tabela é nova e a policy dela DELEGA a visibilidade a `dogs` (o `exists`
+  // de `dog_videos_select`), exatamente como `media_select` já fazia. Delegar é
+  // barato de escrever e caro de errar: se a delegação não funcionar, o vídeo
+  // de um cão em RASCUNHO vaza para o visitante anônimo. É o que o par
+  // publicado/rascunho abaixo mede — e é a razão de este cenário existir.
+  //
+  // Reusa `dogAPub` e `dogADraft` do cenário 1 de propósito: são o mesmo par
+  // que já provou a regra do lado de `dogs`, então uma divergência entre as
+  // duas tabelas aparece como diferença no relatório, não como suposição.
+  // ---------------------------------------------------------------------------
+
+  const { data: videoA, error: videoAError } = await A.client
+    .from("dog_videos")
+    .insert({
+      dog_id: dogAPub.id,
+      provider_uid: `rls-${RUN}-video-a`,
+      status: "ready",
+      thumbnail_url: "https://customer-rls1.cloudflarestream.com/x/thumbnails/thumbnail.jpg",
+      playback_origin: "https://customer-rls1.cloudflarestream.com",
+      duration_seconds: 12.5,
+      owner_id: A.id,
+      created_by: A.id,
+    })
+    .select("id")
+    .single();
+  record(
+    "18. Vídeo",
+    "A registra o vídeo do próprio cão",
+    "criado",
+    videoAError ? `erro ${videoAError.code}: ${videoAError.message}` : "criado",
+    !videoAError && !!videoA,
+  );
+
+  // B tentando gravar vídeo no cão de A, assumindo a própria posse.
+  const videoForjado = await B.client
+    .from("dog_videos")
+    .insert({
+      dog_id: dogAPub.id,
+      provider_uid: `rls-${RUN}-video-forjado`,
+      status: "pendingupload",
+      owner_id: B.id,
+      created_by: B.id,
+    })
+    .select("id");
+  record(
+    "18. Vídeo",
+    "B registra vídeo no cão de A",
+    "negado (42501)",
+    describe(videoForjado.error, videoForjado.data ?? undefined),
+    videoForjado.error?.code === "42501",
+  );
+
+  // E agora forjando o owner_id como se fosse A — `dog_videos_insert` compara
+  // com `auth.uid()`, então a mentira não passa nem com o cão certo.
+  const videoOwnerForjado = await B.client
+    .from("dog_videos")
+    .insert({
+      dog_id: dogAPub.id,
+      provider_uid: `rls-${RUN}-video-owner-forjado`,
+      status: "pendingupload",
+      owner_id: A.id,
+      created_by: A.id,
+    })
+    .select("id");
+  record(
+    "18. Vídeo",
+    "B registra vídeo forjando owner_id de A",
+    "negado (42501)",
+    describe(videoOwnerForjado.error, videoOwnerForjado.data ?? undefined),
+    videoOwnerForjado.error?.code === "42501",
+  );
+
+  if (videoA) {
+    // UPDATE recusado pela RLS não devolve erro pelo PostgREST: devolve sucesso
+    // com ZERO linha. Por isso o critério aqui é a CONTAGEM, não o `error` —
+    // foi essa distinção que deixou passar despercebida a policy que recusava a
+    // própria exclusão lógica de mídia até produção.
+    const videoUpdateB = await B.client
+      .from("dog_videos")
+      .update({ status: "error", error_reason: "sabotagem" })
+      .eq("id", videoA.id)
+      .select("id");
+    record(
+      "18. Vídeo",
+      "B altera o status do vídeo de A",
+      "0 linhas",
+      describe(videoUpdateB.error, videoUpdateB.data ?? undefined),
+      !videoUpdateB.error && (videoUpdateB.data ?? []).length === 0,
+    );
+
+    // Sem grant de DELETE para ninguém: a invariante de exclusão lógica é
+    // privilégio do Postgres, não convenção de código.
+    const videoDelete = await A.client.from("dog_videos").delete().eq("id", videoA.id).select();
+    record(
+      "18. Vídeo",
+      "A apaga fisicamente o próprio vídeo",
+      "negado (42501)",
+      describe(videoDelete.error, videoDelete.data ?? undefined),
+      videoDelete.error?.code === "42501",
+    );
+
+    // Um vídeo vivo por cão — `dog_videos_one_per_dog`.
+    const videoSegundo = await A.client
+      .from("dog_videos")
+      .insert({
+        dog_id: dogAPub.id,
+        provider_uid: `rls-${RUN}-video-segundo`,
+        status: "pendingupload",
+        owner_id: A.id,
+        created_by: A.id,
+      })
+      .select("id");
+    record(
+      "18. Vídeo",
+      "A registra um SEGUNDO vídeo no mesmo cão",
+      "negado (23505)",
+      describe(videoSegundo.error, videoSegundo.data ?? undefined),
+      videoSegundo.error?.code === "23505",
+    );
+  }
+
+  // O vídeo de um cão em RASCUNHO. Existe para o dono; o visitante não pode
+  // nem saber que existe.
+  const { data: videoDraft } = await A.client
+    .from("dog_videos")
+    .insert({
+      dog_id: dogADraft.id,
+      provider_uid: `rls-${RUN}-video-rascunho`,
+      status: "pendingupload",
+      owner_id: A.id,
+      created_by: A.id,
+    })
+    .select("id")
+    .single();
+
+  const anonVideoPub = await anon.from("dog_videos").select("id").eq("dog_id", dogAPub.id);
+  record(
+    "18. Vídeo",
+    "anônimo lê o vídeo de cão PUBLICADO",
+    "1 linha",
+    describe(anonVideoPub.error, anonVideoPub.data ?? undefined),
+    !anonVideoPub.error && (anonVideoPub.data ?? []).length === 1,
+  );
+
+  const anonVideoDraft = await anon.from("dog_videos").select("id").eq("dog_id", dogADraft.id);
+  record(
+    "18. Vídeo",
+    "anônimo lê o vídeo de cão em RASCUNHO",
+    "0 linhas",
+    describe(anonVideoDraft.error, anonVideoDraft.data ?? undefined),
+    !anonVideoDraft.error && (anonVideoDraft.data ?? []).length === 0,
+  );
+
+  // Varredura: nenhum vídeo de rascunho pode aparecer numa listagem aberta.
+  const anonVideoTodos = await anon.from("dog_videos").select("id");
+  const vazados = (anonVideoTodos.data ?? []).filter(
+    (v: { id: string }) => v.id === videoDraft?.id,
+  );
+  record(
+    "18. Vídeo",
+    "listagem anônima sem filtro traz vídeo de rascunho",
+    "0 linhas do rascunho",
+    `${vazados.length} linha(s)`,
+    vazados.length === 0,
+  );
+
+  // ---------------------------------------------------------------------------
   // Limpeza
   //
   // POR POSSE, não por padrão de slug — e esta distinção não é estilo.
@@ -2021,6 +2313,14 @@ async function main() {
   );
   await limpar("dog_identifiers", () =>
     admin.from("dog_identifiers").delete().like("value", `RLS-${RUN}-%`),
+  );
+
+  // `dog_videos.dog_id` é ON DELETE RESTRICT: uma linha de vídeo sobrevivente
+  // faria o DELETE de `dogs` abaixo falhar, e a partir daí a cadeia inteira
+  // (kennels, deleteUser) desmoronaria — o mesmo estrago que a limpeza por
+  // slug já causou uma vez.
+  await limpar("dog_videos", () =>
+    admin.from("dog_videos").delete().in("owner_id", ids),
   );
 
   // Zera o parentesco antes de apagar: cão que é pai de outro cão do lote

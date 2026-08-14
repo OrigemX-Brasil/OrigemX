@@ -2,9 +2,10 @@
 
 import { useActionState, useState } from "react";
 
+import { FormMessage } from "@/components/form-message";
 import { updatePassword, type ActionState } from "@/modules/auth/actions";
 
-import { FormMessage, PasswordField, SubmitButton } from "./form";
+import { PasswordField, SubmitButton } from "./form";
 
 export function NewPasswordForm() {
   const [state, formAction] = useActionState<ActionState, FormData>(updatePassword, {});
