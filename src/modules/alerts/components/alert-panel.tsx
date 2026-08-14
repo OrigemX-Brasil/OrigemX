@@ -70,7 +70,12 @@ export function AlertPanel({ result }: { result: AlertsResult }) {
           <span className="text-success">✓</span> Nada pendente no seu canil e nos seus cães.
         </p>
       ) : (
-        <ul className="flex flex-col gap-3">
+        // Duas colunas no desktop: cada pendência é um cartão curto (chip,
+        // título, uma frase e os alvos), e empilhados numa faixa de 1152px
+        // eles viravam uma escada de blocos largos e baixos. `items-start`
+        // porque a grade não deve esticar o cartão baixo até a altura do
+        // vizinho alto.
+        <ul className="flex flex-col gap-3 xl:grid xl:grid-cols-2 xl:items-start">
           {alerts.map((alert) => (
             <AlertRow key={`${alert.ruleId}:${alert.targets[0]?.id}`} alert={alert} />
           ))}

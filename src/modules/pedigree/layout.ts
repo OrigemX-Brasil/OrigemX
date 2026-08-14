@@ -93,3 +93,48 @@ export function treeWidth(
   for (let g = 0; g <= depth && g < specs.length; g += 1) total += specs[g]!.band;
   return total;
 }
+
+/**
+ * Largura ÚTIL do scroller da árvore, por breakpoint — o quanto de árvore cabe
+ * antes de precisar rolar.
+ *
+ * Mora aqui, e não em `pedigree-tree.tsx`, pelo mesmo motivo de todo o resto
+ * deste arquivo: é régua, e régua tem um dono só. Antes era um
+ * `const CONTAINER_WIDTH = 672` solto dentro do componente — o `max-w-2xl` da
+ * página do cão cravado num lugar onde a página não aparece, e que passaria a
+ * mentir no instante em que aquele container mudasse.
+ *
+ * A conta, em cada breakpoint:
+ *
+ *     container − padding do `<main>` − `px-3` do scroller − 2px de borda
+ *
+ *     base   672 (max-w-2xl) − 40 (px-5)      − 26 =  606
+ *     xl    1152 (max-w-6xl) − 64 (lg:px-8)   − 26 = 1062
+ *
+ * `treeWidth(5)` é 1000: **no desktop a árvore de 5 gerações cabe inteira**,
+ * sem rolagem lateral. `layout.test.ts` trava isso.
+ */
+export const TREE_VIEWPORT = { base: 606, xl: 1062 } as const;
+
+export type TreeOverflow = {
+  /** Rola no layout base (celular e tablet). */
+  base: boolean;
+  /** Ainda rola a partir de `xl` (≥1280px)? */
+  xl: boolean;
+};
+
+/**
+ * Em quais breakpoints esta árvore transborda.
+ *
+ * É o que permite decidir a affordance de rolagem — degradê e "arraste para o
+ * lado" — SEM medir nada no navegador: a profundidade é conhecida no servidor,
+ * as larguras são constantes, e o resultado vira classe de CSS. A página
+ * continua estática, que é o requisito de `/d/[public_id]`.
+ */
+export function treeOverflow(
+  depth: number,
+  specs: readonly GenerationSpec[] = GENERATIONS,
+): TreeOverflow {
+  const width = treeWidth(depth, specs);
+  return { base: width > TREE_VIEWPORT.base, xl: width > TREE_VIEWPORT.xl };
+}

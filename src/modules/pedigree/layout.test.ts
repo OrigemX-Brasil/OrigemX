@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { ELBOW, GENERATIONS, MAX_PHOTO_GENERATION, PREVIEW_GENERATIONS, treeWidth } from "./layout";
+import {
+  ELBOW,
+  GENERATIONS,
+  MAX_PHOTO_GENERATION,
+  PREVIEW_GENERATIONS,
+  TREE_VIEWPORT,
+  treeOverflow,
+  treeWidth,
+} from "./layout";
 
 describe("layout — geometria da árvore em colunas", () => {
   it("a faixa de cada geração (exceto a 0) é o card mais o cotovelo", () => {
@@ -46,5 +54,42 @@ describe("layout — geometria da árvore em colunas", () => {
     expect(PREVIEW_GENERATIONS).toHaveLength(2);
     expect(PREVIEW_GENERATIONS[0]!.band).toBe(PREVIEW_GENERATIONS[0]!.card);
     expect(PREVIEW_GENERATIONS[1]!.band).toBeGreaterThan(PREVIEW_GENERATIONS[1]!.card);
+  });
+});
+
+describe("layout — quando a árvore transborda o scroller", () => {
+  it("NO DESKTOP a árvore de 5 gerações cabe inteira, sem rolagem lateral", () => {
+    // O ganho principal do layout de desktop, travado contra regressão: se
+    // alguém aumentar um card ou o cotovelo, ou estreitar o container, este
+    // teste cai antes de a rolagem voltar sem ninguém notar.
+    expect(treeWidth(5)).toBeLessThanOrEqual(TREE_VIEWPORT.xl);
+    expect(treeOverflow(5).xl).toBe(false);
+  });
+
+  it("no layout base a árvore funda continua rolando — é o que a affordance anuncia", () => {
+    expect(treeOverflow(5).base).toBe(true);
+    expect(treeOverflow(4).base).toBe(true);
+    expect(treeOverflow(3).base).toBe(true);
+  });
+
+  it("árvore rasa não rola em lugar nenhum", () => {
+    for (const depth of [0, 1, 2]) {
+      expect(treeOverflow(depth)).toEqual({ base: false, xl: false });
+    }
+  });
+
+  /**
+   * A prova de que trocar o antigo `CONTAINER_WIDTH = 672` por
+   * `TREE_VIEWPORT.base = 606` NÃO mudou o comportamento em nenhum celular ou
+   * tablet: não existe degrau de `treeWidth` entre os dois valores, então o
+   * booleano é idêntico para toda profundidade.
+   *
+   * É a asserção que sustenta a regra "nada muda abaixo de xl". Se um card
+   * mudar de largura e algum degrau cair nessa faixa, este teste avisa.
+   */
+  it("606 e 672 classificam TODA profundidade do mesmo jeito", () => {
+    for (let depth = 0; depth < GENERATIONS.length; depth += 1) {
+      expect(treeWidth(depth) > TREE_VIEWPORT.base).toBe(treeWidth(depth) > 672);
+    }
   });
 });

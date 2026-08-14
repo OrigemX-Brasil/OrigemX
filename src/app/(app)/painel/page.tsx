@@ -26,47 +26,58 @@ export default async function PainelPage() {
       {alerts ? <AlertPanel result={alerts} /> : null}
 
       {/* Identificação do usuário logado, lida no servidor. Mono nos valores
-          porque são dado de registro, não texto corrido. */}
-      <dl className="border-border bg-surface rounded-card divide-border divide-y border">
-        <div className="flex flex-col gap-1 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          porque são dado de registro, não texto corrido.
+
+          No desktop as três linhas viram três colunas: são dados CURTOS, e
+          empilhados numa faixa de 1152px cada um ocupava a largura toda para
+          exibir um e-mail. `divide-y` vira `divide-x` junto, senão as réguas
+          continuariam horizontais cortando colunas verticais. */}
+      <dl className="border-border bg-surface rounded-card divide-border divide-y border xl:grid xl:grid-cols-3 xl:divide-x xl:divide-y-0">
+        <div className="flex flex-col gap-1 px-5 py-4 sm:flex-row sm:items-center sm:justify-between xl:flex-col xl:items-start xl:justify-start">
           <dt className="text-fg-muted text-sm">E-mail</dt>
           <dd className="text-fg font-mono text-sm break-all">{user?.email ?? "—"}</dd>
         </div>
-        <div className="flex flex-col gap-1 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-1 px-5 py-4 sm:flex-row sm:items-center sm:justify-between xl:flex-col xl:items-start xl:justify-start">
           <dt className="text-fg-muted text-sm">Identificador</dt>
           <dd className="text-fg-faint font-mono text-xs break-all">{user?.id ?? "—"}</dd>
         </div>
-        <div className="flex flex-col gap-1 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-1 px-5 py-4 sm:flex-row sm:items-center sm:justify-between xl:flex-col xl:items-start xl:justify-start">
           <dt className="text-fg-muted text-sm">Perfil</dt>
           <dd className="text-fg font-mono text-sm">{profile?.role ?? "—"}</dd>
         </div>
       </dl>
 
-      <Link
-        href="/painel/canis"
-        className="border-border bg-surface hover:bg-surface-hover rounded-card flex items-center justify-between gap-4 border p-5 transition-colors"
-      >
-        <span className="flex flex-col gap-1">
-          <span className="text-fg font-medium">Meu canil</span>
-          <span className="text-fg-muted text-sm">Cadastre e edite seu canil.</span>
-        </span>
-        <span className="text-fg-faint" aria-hidden="true">
-          →
-        </span>
-      </Link>
+      {/* Os dois atalhos lado a lado no desktop. O `<div>` é só o container da
+          grade — abaixo de `xl` ele não tem classe nenhuma, então os dois
+          `<Link>` continuam sendo irmãos empilhados pelo `gap-8` do pai, como
+          antes. */}
+      <div className="flex flex-col gap-8 xl:grid xl:grid-cols-2 xl:gap-8">
+        <Link
+          href="/painel/canis"
+          className="border-border bg-surface hover:bg-surface-hover rounded-card flex items-center justify-between gap-4 border p-5 transition-colors"
+        >
+          <span className="flex flex-col gap-1">
+            <span className="text-fg font-medium">Meu canil</span>
+            <span className="text-fg-muted text-sm">Cadastre e edite seu canil.</span>
+          </span>
+          <span className="text-fg-faint" aria-hidden="true">
+            →
+          </span>
+        </Link>
 
-      <Link
-        href="/painel/caes"
-        className="border-border bg-surface hover:bg-surface-hover rounded-card flex items-center justify-between gap-4 border p-5 transition-colors"
-      >
-        <span className="flex flex-col gap-1">
-          <span className="text-fg font-medium">Cães</span>
-          <span className="text-fg-muted text-sm">Cadastre cães e defina pai e mãe.</span>
-        </span>
-        <span className="text-fg-faint" aria-hidden="true">
-          →
-        </span>
-      </Link>
+        <Link
+          href="/painel/caes"
+          className="border-border bg-surface hover:bg-surface-hover rounded-card flex items-center justify-between gap-4 border p-5 transition-colors"
+        >
+          <span className="flex flex-col gap-1">
+            <span className="text-fg font-medium">Cães</span>
+            <span className="text-fg-muted text-sm">Cadastre cães e defina pai e mãe.</span>
+          </span>
+          <span className="text-fg-faint" aria-hidden="true">
+            →
+          </span>
+        </Link>
+      </div>
     </div>
   );
 }

@@ -3,7 +3,7 @@ import {
   GENERATIONS,
   PREVIEW_ELBOW,
   PREVIEW_GENERATIONS,
-  treeWidth,
+  treeOverflow,
   type GenerationSpec,
 } from "../layout";
 import { generationOf, parentPositions, type Pedigree } from "../tree";
@@ -50,6 +50,12 @@ import { PedigreeGenerations } from "./pedigree-generations";
  * repousar num ponto de snap, e alvo maior que a área restante vira briga de
  * rolagem com conteúdo inalcançável.
  *
+ * A PARTIR DE `xl` NÃO HÁ ROLAGEM: o container é `max-w-6xl` e a árvore cheia
+ * (1000px, ver `treeWidth`) cabe nos 1062px úteis. O scroller continua no
+ * markup — é o mesmo HTML para todas as larguras, e ele simplesmente não tem o
+ * que rolar. O que muda é a affordance, que some por `xl:hidden`. Quem decide
+ * isso é `treeOverflow`, em `layout.ts`, com a régua ao lado da geometria.
+ *
  * FOTO ATÉ A TERCEIRA GERAÇÃO (`MAX_PHOTO_GENERATION` em `layout.ts`).
  * Sujeito + g1..g3 = no máximo 15 miniaturas, todas `lazy`. Da quarta em
  * diante o card é texto: são 16 e 32 posições, e 48 miniaturas a mais em 4G
@@ -74,12 +80,6 @@ import { PedigreeGenerations } from "./pedigree-generations";
  * público de até a terceira geração: ver `thumbnailTargets` (`tree.ts`) e
  * `getPublicDogThumbs` (`modules/public/queries.ts`).
  */
-
-/** Largura útil do `<main>` da página do cão (`max-w-2xl` menos padding).
- * Acima disso a árvore rola; abaixo, cabe inteira e a affordance some. Os
- * degraus de `treeWidth` (168/364/544/712/…) nunca caem perto dessa borda —
- * a transição real é sempre "3 gerações cabem, 4 não". */
-const CONTAINER_WIDTH = 672;
 
 /** Card do sujeito + o padding esquerdo do scroller (`px-3` = 12px). Sem
  * isto, o `scroll-snap` esconde a coluna assentada atrás do card fixo. */
@@ -108,7 +108,20 @@ export function PedigreeTree({
   if (!pedigree?.subject) return null;
 
   const specs = variant === "preview" ? PREVIEW_GENERATIONS : GENERATIONS;
-  const scrolls = variant === "full" && treeWidth(pedigree.depth, specs) > CONTAINER_WIDTH;
+
+  /**
+   * Onde esta árvore transborda — ver `treeOverflow` em `layout.ts`.
+   *
+   * Duas respostas, uma por breakpoint, porque a partir de `xl` o container é
+   * quase o dobro e a árvore de 5 gerações passa a caber INTEIRA. A decisão
+   * vira classe de CSS (`xl:hidden`), nunca medição no navegador: a
+   * profundidade é conhecida no servidor e a página precisa continuar estática.
+   */
+  const overflow =
+    variant === "full" ? treeOverflow(pedigree.depth, specs) : { base: false, xl: false };
+
+  /** Rola no base mas cabe no desktop: a affordance existe, e some lá. */
+  const soNoBase = overflow.base && !overflow.xl ? "xl:hidden" : "";
 
   return (
     <section className="flex flex-col gap-3">
@@ -172,10 +185,10 @@ export function PedigreeTree({
               </div>
             </div>
 
-            {scrolls ? (
+            {overflow.base ? (
               <div
                 aria-hidden="true"
-                className="from-surface rounded-r-card pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l to-transparent"
+                className={`from-surface rounded-r-card pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l to-transparent ${soNoBase}`}
               />
             ) : null}
           </div>
@@ -192,9 +205,11 @@ export function PedigreeTree({
       {variant === "full" && pedigree.depth >= 1 ? <ColorLegend /> : null}
 
       {/* `hidden sm:block`: no mobile não há árvore lateral para arrastar — a
-          navegação lá é o acordeão por geração. */}
-      {scrolls ? (
-        <p className="text-fg-faint hidden text-xs sm:block">
+          navegação lá é o acordeão por geração. E `xl:hidden` quando a árvore
+          passa a caber no desktop: anunciar rolagem que não existe mais é pior
+          do que não anunciar nada. */}
+      {overflow.base ? (
+        <p className={`text-fg-faint hidden text-xs sm:block ${soNoBase}`}>
           Arraste para o lado para ver as gerações →
         </p>
       ) : null}

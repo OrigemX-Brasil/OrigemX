@@ -47,7 +47,7 @@ export const metadata: Metadata = publicMetadata({
 
 export default function CapturaPage() {
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col gap-10 px-5 py-16">
+    <main className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col gap-10 px-5 py-16 xl:max-w-6xl">
       <Image
         src="/brand/logo-header.png"
         alt="OrigemX"
@@ -60,67 +60,93 @@ export default function CapturaPage() {
         className="h-10 w-auto self-start"
       />
 
-      <div className="flex flex-col gap-5">
-        <span className="text-fg-faint font-mono text-xs tracking-[0.2em] uppercase">
-          A inteligência por trás das linhagens de excelência
-        </span>
-        <h1 className="font-display text-3xl leading-tight font-semibold tracking-tight text-balance sm:text-5xl">
-          A história do seu cão não deveria terminar em um pedigree.
-        </h1>
-        <p className="text-fg-muted max-w-xl text-base">
-          Origem, linhagem e história. Tudo em uma identidade digital que acompanha seu cão por toda
-          a vida.
-        </p>
-      </div>
-
-      {/* A chamada vem ANTES da prova visual: quem já se convenceu no papel
-          impresso não precisa rolar para agir. */}
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-center gap-3">
-          {/*
-            Sem `?de=` fixo aqui, de propósito. Esta página é estática e serve o
-            mesmo HTML para `/` e para `/?de=feira` — um parâmetro cravado no
-            link apagaria a campanha e faria toda conversão cair na mesma origem,
-            enquanto os acessos continuariam separados. O `/cadastro` recupera a
-            origem pelo `Referer`, que traz a URL completa por ser mesma origem.
-          */}
-          <Link
-            href="/cadastro"
-            className="bg-accent text-fg-on-accent hover:bg-accent-hover rounded-control focus-visible:outline-ring px-6 py-3 text-base font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
-          >
-            Criar meu perfil no OrigemX
-          </Link>
-          <Link
-            href="/login"
-            className="border-border-strong text-fg hover:bg-surface-hover rounded-control focus-visible:outline-ring border px-5 py-3 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
-          >
-            Já tenho conta
-          </Link>
-        </div>
-        <p className="text-fg-faint text-xs">Grátis para começar · leva menos de 1 minuto.</p>
-      </div>
-
       {/*
-        Prova visual do que o texto promete. Antes disto a página só dizia "QR
-        Code" e "endereço que não muda" sem mostrar nenhum dos dois — pedido
-        direto do cliente. Os dois cards levam pro perfil de um cão REAL
-        (Thor, ver src/modules/capture/example-dog.ts) — clicar não cai num
-        link morto — e dizem "Exemplo" na etiqueta porque não é o cão de um
-        cliente, é o do próprio OrigemX.
+        UMA COLUNA TAMBÉM NO DESKTOP, e isso foi decidido olhando a tela.
+
+        Cheguei a montar o hero em duas colunas (texto à esquerda, exemplos à
+        direita). Não fecha: a coluna dos exemplos empilha dois cartões e fica
+        quase o dobro da altura do texto, deixando ~530px de vazio embaixo à
+        esquerda. As saídas eram piores — lado a lado numa coluna de 552px cada
+        cartão fica com 268px e a prévia do pedigree (284px de largura fixa)
+        estoura; e encolher o mockup para caber ali torna ilegível justamente a
+        imagem que o cliente pediu para MOSTRAR o produto.
+
+        Então a largura extra vai para onde rende sem criar vão: os dois
+        cartões de exemplo passam de 356px para ~548px cada, e o mockup de
+        768px para ~1112px. O que precisa de teto é só o texto.
       */}
-      <section className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1.5">
-          <h2 className="font-display text-lg font-semibold tracking-tight">Veja como fica</h2>
-          <p className="text-fg-muted text-sm">
-            O QR que vai no crachá, e o perfil que ele abre — os dois são o produto de verdade, só o
-            cão é de exemplo.
-          </p>
+      <div className="flex flex-col gap-10">
+        <div className="flex flex-col gap-10">
+          {/* `xl:max-w-4xl`: a manchete não tem largura máxima própria, e sem
+              isto ela se esticaria pelos 1112px da faixa — exatamente a parede
+              de texto que este trabalho existe para evitar. O parágrafo já
+              tinha o seu `max-w-xl`. */}
+          <div className="flex flex-col gap-5 xl:max-w-4xl">
+            <span className="text-fg-faint font-mono text-xs tracking-[0.2em] uppercase">
+              A inteligência por trás das linhagens de excelência
+            </span>
+            <h1 className="font-display text-3xl leading-tight font-semibold tracking-tight text-balance sm:text-5xl">
+              A história do seu cão não deveria terminar em um pedigree.
+            </h1>
+            <p className="text-fg-muted max-w-xl text-base">
+              Origem, linhagem e história. Tudo em uma identidade digital que acompanha seu cão por
+              toda a vida.
+            </p>
+          </div>
+
+          {/* A chamada vem ANTES da prova visual: quem já se convenceu no papel
+              impresso não precisa rolar para agir. */}
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-wrap items-center gap-3">
+              {/*
+                Sem `?de=` fixo aqui, de propósito. Esta página é estática e serve o
+                mesmo HTML para `/` e para `/?de=feira` — um parâmetro cravado no
+                link apagaria a campanha e faria toda conversão cair na mesma origem,
+                enquanto os acessos continuariam separados. O `/cadastro` recupera a
+                origem pelo `Referer`, que traz a URL completa por ser mesma origem.
+              */}
+              <Link
+                href="/cadastro"
+                className="bg-accent text-fg-on-accent hover:bg-accent-hover rounded-control focus-visible:outline-ring px-6 py-3 text-base font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
+              >
+                Criar meu perfil no OrigemX
+              </Link>
+              <Link
+                href="/login"
+                className="border-border-strong text-fg hover:bg-surface-hover rounded-control focus-visible:outline-ring border px-5 py-3 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
+              >
+                Já tenho conta
+              </Link>
+            </div>
+            <p className="text-fg-faint text-xs">Grátis para começar · leva menos de 1 minuto.</p>
+          </div>
         </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <ExampleQrCard />
-          <ExampleProfileCard />
-        </div>
-      </section>
+
+        {/*
+          Prova visual do que o texto promete. Antes disto a página só dizia "QR
+          Code" e "endereço que não muda" sem mostrar nenhum dos dois — pedido
+          direto do cliente. Os dois cards levam pro perfil de um cão REAL
+          (Thor, ver src/modules/capture/example-dog.ts) — clicar não cai num
+          link morto — e dizem "Exemplo" na etiqueta porque não é o cão de um
+          cliente, é o do próprio OrigemX.
+        */}
+        <section className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <h2 className="font-display text-lg font-semibold tracking-tight">Veja como fica</h2>
+            <p className="text-fg-muted text-sm">
+              O QR que vai no crachá, e o perfil que ele abre — os dois são o produto de verdade, só
+              o cão é de exemplo.
+            </p>
+          </div>
+          {/* Duas colunas seguem valendo no desktop — com a faixa mais larga,
+              cada cartão passa de 356px para ~548px. É a largura extra indo
+              para o conteúdo em vez de virar margem. */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <ExampleQrCard />
+            <ExampleProfileCard />
+          </div>
+        </section>
+      </div>
 
       {/*
         Ampliação por âncora + `:target`, sem uma linha de JavaScript — a
@@ -140,7 +166,11 @@ export default function CapturaPage() {
           alt="Árvore genealógica do OrigemX: fotos, gerações, campeões e análise genética num só perfil."
           width={1536}
           height={1024}
-          sizes="(max-width: 768px) 100vw, 768px"
+          // A primeira cláusula é a de antes, intocada — abaixo de 768px o
+          // navegador escolhe exatamente o mesmo candidato do `srcset`. A
+          // terceira só passa a valer no desktop, onde o container é
+          // `max-w-6xl` e a imagem ocupa ~1112px em vez de 768.
+          sizes="(max-width: 768px) 100vw, (max-width: 1280px) 768px, 1120px"
           loading="lazy"
           className="rounded-card w-full"
         />
@@ -154,7 +184,12 @@ export default function CapturaPage() {
       >
         <span className="bg-bg/70 text-fg hover:bg-bg/90 absolute top-3 right-3 flex size-10 items-center justify-center rounded-full transition-colors sm:top-6 sm:right-6">
           <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none">
-            <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            <path
+              d="M6 6l12 12M18 6L6 18"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
           </svg>
         </span>
         {/* eslint-disable-next-line @next/next/no-img-element -- ampliação em tela cheia: dimensão vem do viewport, não faz sentido fixar width/height do next/image aqui. */}
@@ -172,7 +207,9 @@ export default function CapturaPage() {
         direto do cliente.
       */}
       <footer className="border-border flex flex-col gap-3 border-t pt-6 text-xs sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-fg-faint">© {new Date().getFullYear()} OrigemX. Todos os direitos reservados.</p>
+        <p className="text-fg-faint">
+          © {new Date().getFullYear()} OrigemX. Todos os direitos reservados.
+        </p>
         <div className="text-fg-faint flex flex-wrap gap-x-4 gap-y-2">
           <a href="mailto:contato@origemxbr.com" className="hover:text-fg-muted transition-colors">
             contato@origemxbr.com

@@ -166,52 +166,67 @@ export default async function CaoPublicoPage({
         <KennelSearch />
       </header>
 
-      <main className="mx-auto w-full max-w-2xl flex-1 px-5 py-8 lg:px-8">
+      <main className="mx-auto w-full max-w-2xl flex-1 px-5 py-8 lg:px-8 xl:max-w-6xl">
         <PublicGallery photos={photos}>
           <div className="flex flex-col gap-8">
-            {/* Lado a lado em TODA largura — ver o mesmo bloco em
+            {/*
+              No desktop a identidade e a FICHA ficam lado a lado, em vez de a
+              ficha empurrar o pedigree para baixo da dobra. É a leitura que
+              quem escaneia o QR quer primeiro: quem é o cão, e os dados dele.
+
+              `xl:items-start` porque a ficha é mais alta que o cabeçalho e as
+              duas devem alinhar pelo topo, não pelo meio.
+            */}
+            <div className="flex flex-col gap-8 xl:grid xl:grid-cols-[minmax(0,1fr)_380px] xl:items-start xl:gap-10">
+              {/* Lado a lado em TODA largura — ver o mesmo bloco em
               `kennel-profile.tsx`. */}
-            <div className="flex items-start gap-4 sm:gap-6">
-              {principal && photoIndex.has(principal.id) ? (
-                <PhotoTrigger
-                  index={photoIndex.get(principal.id)!}
-                  label={`Ampliar foto ${photoIndex.get(principal.id)! + 1} de ${photos.length} de ${dog.name}`}
-                  className="focus-visible:outline-ring rounded-card focus-visible:outline-2 focus-visible:outline-offset-2"
-                >
-                  {avatarImage}
-                </PhotoTrigger>
-              ) : (
-                avatarImage
-              )}
-
-              <div className="flex min-w-0 flex-col gap-2">
-                <span className="text-fg-faint font-mono text-xs tracking-[0.2em] uppercase">
-                  Registro
-                </span>
-                <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">
-                  {dog.name}
-                </h1>
-                <p className="text-fg-muted text-sm">{describeDog(dog)}</p>
-                {kennel ? (
-                  // Mesma razão dos links da árvore: página de leitura, saída
-                  // improvável, 4G disputado. Ver pedigree-tree.tsx.
-                  <BackLink href={`/c/${kennel.slug}`} label={kennel.name} variant="link" prefetch={false} />
+              <div className="flex items-start gap-4 sm:gap-6">
+                {principal && photoIndex.has(principal.id) ? (
+                  <PhotoTrigger
+                    index={photoIndex.get(principal.id)!}
+                    label={`Ampliar foto ${photoIndex.get(principal.id)! + 1} de ${photos.length} de ${dog.name}`}
+                    className="focus-visible:outline-ring rounded-card focus-visible:outline-2 focus-visible:outline-offset-2"
+                  >
+                    {avatarImage}
+                  </PhotoTrigger>
                 ) : (
-                  // Ancestral fantasma ou dono ainda sem canil: sem página-pai
-                  // nenhuma para apontar.
-                  <BackLink href="/" label="Início" variant="link" prefetch={false} />
+                  avatarImage
                 )}
-              </div>
-            </div>
 
-            <dl className="border-border bg-surface rounded-card divide-border divide-y border">
-              <Row label="Sexo" value={SEX_LABEL[dog.sex]} />
-              <Row label="Raça" value={dog.breed} />
-              <Row label="Nascimento" value={dog.born_on} />
-              <Row label="Cor" value={dog.color} />
-              <Row label="Pelagem" value={dog.coat} />
-              <Row label="Identificador" value={dog.public_id} mono />
-            </dl>
+                <div className="flex min-w-0 flex-col gap-2">
+                  <span className="text-fg-faint font-mono text-xs tracking-[0.2em] uppercase">
+                    Registro
+                  </span>
+                  <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">
+                    {dog.name}
+                  </h1>
+                  <p className="text-fg-muted text-sm">{describeDog(dog)}</p>
+                  {kennel ? (
+                    // Mesma razão dos links da árvore: página de leitura, saída
+                    // improvável, 4G disputado. Ver pedigree-tree.tsx.
+                    <BackLink
+                      href={`/c/${kennel.slug}`}
+                      label={kennel.name}
+                      variant="link"
+                      prefetch={false}
+                    />
+                  ) : (
+                    // Ancestral fantasma ou dono ainda sem canil: sem página-pai
+                    // nenhuma para apontar.
+                    <BackLink href="/" label="Início" variant="link" prefetch={false} />
+                  )}
+                </div>
+              </div>
+
+              <dl className="border-border bg-surface rounded-card divide-border divide-y border">
+                <Row label="Sexo" value={SEX_LABEL[dog.sex]} />
+                <Row label="Raça" value={dog.breed} />
+                <Row label="Nascimento" value={dog.born_on} />
+                <Row label="Cor" value={dog.color} />
+                <Row label="Pelagem" value={dog.coat} />
+                <Row label="Identificador" value={dog.public_id} mono />
+              </dl>
+            </div>
 
             <PedigreeTree
               pedigree={pedigree}
@@ -225,7 +240,9 @@ export default async function CaoPublicoPage({
                 consulta o Cloudflare, então o serviço fora do ar não muda nada
                 aqui. */}
             {video ? (
-              <section className="flex flex-col gap-3">
+              // `xl:max-w-3xl` no desktop: 16:9 ocupando os 1112px da faixa
+              // seria uma tela de cinema no meio de uma ficha de registro.
+              <section className="flex flex-col gap-3 xl:max-w-3xl">
                 <h2 className="font-display text-lg font-semibold tracking-tight">Vídeo</h2>
                 <DogVideo
                   providerUid={video.provider_uid}
@@ -251,7 +268,7 @@ export default async function CaoPublicoPage({
                 vertical sai de `mb-3` nos itens, porque `gap` em multi-coluna
                 só vale entre colunas.
               */}
-                <ul className="columns-2 gap-3 sm:columns-3">
+                <ul className="columns-2 gap-3 sm:columns-3 xl:columns-4">
                   {restante.map((item) => {
                     const proporcao = aspectOf(item);
                     const image = (

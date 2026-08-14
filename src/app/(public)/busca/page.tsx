@@ -69,7 +69,7 @@ export default async function BuscaPage({
         <KennelSearch />
       </header>
 
-      <main className="mx-auto w-full max-w-3xl flex-1 px-5 py-10 lg:px-8">
+      <main className="xl:max-w-6xl mx-auto w-full max-w-3xl flex-1 px-5 py-10 lg:px-8">
         <div className="mb-8">
           <BackLink href="/" label="Início" variant="link" />
         </div>

@@ -57,7 +57,10 @@ export default async function CaesPage({
       {/* Busca e filtro por GET: a lista fica linkável e o botão voltar
           funciona, coisa que um filtro em estado de client perderia. */}
       <form method="get" className="flex flex-wrap items-end gap-3">
-        <label className="flex flex-1 flex-col gap-1.5" style={{ minWidth: "12rem" }}>
+        {/* `xl:max-w-md`: o `flex-1` estica o campo até ~1000px na faixa larga.
+            Buscar um nome de cão não precisa disso, e um campo daquele tamanho
+            parece um erro de layout, não uma escolha. */}
+        <label className="flex flex-1 flex-col gap-1.5 xl:max-w-md" style={{ minWidth: "12rem" }}>
           <span className="text-fg-muted text-xs">Buscar por nome</span>
           <input
             type="search"
@@ -100,7 +103,10 @@ export default async function CaesPage({
           ) : null}
         </div>
       ) : (
-        <ul className="flex flex-col gap-3">
+        // Duas colunas no desktop, não três: cada item é uma linha com nome à
+        // esquerda e situação + identificador à direita (`sm:justify-between`).
+        // A ~560px isso respira; a ~370px as duas pontas se encostam.
+        <ul className="flex flex-col gap-3 xl:grid xl:grid-cols-2 xl:gap-4">
           {items.map((dog) => (
             <li key={dog.id}>
               <Link

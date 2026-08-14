@@ -89,7 +89,7 @@ export async function KennelProfile({ slug, cursor }: { slug: string; cursor?: s
         <KennelSearch />
       </header>
 
-      <main className="mx-auto w-full max-w-2xl flex-1 px-5 py-8 lg:px-8">
+      <main className="mx-auto w-full max-w-2xl flex-1 px-5 py-8 lg:px-8 xl:max-w-6xl">
         <PublicGallery photos={logoPhotos}>
           <div className="flex flex-col gap-8">
             {cursor ? (
@@ -178,7 +178,11 @@ export async function KennelProfile({ slug, cursor }: { slug: string; cursor?: s
                 <p className="text-fg-muted text-sm">Nenhum cão publicado ainda.</p>
               ) : (
                 <>
-                  <ul className="flex flex-col gap-3">
+                  {/* Três colunas no desktop: o cartão do cão aqui é curto —
+                      nome e uma linha de meta — então a ~360px ele fica
+                      confortável, e empilhado numa faixa de 1152px viraria uma
+                      escada de blocos quase vazios. */}
+                  <ul className="flex flex-col gap-3 xl:grid xl:grid-cols-3 xl:gap-4">
                     {dogs.items.map((dog) => (
                       <li key={dog.id}>
                         <Link
