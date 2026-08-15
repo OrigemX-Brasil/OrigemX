@@ -9,20 +9,24 @@
  * Se as duas divergirem, quem manda é o banco.
  */
 
-/** Espelha `maxvalue` da sequence `kennel_founder_seq`. */
-export const FOUNDER_LIMIT = 100;
-
-/** Três dígitos, como o cliente aprovou: "Criador Fundador nº 007". */
+/**
+ * Três dígitos, como o cliente aprovou: "Criador Fundador nº 007".
+ *
+ * SEM teto superior: a sequence `kennel_founder_seq` não tem mais `maxvalue`
+ * (`20260806234150_founder_number_sem_teto.sql`) — o selo virou número de
+ * registro sequencial. Só o piso (`>= 1`, o mesmo do CHECK no banco)
+ * continua recusado aqui.
+ */
 export function formatFounderNumber(value: number | null | undefined): string | null {
   if (typeof value !== "number" || !Number.isInteger(value)) return null;
-  if (value < 1 || value > FOUNDER_LIMIT) return null;
+  if (value < 1) return null;
   return `Criador Fundador nº ${String(value).padStart(3, "0")}`;
 }
 
 /** Só o número, para onde o rótulo já apareceu. */
 export function formatFounderDigits(value: number | null | undefined): string | null {
   if (typeof value !== "number" || !Number.isInteger(value)) return null;
-  if (value < 1 || value > FOUNDER_LIMIT) return null;
+  if (value < 1) return null;
   return String(value).padStart(3, "0");
 }
 

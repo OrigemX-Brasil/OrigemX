@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/modules/auth/queries";
+import { getDescendantIds } from "@/modules/dogs/queries";
 
 import {
   BUCKET_PRIVATE,
@@ -85,13 +86,46 @@ export async function parentPublishState(
 
   const { data } = await supabase
     .from("dogs")
-    .select("published_at, public_id")
+    .select("published_at, public_id, owner_id, kennel_id")
     .eq("id", entityId)
     .maybeSingle();
+  if (!data) return { isPublished: false, publicPath: null };
   return {
-    isPublished: Boolean(data?.published_at),
-    publicPath: data?.public_id ? `/d/${data.public_id}` : null,
+    // Ancestral FANTASMA (sem dono e sem canil) é público mesmo sem
+    // `published_at` — mesma exceção de `dog_is_public()` no banco. Sem
+    // replicar isto aqui, a foto dele nunca saía do bucket privado: era o
+    // bug relatado (a árvore de pedigree nunca via a foto, não só atrasada).
+    isPublished: Boolean(data.published_at) || (data.owner_id === null && data.kennel_id === null),
+    publicPath: data.public_id ? `/d/${data.public_id}` : null,
   };
+}
+
+/**
+ * Revalida a árvore de pedigree de todo descendente do cão — o MESMO cão
+ * pode ser sire/dam de vários descendentes publicados (linebreeding é
+ * legítimo), então a foto de capa de um ancestral pode aparecer em mais de
+ * UMA página. Sem isto, só a página do próprio cão era revalidada, e a
+ * árvore de qualquer descendente ficava presa no HTML do ISR por até 300s
+ * (`revalidate` de `/d/[public_id]`) — ou para sempre, no caso do fantasma
+ * que `parentPublishState` corrige acima.
+ *
+ * `getDescendantIds` enxerga a árvore inteira (SECURITY DEFINER, ignora
+ * RLS); o `.select` que segue passa pela RLS normal do chamador — só volta
+ * `public_id` de quem já é alcançável, que é exatamente quem tem página
+ * pública para revalidar. Um descendente ainda rascunho não devolve linha
+ * aqui, e não precisa: não existe HTML publicado dele para ficar velho.
+ */
+async function revalidateDescendantPedigrees(
+  supabase: SupabaseClientLike,
+  dogId: string,
+): Promise<void> {
+  const ids = await getDescendantIds(dogId);
+  if (ids.size === 0) return;
+
+  const { data } = await supabase.from("dogs").select("public_id").in("id", [...ids]);
+  for (const row of data ?? []) {
+    if (row.public_id) revalidatePath(`/d/${row.public_id}`);
+  }
 }
 
 /** O join do PostgREST vem como objeto ou array conforme a cardinalidade. */
@@ -251,6 +285,7 @@ export async function registerMedia(
       // acontece no Storage mas o HTML cacheado segue sem a foto por até 5
       // minutos — o mesmo bug relatado, só que mais devagar.
       revalidatePath(parent.publicPath);
+      if (role === "dog_gallery") await revalidateDescendantPedigrees(supabase, entityId);
     }
   }
 
@@ -350,7 +385,10 @@ export async function deleteMedia(formData: FormData): Promise<void> {
   const entityId = data.kennel_id ?? data.dog_id ?? data.litter_id;
   if (role && entityId) {
     const parent = await parentPublishState(supabase, role, entityId);
-    if (parent.isPublished && parent.publicPath) revalidatePath(parent.publicPath);
+    if (parent.isPublished && parent.publicPath) {
+      revalidatePath(parent.publicPath);
+      if (role === "dog_gallery") await revalidateDescendantPedigrees(supabase, entityId);
+    }
   }
 }
 
@@ -411,7 +449,10 @@ export async function setDogGalleryCover(formData: FormData): Promise<void> {
   revalidatePath(`/painel/caes/${dogId}`);
 
   const parent = await parentPublishState(supabase, "dog_gallery", dogId);
-  if (parent.isPublished && parent.publicPath) revalidatePath(parent.publicPath);
+  if (parent.isPublished && parent.publicPath) {
+    revalidatePath(parent.publicPath);
+    await revalidateDescendantPedigrees(supabase, dogId);
+  }
 }
 
 export type CaptionState = {

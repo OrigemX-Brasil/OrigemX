@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
+import type { PublicDogSearchItem } from "@/modules/dogs/queries";
 import type { PublicKennel } from "@/modules/public/queries";
 import { overlayVariants, panelVariants, resultVariants } from "@/modules/search/motion";
 
@@ -66,7 +67,8 @@ export function KennelSearchPanel({
   const [visible, setVisible] = useState(false);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<Status>("empty");
-  const [results, setResults] = useState<PublicKennel[]>([]);
+  const [kennelResults, setKennelResults] = useState<PublicKennel[]>([]);
+  const [dogResults, setDogResults] = useState<PublicDogSearchItem[]>([]);
   /** Escalona só a PRIMEIRA lista de cada abertura — ver `motion.ts`. */
   const [stagger, setStagger] = useState(true);
 
@@ -133,6 +135,11 @@ export function KennelSearchPanel({
     if (failsafeRef.current) clearTimeout(failsafeRef.current);
   }, []);
 
+  // Duas rotas, não uma: `/api/search/dogs` não pode compartilhar cache com
+  // `/api/search/kennels` (o resultado de cão depende de sessão — ver a rota),
+  // então também não compartilha o fetch. As duas disparam juntas e o painel
+  // só reage quando as DUAS voltam, para o "Nada encontrado" não piscar antes
+  // da segunda resposta chegar.
   useEffect(() => {
     const term = query.trim();
     if (term.length < MIN_QUERY_LENGTH) return;
@@ -140,18 +147,29 @@ export function KennelSearchPanel({
     const controller = new AbortController();
     const timer = setTimeout(() => {
       setStatus("loading");
-      fetch(`/api/search/kennels?q=${encodeURIComponent(term)}`, { signal: controller.signal })
-        .then((res) => {
-          if (!res.ok) throw new Error("busca falhou");
-          return res.json() as Promise<{ items: PublicKennel[] }>;
-        })
-        .then(({ items }) => {
-          setResults(items);
-          setStatus(items.length === 0 ? "empty" : "success");
+      Promise.all([
+        fetch(`/api/search/kennels?q=${encodeURIComponent(term)}`, { signal: controller.signal }).then(
+          (res) => {
+            if (!res.ok) throw new Error("busca de canis falhou");
+            return res.json() as Promise<{ items: PublicKennel[] }>;
+          },
+        ),
+        fetch(`/api/search/dogs?q=${encodeURIComponent(term)}`, { signal: controller.signal }).then(
+          (res) => {
+            if (!res.ok) throw new Error("busca de cães falhou");
+            return res.json() as Promise<{ items: PublicDogSearchItem[] }>;
+          },
+        ),
+      ])
+        .then(([kennels, dogs]) => {
+          setKennelResults(kennels.items);
+          setDogResults(dogs.items);
+          const total = kennels.items.length + dogs.items.length;
+          setStatus(total === 0 ? "empty" : "success");
           // Decidido AQUI, num callback, e não durante o render: mutar ref
           // enquanto renderiza quebra sob StrictMode/render duplo.
           setStagger(!staggeredRef.current);
-          if (items.length > 0) staggeredRef.current = true;
+          if (total > 0) staggeredRef.current = true;
         })
         .catch((err: unknown) => {
           if (err instanceof DOMException && err.name === "AbortError") return;
@@ -160,7 +178,7 @@ export function KennelSearchPanel({
     }, DEBOUNCE_MS);
 
     // Resposta mais lenta não pode sobrescrever um resultado mais novo: o
-    // timer anterior nunca dispara, e a requisição em voo é abortada.
+    // timer anterior nunca dispara, e as requisições em voo são abortadas.
     return () => {
       clearTimeout(timer);
       controller.abort();
@@ -202,7 +220,7 @@ export function KennelSearchPanel({
         onClick={(e) => {
           if (e.target === e.currentTarget) requestClose();
         }}
-        aria-label="Buscar canil"
+        aria-label="Buscar canil ou cão"
         className="fixed inset-0 m-0 hidden h-dvh max-h-none w-dvw max-w-none items-start justify-center border-0 bg-transparent p-0 backdrop:bg-transparent open:flex sm:justify-end sm:pt-16 sm:pr-8"
       >
         <AnimatePresence onExitComplete={finishClose}>
@@ -254,7 +272,7 @@ export function KennelSearchPanel({
                   autoFocus
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Buscar canil pelo nome..."
+                  placeholder="Buscar canil ou cão pelo nome..."
                   className="text-fg placeholder:text-fg-faint w-full bg-transparent text-sm outline-none"
                 />
                 <button
@@ -285,38 +303,86 @@ export function KennelSearchPanel({
                 ) : null}
 
                 {!isIdle && status === "empty" ? (
-                  <p className="text-fg-faint px-3 py-4 text-sm">Nenhum canil encontrado.</p>
+                  <p className="text-fg-faint px-3 py-4 text-sm">Nada encontrado.</p>
                 ) : null}
 
-                {!isIdle && results.length > 0 && (status === "success" || status === "loading") ? (
-                  <ul
-                    className={`ease-panel flex flex-col gap-1 transition-opacity duration-200 motion-reduce:transition-none ${
+                {!isIdle &&
+                (kennelResults.length > 0 || dogResults.length > 0) &&
+                (status === "success" || status === "loading") ? (
+                  <div
+                    className={`ease-panel flex flex-col gap-3 transition-opacity duration-200 motion-reduce:transition-none ${
                       status === "loading" ? "opacity-60" : "opacity-100"
                     }`}
                   >
-                    {results.map((kennel, i) => (
-                      <m.li
-                        key={kennel.id}
-                        variants={resultVariants(reduced, i, stagger)}
-                        initial="hidden"
-                        animate="visible"
-                      >
-                        <Link
-                          href={`/c/${kennel.slug}`}
-                          prefetch={false}
-                          onClick={requestClose}
-                          className="hover:bg-surface-hover focus-visible:outline-ring rounded-control ease-panel flex flex-col gap-0.5 px-3 py-2 transition-colors duration-200 focus-visible:outline-2 focus-visible:-outline-offset-2"
-                        >
-                          <span className="text-fg text-sm font-medium">{kennel.name}</span>
-                          {kennel.city || kennel.state ? (
-                            <span className="text-fg-faint text-xs">
-                              {[kennel.city, kennel.state].filter(Boolean).join(", ")}
-                            </span>
-                          ) : null}
-                        </Link>
-                      </m.li>
-                    ))}
-                  </ul>
+                    {kennelResults.length > 0 ? (
+                      <div>
+                        <p className="text-fg-faint px-3 pb-1 font-mono text-[0.65rem] tracking-wide uppercase">
+                          Canis
+                        </p>
+                        <ul className="flex flex-col gap-1">
+                          {kennelResults.map((kennel, i) => (
+                            <m.li
+                              key={kennel.id}
+                              variants={resultVariants(reduced, i, stagger)}
+                              initial="hidden"
+                              animate="visible"
+                            >
+                              <Link
+                                href={`/c/${kennel.slug}`}
+                                prefetch={false}
+                                onClick={requestClose}
+                                className="hover:bg-surface-hover focus-visible:outline-ring rounded-control ease-panel flex flex-col gap-0.5 px-3 py-2 transition-colors duration-200 focus-visible:outline-2 focus-visible:-outline-offset-2"
+                              >
+                                <span className="text-fg text-sm font-medium">{kennel.name}</span>
+                                {kennel.city || kennel.state ? (
+                                  <span className="text-fg-faint text-xs">
+                                    {[kennel.city, kennel.state].filter(Boolean).join(", ")}
+                                  </span>
+                                ) : null}
+                              </Link>
+                            </m.li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+
+                    {dogResults.length > 0 ? (
+                      <div>
+                        <p className="text-fg-faint px-3 pb-1 font-mono text-[0.65rem] tracking-wide uppercase">
+                          Cães
+                        </p>
+                        <ul className="flex flex-col gap-1">
+                          {dogResults.map((dog, i) => (
+                            <m.li
+                              key={dog.id}
+                              variants={resultVariants(reduced, i, stagger)}
+                              initial="hidden"
+                              animate="visible"
+                            >
+                              <Link
+                                href={dog.published_at ? `/d/${dog.public_id}` : `/painel/caes/${dog.id}`}
+                                prefetch={false}
+                                onClick={requestClose}
+                                className="hover:bg-surface-hover focus-visible:outline-ring rounded-control ease-panel flex flex-col gap-0.5 px-3 py-2 transition-colors duration-200 focus-visible:outline-2 focus-visible:-outline-offset-2"
+                              >
+                                <span className="text-fg text-sm font-medium">
+                                  {dog.name}
+                                  {dog.published_at === null ? (
+                                    <span className="text-fg-faint font-normal"> · Rascunho</span>
+                                  ) : null}
+                                </span>
+                                {dog.breed || dog.kennel_name ? (
+                                  <span className="text-fg-faint text-xs">
+                                    {[dog.breed, dog.kennel_name].filter(Boolean).join(" · ")}
+                                  </span>
+                                ) : null}
+                              </Link>
+                            </m.li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+                  </div>
                 ) : null}
 
                 {!isIdle ? (

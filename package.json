@@ -25,6 +25,7 @@
     "test:e2e:install": "playwright install chromium",
     "test:rls": "node --env-file-if-exists=.env.local scripts/test-rls.mts",
     "media:reconcile": "node --env-file-if-exists=.env.local scripts/reconcile-media.mts",
+    "founder:backfill": "node --env-file-if-exists=.env.local scripts/founder-backfill.mts",
     "metrics": "node --env-file-if-exists=.env.local scripts/metrics.mts",
     "loadtest:prepare": "node --env-file-if-exists=.env.local scripts/loadtest-prepare.mts",
     "loadtest:action": "node --env-file-if-exists=.env.local scripts/loadtest-action.mts",

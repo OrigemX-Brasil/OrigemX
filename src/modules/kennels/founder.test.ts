@@ -1,11 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  FOUNDER_LIMIT,
-  formatFounderDigits,
-  formatFounderNumber,
-  founderEligibility,
-} from "./founder";
+import { formatFounderDigits, formatFounderNumber, founderEligibility } from "./founder";
 
 describe("formatFounderNumber", () => {
   it("usa três dígitos, como o cliente aprovou", () => {
@@ -24,12 +19,14 @@ describe("formatFounderNumber", () => {
     expect(formatFounderNumber(undefined)).toBeNull();
   });
 
-  it("recusa valor fora do intervalo em vez de exibir selo inválido", () => {
-    // Se um 101 chegar aqui, algo furou o banco. Melhor não mostrar nada do que
-    // legitimar na tela um número que não deveria existir.
+  it("recusa valor abaixo do piso, mas não tem teto superior", () => {
+    // Sem `maxvalue` na sequence desde 20260806234150_founder_number_sem_teto:
+    // o selo virou número de registro sequencial, e o piso (>= 1, o mesmo do
+    // CHECK no banco) é a única recusa que ainda faz sentido aqui.
     expect(formatFounderNumber(0)).toBeNull();
-    expect(formatFounderNumber(101)).toBeNull();
     expect(formatFounderNumber(-1)).toBeNull();
+    expect(formatFounderNumber(101)).toBe("Criador Fundador nº 101");
+    expect(formatFounderNumber(1000)).toBe("Criador Fundador nº 1000");
   });
 
   it("recusa o que não é inteiro", () => {
@@ -37,12 +34,6 @@ describe("formatFounderNumber", () => {
     expect(formatFounderNumber(Number.NaN)).toBeNull();
   });
 
-  it("o teto do módulo acompanha o do banco", () => {
-    // maxvalue da sequence kennel_founder_seq.
-    expect(FOUNDER_LIMIT).toBe(100);
-    expect(formatFounderNumber(FOUNDER_LIMIT)).not.toBeNull();
-    expect(formatFounderNumber(FOUNDER_LIMIT + 1)).toBeNull();
-  });
 });
 
 describe("formatFounderDigits", () => {

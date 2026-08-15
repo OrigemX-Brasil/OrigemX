@@ -167,6 +167,79 @@ test("cadastra o pai como ancestral direto na tela do filho, com foto", async ({
   expect(foto?.role, "a foto foi gravada como galeria do fantasma").toBe("dog_gallery");
 });
 
+test("foto do ancestral fantasma aparece na árvore do descendente publicado", async ({
+  page,
+  criador,
+  admin,
+}) => {
+  // Prova o bug relatado: um ancestral sem dono e sem canil é público por
+  // regra do banco (`dog_is_public`) mesmo NUNCA passando por `published_at`
+  // — só o filho (e o canil dele) publicam aqui, de propósito.
+  const canil = await criarCanil(admin, criador.id);
+  const token = Date.now().toString(36);
+
+  await page.goto("/painel/caes/novo");
+  await page.getByLabel("Nome", { exact: false }).first().fill(`Filho da Foto ${token}`);
+  await page.getByLabel("Sexo").selectOption("male");
+
+  await page.getByRole("button", { name: /Buscar o pai/ }).click();
+  await page.getByRole("button", { name: "Não encontrei — cadastrar como ancestral" }).click();
+
+  const painelAncestral = page.getByRole("group", { name: "Cadastrar ancestral" });
+  await painelAncestral.getByLabel("Nome").fill(`Fantasma Visível ${token}`);
+  await painelAncestral.getByRole("button", { name: "Criar ancestral" }).click();
+
+  await expect(page.getByText(`Fantasma Visível ${token}`)).toBeVisible();
+  const campoFoto = page.getByLabel("Foto do ancestral");
+  await campoFoto.setInputFiles({
+    name: "fantasma.png",
+    mimeType: MIME,
+    buffer: await pngDeTeste("fantasma", 700),
+  });
+  await expect(page.getByText("Foto adicionada.")).toBeVisible({ timeout: 30_000 });
+
+  await page.getByRole("button", { name: "Cadastrar cão" }).click();
+  await page.waitForURL(/\/painel\/caes\/[0-9a-f-]{36}/);
+
+  const { data: filho } = await admin
+    .from("dogs")
+    .select("id, public_id, sire_id")
+    .eq("name", `Filho da Foto ${token}`)
+    .single();
+
+  const { data: fantasma } = await admin
+    .from("dogs")
+    .select("id, owner_id, kennel_id, published_at")
+    .eq("id", filho!.sire_id!)
+    .single();
+  // Confirma que é DE FATO um fantasma, e que ele segue sem `published_at`
+  // depois de publicar só o filho — é o que isola a causa do bug (a exceção
+  // do banco), e não um efeito colateral de publicar o fantasma também.
+  expect(fantasma?.owner_id).toBeNull();
+  expect(fantasma?.kennel_id).toBeNull();
+
+  await publicar(admin, { kennelId: canil.id, dogIds: [filho!.id] });
+  expect(fantasma?.published_at).toBeNull();
+
+  await page.goto(`/d/${filho!.public_id}`);
+
+  // A árvore existe em DUAS marcações simultâneas no DOM — lista mobile e
+  // colunas desktop (`hidden sm:block`) — e só uma fica visível por vez via
+  // CSS. Nos 390px do viewport padrão, sem `:visible` o locator bate nas
+  // duas e o modo estrito do Playwright recusa a ambiguidade.
+  const arvore = page.locator("section", { hasText: "Pedigree" }).first();
+  const cardFantasma = arvore.locator("article:visible", { hasText: `Fantasma Visível ${token}` });
+  await expect(cardFantasma).toBeVisible();
+
+  // Sem o fix, `PublicImage` recebe `thumbUrl: undefined` (a foto ficou presa
+  // no bucket privado) e desenha só o bloco com a inicial do nome — nenhum
+  // `<img>` no DOM. A asserção do `src` prova que a URL veio do bucket
+  // PÚBLICO, não só que "alguma" imagem apareceu.
+  const foto = cardFantasma.locator("img");
+  await expect(foto).toHaveCount(1);
+  await expect(foto).toHaveAttribute("src", /kennel-media-public/);
+});
+
 test("linebreeding: o mesmo ancestral aparece nos dois caminhos", async ({
   page,
   criador,

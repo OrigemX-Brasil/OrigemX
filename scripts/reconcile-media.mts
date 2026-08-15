@@ -78,15 +78,25 @@ async function main() {
       ? admin.from("kennels").select("id, published_at, deleted_at").in("id", kennelIds)
       : Promise.resolve({ data: [] }),
     dogIds.length
-      ? admin.from("dogs").select("id, published_at, deleted_at").in("id", dogIds)
+      ? admin
+          .from("dogs")
+          .select("id, published_at, deleted_at, owner_id, kennel_id")
+          .in("id", dogIds)
       : Promise.resolve({ data: [] }),
   ]);
 
   const publishedKennel = new Map(
     (kennels.data ?? []).map((k) => [k.id, Boolean(k.published_at) && !k.deleted_at]),
   );
+  // Ancestral FANTASMA (sem dono e sem canil) é público mesmo sem
+  // `published_at` — mesma exceção de `dog_is_public()` no banco. Sem isto
+  // aqui, o script achava a mídia dele "divergente" na direção errada: podia
+  // devolver ao privado uma foto que por acaso estivesse no público.
   const publishedDog = new Map(
-    (dogs.data ?? []).map((d) => [d.id, Boolean(d.published_at) && !d.deleted_at]),
+    (dogs.data ?? []).map((d) => [
+      d.id,
+      (Boolean(d.published_at) || (d.owner_id === null && d.kennel_id === null)) && !d.deleted_at,
+    ]),
   );
 
   let ok = 0;

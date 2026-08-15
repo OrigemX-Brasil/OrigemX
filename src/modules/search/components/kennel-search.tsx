@@ -72,7 +72,7 @@ export function KennelSearch() {
         onPointerEnter={warmPanel}
         onFocus={warmPanel}
         onTouchStart={warmPanel}
-        aria-label="Buscar canil"
+        aria-label="Buscar canil ou cão"
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-busy={pending}
