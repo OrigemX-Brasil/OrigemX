@@ -43,6 +43,7 @@ type Row = {
   thumb_path: string | null;
   kennel_id: string | null;
   dog_id: string | null;
+  litter_id: string | null;
 };
 
 async function objectExists(bucket: string, path: string): Promise<boolean> {
@@ -60,7 +61,7 @@ async function main() {
 
   const { data: rows, error } = await admin
     .from("media")
-    .select("id, bucket_id, storage_path, thumb_path, kennel_id, dog_id")
+    .select("id, bucket_id, storage_path, thumb_path, kennel_id, dog_id, litter_id")
     .is("deleted_at", null);
 
   if (error || !rows) {
@@ -72,8 +73,9 @@ async function main() {
   // por linha.
   const kennelIds = [...new Set(rows.map((r) => r.kennel_id).filter(Boolean))] as string[];
   const dogIds = [...new Set(rows.map((r) => r.dog_id).filter(Boolean))] as string[];
+  const litterIds = [...new Set(rows.map((r) => r.litter_id).filter(Boolean))] as string[];
 
-  const [kennels, dogs] = await Promise.all([
+  const [kennels, dogs, litters] = await Promise.all([
     kennelIds.length
       ? admin.from("kennels").select("id, published_at, deleted_at").in("id", kennelIds)
       : Promise.resolve({ data: [] }),
@@ -82,6 +84,9 @@ async function main() {
           .from("dogs")
           .select("id, published_at, deleted_at, owner_id, kennel_id")
           .in("id", dogIds)
+      : Promise.resolve({ data: [] }),
+    litterIds.length
+      ? admin.from("kennel_litters").select("id, published_at, deleted_at, kennel_id").in("id", litterIds)
       : Promise.resolve({ data: [] }),
   ]);
 
@@ -98,6 +103,18 @@ async function main() {
       (Boolean(d.published_at) || (d.owner_id === null && d.kennel_id === null)) && !d.deleted_at,
     ]),
   );
+  // REGRA DUPLA, mesma de `parentPublishState` em media/actions.ts: a foto só
+  // é pública se a NINHADA e o CANIL dela estiverem publicados. `litter_id` é
+  // o terceiro braço de posse (media_single_owner, desde a migration de
+  // ninhadas) — sem esta entrada o script tratava toda foto de ninhada como
+  // "deveria ser privada" incondicionalmente, movendo até foto já pública e
+  // correta para o bucket errado.
+  const publishedLitter = new Map(
+    (litters.data ?? []).map((l) => [
+      l.id,
+      Boolean(l.published_at) && !l.deleted_at && (publishedKennel.get(l.kennel_id) ?? false),
+    ]),
+  );
 
   let ok = 0;
   let corrigidas = 0;
@@ -110,7 +127,9 @@ async function main() {
       ? (publishedKennel.get(row.kennel_id) ?? false)
       : row.dog_id
         ? (publishedDog.get(row.dog_id) ?? false)
-        : false;
+        : row.litter_id
+          ? (publishedLitter.get(row.litter_id) ?? false)
+          : false;
 
     const target = isPublished ? BUCKET_PUBLIC : BUCKET_PRIVATE;
     const source = target === BUCKET_PUBLIC ? BUCKET_PRIVATE : BUCKET_PUBLIC;
@@ -135,7 +154,11 @@ async function main() {
       continue;
     }
 
-    const dono = row.kennel_id ? `canil ${row.kennel_id}` : `cão ${row.dog_id}`;
+    const dono = row.kennel_id
+      ? `canil ${row.kennel_id}`
+      : row.dog_id
+        ? `cão ${row.dog_id}`
+        : `ninhada ${row.litter_id}`;
 
     // ÓRFÃ: a linha existe, o arquivo não está em bucket nenhum. Mover é
     // impossível e tentar só geraria erro. Só relata — apagar metadata é
