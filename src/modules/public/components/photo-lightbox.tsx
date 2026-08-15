@@ -111,75 +111,107 @@ export function PublicGallery({
         */}
         {index !== null ? (
           <div className="relative flex h-full w-full flex-col items-center justify-center gap-4">
-            <button
-              type="button"
-              onClick={close}
-              aria-label="Fechar"
-              className="bg-bg/70 text-fg hover:bg-bg/90 focus-visible:outline-ring absolute top-3 right-3 z-10 flex size-10 items-center justify-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
-            >
-              <CloseIcon />
-            </button>
+            {/*
+              Sem foto (ninhada só com descrição, ainda sem imagem), o botão
+              não tem em que ancorar — fica preso ao canto do DIÁLOGO, como
+              sempre foi. Com foto, ele muda de lugar (ver abaixo, dentro do
+              wrapper que abraça a imagem) e este aqui não é renderizado.
+            */}
+            {!photo ? (
+              <button
+                type="button"
+                onClick={close}
+                aria-label="Fechar"
+                className="bg-bg/70 text-fg hover:bg-bg/90 focus-visible:outline-ring absolute top-3 right-3 z-10 flex size-10 items-center justify-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
+              >
+                <CloseIcon />
+              </button>
+            ) : null}
 
             {description ? (
-              // `pr-14`: sem isto, o texto passa por baixo do botão de
-              // fechar em telas estreitas — o botão é `absolute` sobre o
-              // wrapper, não sabe da largura do parágrafo, e um parágrafo
-              // comprido ocupa quase toda a largura disponível. Achado
-              // testando em 360px: o texto ficava ilegível atrás do ×.
-              <p className="bg-bg/70 text-fg rounded-card max-h-[30vh] w-full max-w-prose overflow-y-auto py-3 pr-14 pl-4 text-sm whitespace-pre-line">
+              // `pr-14` só é preciso quando o botão de fechar ainda está no
+              // canto do diálogo (sem foto) — com foto, ele migrou para cima
+              // da imagem e não disputa mais espaço com este parágrafo.
+              <p
+                className={`bg-bg/70 text-fg rounded-card max-h-[30vh] w-full max-w-prose overflow-y-auto py-3 pl-4 text-sm whitespace-pre-line ${photo ? "pr-4" : "pr-14"}`}
+              >
                 {description}
               </p>
             ) : null}
 
             {photo ? (
-              <div className="relative flex min-h-0 w-full flex-1 items-center justify-center">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={photo.url}
-                  alt={photo.alt}
-                  className="max-h-full max-w-full rounded-card object-contain"
-                />
+              <>
+                <div className="relative flex min-h-0 w-full flex-1 items-center justify-center">
+                  {/*
+                    Wrapper que ABRAÇA o tamanho real da foto renderizada
+                    (`inline-block` encolhe para o conteúdo), não o container
+                    inteiro disponível — é o que permite ancorar o × e o
+                    contador no canto da IMAGEM, não do diálogo. Só funciona
+                    porque a imagem usa `max-h-[…dvh]`, não porcentagem: um
+                    limite em porcentagem exigiria um ancestral de altura já
+                    definida, e um wrapper que encolhe para o conteúdo é
+                    justamente o oposto disso.
 
-                {photos.length > 1 ? (
-                  <>
+                    `min-h`/`min-w`: sem eles, ANTES da foto carregar (a
+                    página abre por QR, muitas vezes em 4G) o wrapper encolhe
+                    para o conteúdo de uma `<img>` ainda sem dimensão
+                    nenhuma — ou seja, quase zero — e o × e o contador
+                    aparecem amontoados no centro do diálogo até a imagem
+                    chegar. O piso garante uma área estável desde o primeiro
+                    paint; a imagem cresce dentro dela normalmente.
+                  */}
+                  <div className="bg-surface rounded-card relative inline-block max-w-full min-h-[40dvh] min-w-[40dvw]">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={photo.url}
+                      alt={photo.alt}
+                      className="block max-h-[60dvh] max-w-full rounded-card object-contain sm:max-h-[70dvh]"
+                    />
+
                     <button
                       type="button"
-                      onClick={prev}
-                      aria-label="Foto anterior"
-                      className="bg-bg/70 text-fg hover:bg-bg/90 focus-visible:outline-ring absolute top-1/2 left-2 flex size-10 -translate-y-1/2 items-center justify-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 sm:left-4"
+                      onClick={close}
+                      aria-label="Fechar"
+                      className="focus-visible:outline-ring absolute -top-2 -right-2 z-10 flex size-10 items-center justify-center rounded-full bg-black/80 text-white transition-colors hover:bg-black focus-visible:outline-2 focus-visible:outline-offset-2"
                     >
-                      <ChevronIcon direction="left" />
+                      <CloseIcon />
                     </button>
-                    <button
-                      type="button"
-                      onClick={next}
-                      aria-label="Próxima foto"
-                      className="bg-bg/70 text-fg hover:bg-bg/90 focus-visible:outline-ring absolute top-1/2 right-2 flex size-10 -translate-y-1/2 items-center justify-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 sm:right-4"
-                    >
-                      <ChevronIcon direction="right" />
-                    </button>
-                  </>
-                ) : null}
 
-                {/* Legenda e contador na MESMA pilha inferior — os dois
-                    brigavam por `bottom-3 left-1/2` quando soltos. A legenda
-                    aparece mesmo com uma única foto; o contador só com mais
-                    de uma. */}
-                {photo.caption || photos.length > 1 ? (
-                  <div className="absolute inset-x-0 bottom-3 flex flex-col items-center gap-2 px-4">
-                    {photo.caption ? (
-                      <p className="bg-bg/70 text-fg rounded-card max-w-prose px-3 py-1.5 text-center text-sm">
-                        {photo.caption}
-                      </p>
-                    ) : null}
                     {photos.length > 1 ? (
-                      <span className="bg-bg/70 text-fg-muted rounded-full px-3 py-1 font-mono text-xs tabular-nums">
+                      <span className="bg-bg/70 text-fg-muted absolute -bottom-2 left-1/2 -translate-x-1/2 rounded-full px-3 py-1 font-mono text-xs tabular-nums">
                         {index! + 1} / {photos.length}
                       </span>
                     ) : null}
                   </div>
+
+                  {photos.length > 1 ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={prev}
+                        aria-label="Foto anterior"
+                        className="bg-bg/70 text-fg hover:bg-bg/90 focus-visible:outline-ring absolute top-1/2 left-2 flex size-10 -translate-y-1/2 items-center justify-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 sm:left-4"
+                      >
+                        <ChevronIcon direction="left" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={next}
+                        aria-label="Próxima foto"
+                        className="bg-bg/70 text-fg hover:bg-bg/90 focus-visible:outline-ring absolute top-1/2 right-2 flex size-10 -translate-y-1/2 items-center justify-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 sm:right-4"
+                      >
+                        <ChevronIcon direction="right" />
+                      </button>
+                    </>
+                  ) : null}
+                </div>
+
+                {photo.caption ? (
+                  <p className="bg-bg/70 text-fg rounded-card w-full max-w-prose px-3 py-1.5 text-center text-sm">
+                    {photo.caption}
+                  </p>
                 ) : null}
-              </div>
+              </>
             ) : null}
           </div>
         ) : null}
