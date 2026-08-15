@@ -74,9 +74,11 @@ export const GENERATIONS: readonly GenerationSpec[] = buildSpecs(
 
 /**
  * Prévia (`variant="preview"`, card de exemplo da home). Só sujeito + pais —
- * o fixture de `example-profile-card.tsx` não tem avós. Sem foto: aquela
- * página precisa continuar 100% estática, e uma foto de ancestral exigiria
- * uma consulta que a página de captura não pode fazer.
+ * o fixture de `example-profile-card.tsx` não tem avós. `photo` sai `true`
+ * pela mesma fórmula de `GENERATIONS` (não há exceção para `preview`): o que
+ * a página de captura não pode ter é uma CONSULTA ao banco, não a foto em
+ * si — uma URL literal/hardcoded, como as três em `example-dog.ts`, mantém a
+ * página 100% estática e ainda assim mostra foto de verdade.
  */
 export const PREVIEW_GENERATIONS: readonly GenerationSpec[] = buildSpecs(
   [132, 132],

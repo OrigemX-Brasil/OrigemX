@@ -1,6 +1,11 @@
 import Link from "next/link";
 
-import { EXAMPLE_DOG_AVATAR_URL, EXAMPLE_DOG_PATH } from "@/modules/capture/example-dog";
+import {
+  EXAMPLE_DAM_AVATAR_URL,
+  EXAMPLE_DOG_AVATAR_URL,
+  EXAMPLE_DOG_PATH,
+  EXAMPLE_SIRE_AVATAR_URL,
+} from "@/modules/capture/example-dog";
 import { PedigreeTree } from "@/modules/pedigree/components/pedigree-tree";
 import { buildPedigree, type PedigreeRow } from "@/modules/pedigree/tree";
 import { PublicImage } from "@/modules/public/components/public-image";
@@ -67,6 +72,17 @@ const FIXTURE_ROWS: PedigreeRow[] = [
 
 const FIXTURE_PEDIGREE = buildPedigree(FIXTURE_ROWS);
 
+/**
+ * `dog_id` de `FIXTURE_ROWS` → foto de capa real (mesmo bucket público que o
+ * avatar acima). URL literal, não consulta — é o que permite foto aqui sem
+ * violar "página 100% estática". Ver `PREVIEW_GENERATIONS` em
+ * `pedigree/layout.ts` para a mesma explicação do lado da árvore.
+ */
+const EXAMPLE_THUMBS = new Map([
+  ["exemplo-firefighter", EXAMPLE_SIRE_AVATAR_URL],
+  ["exemplo-sensation", EXAMPLE_DAM_AVATAR_URL],
+]);
+
 export function ExampleProfileCard() {
   return (
     <Link
@@ -113,7 +129,12 @@ export function ExampleProfileCard() {
           </div>
         </div>
 
-        <PedigreeTree pedigree={FIXTURE_PEDIGREE} variant="preview" />
+        <PedigreeTree
+          pedigree={FIXTURE_PEDIGREE}
+          thumbs={EXAMPLE_THUMBS}
+          subjectPhotoUrl={EXAMPLE_DOG_AVATAR_URL}
+          variant="preview"
+        />
 
         <p className="text-fg-faint text-xs">Prévia dos pais — o perfil completo vai até cinco gerações.</p>
 
