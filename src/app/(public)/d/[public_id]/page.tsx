@@ -224,6 +224,12 @@ export default async function CaoPublicoPage({
                 <Row label="Nascimento" value={dog.born_on} />
                 <Row label="Cor" value={dog.color} />
                 <Row label="Pelagem" value={dog.coat} />
+                <Row label="Títulos" value={dog.titles?.length ? dog.titles.join(" · ") : null} />
+                <Row label="Peso" value={dog.weight_kg != null ? `${dog.weight_kg} kg` : null} />
+                <Row
+                  label="Cernelha"
+                  value={dog.withers_height_cm != null ? `${dog.withers_height_cm} cm` : null}
+                />
                 <Row label="Identificador" value={dog.public_id} mono />
               </dl>
             </div>

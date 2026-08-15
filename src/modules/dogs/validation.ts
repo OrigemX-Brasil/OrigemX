@@ -13,11 +13,15 @@ export type DogFieldErrors = Partial<Record<DogFieldName, string>>;
 export type DogInput = Partial<Record<DogFieldName, string>>;
 export type DogPatch = Database["public"]["Tables"]["dogs"]["Update"];
 
-function assign(target: DogPatch, key: DogFieldName, value: string | null): void {
+function assign(
+  target: DogPatch,
+  key: DogFieldName,
+  value: string | number | string[] | null,
+): void {
   // A obrigatoriedade mora em `fields.ts`, que é dado de runtime, então o
   // compilador não tem como saber quais chaves aceitam null. O `if` de quem
   // chama é que garante; o cast fica confinado aqui.
-  (target as Record<string, string | null>)[key] = value;
+  (target as Record<string, string | number | string[] | null>)[key] = value;
 }
 
 export function normalizeDogInput(
@@ -30,11 +34,37 @@ export function normalizeDogInput(
     const value = raw[field.name];
     if (value === undefined) continue;
 
-    let normalized = value.trim();
-    if (field.input === "slug") normalized = normalized.toLowerCase();
+    const normalized = value.trim();
 
-    if (normalized.length > 0) {
-      assign(out, field.name, normalized);
+    if (field.input === "number") {
+      if (normalized.length > 0) {
+        assign(out, field.name, Number(normalized));
+      } else if (field.weight !== "required") {
+        assign(out, field.name, null);
+      }
+      continue;
+    }
+
+    if (field.input === "list") {
+      // Uma linha por título — ver o mesmo raciocínio no `Control` do
+      // formulário. Linha em branco é ruído de quem só deu Enter a mais.
+      const items = normalized
+        .split("\n")
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0);
+
+      if (items.length > 0) {
+        assign(out, field.name, items);
+      } else if (field.weight !== "required") {
+        assign(out, field.name, null);
+      }
+      continue;
+    }
+
+    const normalizedText = field.input === "slug" ? normalized.toLowerCase() : normalized;
+
+    if (normalizedText.length > 0) {
+      assign(out, field.name, normalizedText);
     } else if (field.weight !== "required") {
       // Vazio em campo não obrigatório vira null explícito: é assim que o dono
       // apaga uma cor que preencheu antes.
@@ -53,32 +83,61 @@ export function validateDog(
   const values = normalizeDogInput(raw, fields);
 
   for (const field of fields) {
-    const value = (values as Record<string, string | null | undefined>)[field.name];
+    const value = (values as Record<string, string | number | string[] | null | undefined>)[
+      field.name
+    ];
 
     if (field.weight === "required" && !value) {
       errors[field.name] = `${field.label} é obrigatório.`;
       continue;
     }
 
-    if (!value) continue;
+    // Falsy comum (`!value`) rejeitaria peso 0 antes mesmo de ele ser
+    // reconhecido como inválido — `0` e `NaN` são valores DEFINIDOS que ainda
+    // precisam passar pela checagem de "number" abaixo, não ausência de valor.
+    if (value === null || value === undefined) continue;
+    if (Array.isArray(value) && value.length === 0) continue;
 
-    if (field.options && !field.options.some((o) => o.value === value)) {
+    if (field.input === "number") {
+      if (typeof value === "number" && (Number.isNaN(value) || value <= 0)) {
+        errors[field.name] = `${field.label} deve ser um número maior que zero.`;
+      }
+      continue;
+    }
+
+    if (field.input === "list") {
+      if (field.maxLength && Array.isArray(value)) {
+        const tooLong = value.some((item) => item.length > field.maxLength!);
+        if (tooLong) {
+          errors[field.name] =
+            `Cada item de ${field.label.toLowerCase()} deve ter no máximo ${field.maxLength} caracteres.`;
+        }
+      }
+      continue;
+    }
+
+    // A partir daqui `field.input` só pode ser "text" | "select" | "date" |
+    // "slug" — os dois `continue` acima já trataram "number" e "list", os
+    // únicos que produzem valor não-string em `normalizeDogInput`.
+    const text = value as string;
+
+    if (field.options && !field.options.some((o) => o.value === text)) {
       errors[field.name] = `${field.label} tem valor inválido.`;
       continue;
     }
 
-    if (field.maxLength && value.length > field.maxLength) {
+    if (field.maxLength && text.length > field.maxLength) {
       errors[field.name] = `${field.label} deve ter no máximo ${field.maxLength} caracteres.`;
       continue;
     }
 
-    if (field.pattern && !field.pattern.test(value)) {
+    if (field.pattern && !field.pattern.test(text)) {
       errors[field.name] = field.patternError ?? `${field.label} está em formato inválido.`;
       continue;
     }
 
     if (field.input === "date") {
-      const error = validateBirthDate(value);
+      const error = validateBirthDate(text);
       if (error) errors[field.name] = error;
     }
   }

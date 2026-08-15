@@ -230,7 +230,10 @@ export type Database = {
           sex: string
           sire_id: string | null
           slug: string | null
+          titles: string[] | null
           updated_at: string
+          weight_kg: number | null
+          withers_height_cm: number | null
         }
         Insert: {
           born_on?: string | null
@@ -251,7 +254,10 @@ export type Database = {
           sex: string
           sire_id?: string | null
           slug?: string | null
+          titles?: string[] | null
           updated_at?: string
+          weight_kg?: number | null
+          withers_height_cm?: number | null
         }
         Update: {
           born_on?: string | null
@@ -272,7 +278,10 @@ export type Database = {
           sex?: string
           sire_id?: string | null
           slug?: string | null
+          titles?: string[] | null
           updated_at?: string
+          weight_kg?: number | null
+          withers_height_cm?: number | null
         }
         Relationships: [
           {

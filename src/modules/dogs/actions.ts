@@ -155,7 +155,7 @@ export async function updateDog(_prev: DogFormState, formData: FormData): Promis
     })
     .eq("id", id)
     .is("deleted_at", null)
-    .select("id");
+    .select("id, public_id");
 
   if (error) return toFormState(error, input);
 
@@ -166,6 +166,9 @@ export async function updateDog(_prev: DogFormState, formData: FormData): Promis
 
   revalidatePath("/painel/caes");
   revalidatePath(`/painel/caes/${id}`);
+  // Sem isto o perfil público ficava até 5min desatualizado depois de uma
+  // edição — o mesmo padrão que `revalidateDog` já aplica em publish.ts.
+  revalidatePath(`/d/${data[0].public_id}`);
   return { ok: true, values: input };
 }
 

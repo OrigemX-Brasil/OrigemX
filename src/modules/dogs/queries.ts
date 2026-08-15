@@ -22,7 +22,7 @@ import {
  */
 
 const LIST_COLUMNS =
-  "id, public_id, slug, name, sex, born_on, breed, color, coat, kennel_id, owner_id, sire_id, dam_id, published_at, created_at, updated_at";
+  "id, public_id, slug, name, sex, born_on, breed, color, coat, titles, weight_kg, withers_height_cm, kennel_id, owner_id, sire_id, dam_id, published_at, created_at, updated_at";
 
 export type DogListItem = {
   id: string;
@@ -34,6 +34,9 @@ export type DogListItem = {
   breed: string | null;
   color: string | null;
   coat: string | null;
+  titles: string[] | null;
+  weight_kg: number | null;
+  withers_height_cm: number | null;
   kennel_id: string | null;
   owner_id: string | null;
   sire_id: string | null;
@@ -104,6 +107,152 @@ export async function listMyDogs(
 /** `%` e `_` são curingas no LIKE; sem escapar, "100%" viraria busca aberta. */
 function escapeLike(value: string): string {
   return value.replace(/[%_\\]/g, (m) => `\\${m}`);
+}
+
+export type PublicDogSearchItem = {
+  id: string;
+  public_id: string;
+  name: string;
+  breed: string | null;
+  sex: "male" | "female";
+  kennel_name: string | null;
+  /** `null` = rascunho — só chega aqui em `ownDrafts`, nunca em `items`. */
+  published_at: string | null;
+};
+
+export type DogSearchResult = {
+  items: PublicDogSearchItem[];
+  nextCursor: string | null;
+  ownDrafts: PublicDogSearchItem[];
+};
+
+const DOG_SEARCH_COLUMNS = "id, public_id, name, breed, sex, published_at, kennels(name)";
+
+type DogSearchRow = {
+  id: string;
+  public_id: string;
+  name: string;
+  breed: string | null;
+  sex: string;
+  published_at: string | null;
+  kennels: { name: string } | { name: string }[] | null;
+};
+
+function mapDogSearchRow(row: DogSearchRow): PublicDogSearchItem {
+  const kennel = row.kennels;
+  const kennel_name = Array.isArray(kennel) ? (kennel[0]?.name ?? null) : (kennel?.name ?? null);
+  return {
+    id: row.id,
+    public_id: row.public_id,
+    name: row.name,
+    breed: row.breed,
+    sex: row.sex as "male" | "female",
+    kennel_name,
+    published_at: row.published_at,
+  };
+}
+
+/** Quantos rascunhos do próprio usuário entram junto — nunca paginado, ver abaixo. */
+const OWN_DRAFTS_LIMIT = 5;
+
+/**
+ * Busca pública de cão por nome — a mesma lupa do cabeçalho, estendida.
+ *
+ * Client de SESSÃO (nunca `createPublicClient`): é o que permite o próprio
+ * dono ver o rascunho dele sem nenhum filtro de `owner_id` escrito à mão — a
+ * policy `dogs_select` já resolve "publicado OU meu" sozinha, o mesmo
+ * princípio que `searchAncestorCandidates`, acima, já usa. Sem sessão, o
+ * resultado é idêntico ao de um visitante anônimo.
+ *
+ * Termo passa por `normalizeSearchTerm` (mesma função do seletor de
+ * pai/mãe, para o comportamento de busca ser consistente no projeto) antes
+ * do `ilike`. Isso ajuda maiúscula e espaço duplicado, mas TEM UM LIMITE:
+ * `ilike` não ignora acento sozinho, então "IPE" só encontra "Ipê" quando o
+ * termo sobrevive ao filtro por outro caminho (ex.: termo mais curto) — a
+ * MESMA limitação que já existe hoje no seletor de pai/mãe. Resolver isso de
+ * verdade pediria `unaccent(name)` com um índice funcional novo, fora de
+ * escopo aqui.
+ *
+ * Busca com `dogs_name_trgm_idx` (GIN trigram, já existe — nenhum índice
+ * novo). Não existe índice global "cães publicados" (só
+ * `dogs_kennel_published_idx`, por canil) para casar com a ordenação do
+ * cursor — o resultado já filtrado pelo trigram é pequeno o bastante para um
+ * sort em memória sem custo relevante.
+ *
+ * Rascunho do próprio usuário vem de uma consulta SEPARADA, só na primeira
+ * página (sem cursor): `published_at` nulo quebra a comparação `<`/`>` do
+ * keyset (`NULL` nunca satisfaz `<`/`>` em SQL), então misturá-lo na
+ * paginação principal faria o rascunho sumir silenciosamente a partir da 2ª
+ * página.
+ */
+export async function searchPublicDogs(
+  rawTerm: string,
+  params: PageParams = {},
+): Promise<DogSearchResult> {
+  if (!isSearchable(rawTerm)) return { items: [], nextCursor: null, ownDrafts: [] };
+
+  const term = normalizeSearchTerm(rawTerm);
+  const pattern = `%${escapeLike(term)}%`;
+  const limit = resolveLimit(params.limit);
+  const cursor = decodeCursor(params.cursor);
+  const supabase = await createClient();
+
+  let publicQuery = supabase
+    .from("dogs")
+    .select(DOG_SEARCH_COLUMNS)
+    .is("deleted_at", null)
+    .not("published_at", "is", null)
+    .ilike("name", pattern)
+    .order("published_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(limit + 1);
+
+  if (cursor) {
+    publicQuery = publicQuery.or(
+      `published_at.lt.${cursor.createdAt},and(published_at.eq.${cursor.createdAt},id.lt.${cursor.id})`,
+    );
+  }
+
+  const [{ data, error }, draftsData] = await Promise.all([
+    publicQuery,
+    cursor
+      ? Promise.resolve<DogSearchRow[]>([])
+      : supabase
+          .from("dogs")
+          .select(DOG_SEARCH_COLUMNS)
+          .is("deleted_at", null)
+          .is("published_at", null)
+          // Sem isto, o ancestral FANTASMA (sem dono e sem canil) vaza pra
+          // cá: ele também tem `published_at` nulo, mas é público por regra
+          // própria (`dog_is_public`), não por ser rascunho de alguém — a
+          // RLS deixa até o anônimo ler a linha. Achado testando na mão: uma
+          // busca anônima por "Rex" devolvia um fantasma rotulado como
+          // "Rascunho", linkando pro painel de edição de ninguém. A mesma
+          // conjunção de `isGhostAncestor` (ancestors.ts) exclui só o
+          // fantasma de verdade — cão de canil ainda sem dono pessoal
+          // continua contando como rascunho legítimo do criador do canil.
+          .or("owner_id.not.is.null,kennel_id.not.is.null")
+          .ilike("name", pattern)
+          .order("id", { ascending: false })
+          .limit(OWN_DRAFTS_LIMIT)
+          .then((r) => (r.data ?? []) as DogSearchRow[]),
+  ]);
+
+  if (error) return { items: [], nextCursor: null, ownDrafts: [] };
+
+  const rows = (data ?? []) as DogSearchRow[];
+  const hasMore = rows.length > limit;
+  const items = (hasMore ? rows.slice(0, limit) : rows).map(mapDogSearchRow);
+  const last = items.at(-1);
+
+  return {
+    items,
+    nextCursor:
+      hasMore && last?.published_at
+        ? encodeCursor({ createdAt: last.published_at, id: last.id })
+        : null,
+    ownDrafts: draftsData.map(mapDogSearchRow),
+  };
 }
 
 export async function getDogById(id: string) {

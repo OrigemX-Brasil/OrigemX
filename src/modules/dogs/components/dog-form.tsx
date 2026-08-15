@@ -92,6 +92,28 @@ function Control({
           ariaDescribedBy={describedBy}
           onFormatError={setDateFormatError}
         />
+      ) : field.input === "number" ? (
+        <input
+          id={field.name}
+          name={field.name}
+          type="number"
+          step="0.1"
+          inputMode="decimal"
+          defaultValue={defaultValue}
+          placeholder={field.placeholder}
+          aria-describedby={describedBy}
+          className={cls}
+        />
+      ) : field.input === "list" ? (
+        <textarea
+          id={field.name}
+          name={field.name}
+          rows={3}
+          defaultValue={defaultValue}
+          placeholder={field.placeholder}
+          aria-describedby={describedBy}
+          className={cls}
+        />
       ) : (
         <input
           id={field.name}
@@ -140,7 +162,7 @@ export function DogForm({
   dam,
   ownerId,
 }: {
-  dog?: (Partial<Record<string, string | null>> & { id?: string }) | null;
+  dog?: (Partial<Record<string, string | number | string[] | null>> & { id?: string }) | null;
   kennel: KennelOption | null;
   sire?: AncestorCandidate | null;
   dam?: AncestorCandidate | null;
@@ -204,7 +226,12 @@ export function DogForm({
           <Control
             key={field.name}
             field={field}
-            defaultValue={state.values?.[field.name] ?? String(dog?.[field.name] ?? "")}
+            defaultValue={
+              state.values?.[field.name] ??
+              (Array.isArray(dog?.[field.name])
+                ? (dog[field.name] as string[]).join("\n")
+                : String(dog?.[field.name] ?? ""))
+            }
             error={errors[field.name]}
             slugValue={field.input === "slug" ? slug : undefined}
             onSlugChange={
