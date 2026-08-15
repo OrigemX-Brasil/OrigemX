@@ -55,6 +55,10 @@ describe("isGuestOnlyRoute", () => {
     expect(isGuestOnlyRoute("/cadastro")).toBe(true);
   });
 
+  it("marca a landing — quem já tem sessão não precisa dela, nem o link de voltar das páginas públicas", () => {
+    expect(isGuestOnlyRoute("/")).toBe(true);
+  });
+
   it("não marca o resto", () => {
     expect(isGuestOnlyRoute("/painel")).toBe(false);
     expect(isGuestOnlyRoute("/esqueci-senha")).toBe(false);

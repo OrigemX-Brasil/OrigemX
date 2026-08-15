@@ -24,8 +24,17 @@
  */
 const PROTECTED_PREFIXES = ["/painel", "/admin"];
 
-/** Rotas que quem já tem sessão não precisa ver. */
-const GUEST_ONLY = new Set(["/login", "/cadastro"]);
+/**
+ * Rotas que quem já tem sessão não precisa ver.
+ *
+ * `/` entra aqui pelo mesmo motivo de `/login`/`/cadastro`: é a landing de
+ * captura (QR de feira, "Criar meu perfil" / "Já tenho conta"), sem sentido
+ * para quem já está logado. Todo link de "voltar pro início" nas páginas
+ * públicas aponta para `/` sem saber se há sessão — é este redirect na borda
+ * que resolve para o painel, sem tocar em nenhuma dessas páginas nem no
+ * cache ISR delas.
+ */
+const GUEST_ONLY = new Set(["/", "/login", "/cadastro"]);
 
 /** Casa o prefixo inteiro (segmento), não `/painel-privado`. */
 export function isProtectedRoute(pathname: string): boolean {
