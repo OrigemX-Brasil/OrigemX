@@ -6,9 +6,10 @@ import { buildPedigree, type PedigreeRow } from "@/modules/pedigree/tree";
 import { PublicImage } from "@/modules/public/components/public-image";
 
 /**
- * Prévia do perfil público REAL do Thor (ver `example-dog.ts`) — a página de
- * captura promete "pedigree de várias gerações" e "endereço que não muda" em
- * texto; isto mostra, com o mesmo cão que o card abre ao clicar.
+ * Prévia do perfil público REAL da Fire Moon New Creation & Power Chronos
+ * (ver `example-dog.ts`) — a página de captura promete "pedigree de várias
+ * gerações" e "endereço que não muda" em texto; isto mostra, com o mesmo cão
+ * que o card abre ao clicar.
  *
  * `PedigreeTree` é o componente REAL do perfil (sem fetch, sem client JS —
  * ver o próprio arquivo), com `variant="preview"`. Os pais aqui são fixture —
@@ -29,37 +30,37 @@ const FIXTURE_ROWS: PedigreeRow[] = [
   {
     pos: 1,
     generation: 0,
-    dog_id: "exemplo-thor",
-    name: "Thor",
+    dog_id: "exemplo-firemoon",
+    name: "Fire Moon New Creation & Power Chronos",
     is_public: false,
     public_id: null,
-    sex: "male",
-    breed: "Rottweiler",
-    born_on: "2025-11-02",
+    sex: "female",
+    breed: "American Staffordshire Terrier",
+    born_on: "2021-12-09",
     kennel_name: null,
   },
   {
     pos: 2,
     generation: 1,
-    dog_id: "exemplo-rex",
-    name: "Rex von Thalheim",
+    dog_id: "exemplo-firefighter",
+    name: "Fire Fighter From Kanekt",
     is_public: false,
     public_id: null,
     sex: "male",
-    breed: "Rottweiler",
-    born_on: "2021-03-15",
+    breed: "American Staffordshire Terrier",
+    born_on: "2017-07-20",
     kennel_name: null,
   },
   {
     pos: 3,
     generation: 1,
-    dog_id: "exemplo-bela",
-    name: "Bela do Vale Negro",
+    dog_id: "exemplo-sensation",
+    name: "Sensation Power Chronos",
     is_public: false,
     public_id: null,
     sex: "female",
-    breed: "Rottweiler",
-    born_on: "2021-07-22",
+    breed: "American Staffordshire Terrier",
+    born_on: "2015-10-13",
     kennel_name: null,
   },
 ];
@@ -96,15 +97,19 @@ export function ExampleProfileCard() {
         <div className="flex items-center gap-4">
           <PublicImage
             src={EXAMPLE_DOG_AVATAR_URL}
-            alt="Thor"
-            fallbackText="Thor"
+            alt="Fire Moon New Creation & Power Chronos"
+            fallbackText="Fire Moon New Creation & Power Chronos"
             width={96}
             height={96}
             className="rounded-card size-16 shrink-0 object-cover"
           />
           <div className="flex flex-col gap-0.5">
-            <h3 className="font-display text-lg font-semibold tracking-tight">Thor</h3>
-            <p className="text-fg-muted text-sm">Macho · Rottweiler · nascido em 2025</p>
+            <h3 className="font-display text-lg font-semibold tracking-tight">
+              Fire Moon New Creation & Power Chronos
+            </h3>
+            <p className="text-fg-muted text-sm">
+              Fêmea · American Staffordshire Terrier · nascida em 2021
+            </p>
           </div>
         </div>
 

@@ -126,9 +126,11 @@ export default function CapturaPage() {
           Prova visual do que o texto promete. Antes disto a página só dizia "QR
           Code" e "endereço que não muda" sem mostrar nenhum dos dois — pedido
           direto do cliente. Os dois cards levam pro perfil de um cão REAL
-          (Thor, ver src/modules/capture/example-dog.ts) — clicar não cai num
-          link morto — e dizem "Exemplo" na etiqueta porque não é o cão de um
-          cliente, é o do próprio OrigemX.
+          (Fire Moon New Creation & Power Chronos, ver
+          src/modules/capture/example-dog.ts) — clicar não cai num link morto.
+          É cão de cliente real (canil New Creation, com consentimento), não
+          mais o exemplo neutro anterior — a etiqueta "Exemplo" é sobre o
+          card ser demonstração, não sobre a origem do cão.
         */}
         <section className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
