@@ -24,15 +24,9 @@ import { publicMetadata } from "@/modules/public/metadata";
  *
  * PESO: nenhum ícone de biblioteca, nenhum componente de cliente. As exceções
  * deliberadas são a logo do cabeçalho (~38 KB, `priority` — é o LCP), o QR de
- * exemplo (SVG puro, poucos KB), o avatar do cão de exemplo em
- * `ExampleProfileCard` (~44 KB) e o mockup da árvore genealógica logo abaixo
- * da seção de exemplo (~190 KB, a maior imagem da página) — estas duas
- * últimas com `loading="lazy"`, por não serem o LCP. Pedido explícito do
- * cliente para MOSTRAR o produto, não só prometer em texto.
- *
- * O mockup amplia em tela cheia ao clicar, também sem JavaScript: âncora +
- * `:target` puro, não um componente de cliente com `useState`. Ver o
- * comentário junto do bloco.
+ * exemplo (SVG puro, poucos KB) e o avatar do cão de exemplo em
+ * `ExampleProfileCard` (~44 KB, `loading="lazy"`, por não ser o LCP). Pedido
+ * explícito do cliente para MOSTRAR o produto, não só prometer em texto.
  *
  * A CHAMADA PARA CADASTRO É O CONTEÚDO, não um enfeite no rodapé: quem chega
  * aqui veio de um papel impresso e tem trinta segundos de paciência.
@@ -65,15 +59,13 @@ export default function CapturaPage() {
 
         Cheguei a montar o hero em duas colunas (texto à esquerda, exemplos à
         direita). Não fecha: a coluna dos exemplos empilha dois cartões e fica
-        quase o dobro da altura do texto, deixando ~530px de vazio embaixo à
-        esquerda. As saídas eram piores — lado a lado numa coluna de 552px cada
-        cartão fica com 268px e a prévia do pedigree (284px de largura fixa)
-        estoura; e encolher o mockup para caber ali torna ilegível justamente a
-        imagem que o cliente pediu para MOSTRAR o produto.
+        mais alta que o texto, deixando vazio embaixo à esquerda. A saída lado
+        a lado também é pior — numa coluna de 552px cada cartão fica com 268px
+        e a prévia do pedigree (284px de largura fixa) estoura.
 
         Então a largura extra vai para onde rende sem criar vão: os dois
-        cartões de exemplo passam de 356px para ~548px cada, e o mockup de
-        768px para ~1112px. O que precisa de teto é só o texto.
+        cartões de exemplo passam de 356px para ~548px cada. O que precisa de
+        teto é só o texto.
       */}
       <div className="flex flex-col gap-10">
         <div className="flex flex-col gap-10">
@@ -149,58 +141,6 @@ export default function CapturaPage() {
           </div>
         </section>
       </div>
-
-      {/*
-        Ampliação por âncora + `:target`, sem uma linha de JavaScript — a
-        página continua estática. Clicar leva para `#exemplo-ampliado`; o
-        próprio elemento vira o alvo do CSS e aparece em tela cheia. Clicar em
-        qualquer ponto da tela cheia (a `<a>` cobre tudo) volta para `#` e
-        fecha. Sem Escape para fechar — é a única perda real do truque sem JS,
-        aceitável numa imagem só.
-      */}
-      <a
-        href="#exemplo-ampliado"
-        className="group border-border hover:border-border-strong focus-visible:outline-ring rounded-card block border transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
-        aria-label="Ampliar a árvore genealógica de exemplo"
-      >
-        <Image
-          src="/brand/home-exemplo.jpg"
-          alt="Árvore genealógica do OrigemX: fotos, gerações, campeões e análise genética num só perfil."
-          width={1536}
-          height={1024}
-          // A primeira cláusula é a de antes, intocada — abaixo de 768px o
-          // navegador escolhe exatamente o mesmo candidato do `srcset`. A
-          // terceira só passa a valer no desktop, onde o container é
-          // `max-w-6xl` e a imagem ocupa ~1112px em vez de 768.
-          sizes="(max-width: 768px) 100vw, (max-width: 1280px) 768px, 1120px"
-          loading="lazy"
-          className="rounded-card w-full"
-        />
-      </a>
-
-      <a
-        href="#"
-        id="exemplo-ampliado"
-        aria-label="Fechar imagem ampliada"
-        className="bg-bg/95 fixed inset-0 z-50 hidden items-center justify-center p-4 sm:p-8 [&:target]:flex"
-      >
-        <span className="bg-bg/70 text-fg hover:bg-bg/90 absolute top-3 right-3 flex size-10 items-center justify-center rounded-full transition-colors sm:top-6 sm:right-6">
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none">
-            <path
-              d="M6 6l12 12M18 6L6 18"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-            />
-          </svg>
-        </span>
-        {/* eslint-disable-next-line @next/next/no-img-element -- ampliação em tela cheia: dimensão vem do viewport, não faz sentido fixar width/height do next/image aqui. */}
-        <img
-          src="/brand/home-exemplo.jpg"
-          alt="Árvore genealógica do OrigemX: fotos, gerações, campeões e análise genética num só perfil."
-          className="border-border rounded-card max-h-full max-w-full border object-contain"
-        />
-      </a>
 
       {/*
         Rodapé mínimo — não é site institucional de várias colunas, é

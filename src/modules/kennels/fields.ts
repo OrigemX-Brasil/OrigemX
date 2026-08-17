@@ -109,8 +109,8 @@ export const KENNEL_FIELDS: readonly KennelField[] = [
     weight: "recommended",
     input: "textarea",
     publicProfile: true,
-    maxLength: 1000,
-    help: "História, linhagens de trabalho, o que diferencia sua criação.",
+    maxLength: 250,
+    help: "História, linhagens de trabalho, o que diferencia sua criação. (limite de 250 caracteres)",
   },
   {
     name: "city",
