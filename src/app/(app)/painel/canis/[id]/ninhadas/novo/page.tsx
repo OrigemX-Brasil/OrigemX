@@ -9,10 +9,12 @@ import { LitterForm } from "@/modules/litters/components/litter-form";
 export const metadata: Metadata = { title: "Nova ninhada" };
 
 /**
- * Só a descrição — sem upload de foto. `litter_id` não existe até o INSERT
- * acontecer, mesma restrição que já vale para logo de canil e galeria de
- * cão: as duas só aparecem na tela de EDIÇÃO, depois que a entidade dona já
- * existe. `LitterForm` redireciona para lá ao salvar.
+ * Dados e progenitores — sem foto e sem filhote. `litter_id` não existe até o
+ * INSERT acontecer, mesma restrição que já vale para logo de canil e galeria
+ * de cão: as duas só aparecem na tela de EDIÇÃO, depois que a entidade dona já
+ * existe. Filhote entra na mesma categoria, e por um motivo a mais: ele nasce
+ * com `sire_id`/`dam_id` copiados da ninhada, então precisa que os
+ * progenitores já estejam escolhidos. `LitterForm` redireciona ao salvar.
  */
 export default async function NovaNinhadaPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -29,7 +31,7 @@ export default async function NovaNinhadaPage({ params }: { params: Promise<{ id
         <h1 className="font-display text-2xl font-semibold tracking-tight">Nova ninhada</h1>
       </div>
 
-      <LitterForm kennelId={kennel.id} />
+      <LitterForm kennelId={kennel.id} ownerId={user.id} />
     </div>
   );
 }

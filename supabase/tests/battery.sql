@@ -1586,6 +1586,205 @@ exception when others then
                       'ERRO: ' || sqlstate || ' ' || sqlerrm, false);
 end $$;
 
+-- =============================================================================
+-- Grupo 8 — ninhada completa: filhote é `dogs` (casos 68 a 78)
+--
+-- Fixture: ninhada L1 no canil de u1, com A (macho) e B (fêmea) de progenitores
+-- — os mesmos que já geraram Battery C, então linebreeding continua legítimo.
+-- =============================================================================
+
+insert into public.kennel_litters (id, kennel_id, sire_id, dam_id, mated_on, created_by)
+values ('e1000000-0000-4000-8000-000000000001', 'c1000000-0000-4000-8000-000000000001',
+        'd1000000-0000-4000-8000-00000000000a', 'd1000000-0000-4000-8000-00000000000b',
+        current_date - 60, 'b1000000-0000-4000-8000-000000000001');
+
+-- 68. public_id da ninhada nasce preenchido e no formato do alfabeto sem ambíguos
+do $$
+declare v_pid text;
+begin
+  select public_id into v_pid from public.kennel_litters
+   where id = 'e1000000-0000-4000-8000-000000000001';
+  perform pg_temp.rec(68, 'ninhada nasce com public_id válido', 'casa ^[2-9a-hjkmnp-z]{12}$',
+                      coalesce(v_pid, '(nulo)'), v_pid ~ '^[2-9a-hjkmnp-z]{12}$');
+end $$;
+
+-- 69. public_id da ninhada é imutável — o link divulgado não pode mudar de dono
+do $$
+begin
+  update public.kennel_litters set public_id = 'abcdefghjkmn'
+   where id = 'e1000000-0000-4000-8000-000000000001';
+  perform pg_temp.rec(69, 'trocar public_id da ninhada', 'bloqueio',
+                      'aceitou — INVARIANTE DESPROTEGIDA', false);
+exception when others then
+  perform pg_temp.rec(69, 'trocar public_id da ninhada', 'bloqueio',
+                      sqlstate || ' ' || sqlerrm, true);
+end $$;
+
+-- 70. progenitor da ninhada com sexo trocado
+do $$
+begin
+  update public.kennel_litters set sire_id = 'd1000000-0000-4000-8000-00000000000b'
+   where id = 'e1000000-0000-4000-8000-000000000001';
+  perform pg_temp.rec(70, 'fêmea na posição de pai da ninhada', 'bloqueio',
+                      'aceitou — INVARIANTE DESPROTEGIDA', false);
+exception when others then
+  perform pg_temp.rec(70, 'fêmea na posição de pai da ninhada', 'bloqueio',
+                      sqlstate || ' ' || sqlerrm, true);
+end $$;
+
+-- 71. nascimento antes da cobrição (kennel_litters_born_after_mated)
+do $$
+begin
+  update public.kennel_litters set born_on = current_date - 90
+   where id = 'e1000000-0000-4000-8000-000000000001';
+  perform pg_temp.rec(71, 'nascimento anterior à cobrição', 'bloqueio',
+                      'aceitou — INVARIANTE DESPROTEGIDA', false);
+exception when others then
+  perform pg_temp.rec(71, 'nascimento anterior à cobrição', 'bloqueio',
+                      sqlstate || ' ' || sqlerrm, true);
+end $$;
+
+-- Filhote de fixture, com o par COPIADO da ninhada — o caminho feliz.
+do $$
+begin
+  insert into public.dogs (id, name, sex, kennel_id, owner_id, created_by,
+                           litter_id, litter_status, sire_id, dam_id)
+  values ('d1000000-0000-4000-8000-0000000000f1', 'Battery Filhote 1', 'male',
+          'c1000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000001',
+          'b1000000-0000-4000-8000-000000000001',
+          'e1000000-0000-4000-8000-000000000001', 'available',
+          'd1000000-0000-4000-8000-00000000000a', 'd1000000-0000-4000-8000-00000000000b');
+  perform pg_temp.rec(72, 'filhote com o par da ninhada', 'aceita', 'aceita', true);
+exception when others then
+  perform pg_temp.rec(72, 'filhote com o par da ninhada', 'aceita',
+                      'ERRO: ' || sqlstate || ' ' || sqlerrm, false);
+end $$;
+
+-- 73. filhote com par DIFERENTE do da ninhada (dogs_check_litter_parents)
+do $$
+begin
+  insert into public.dogs (name, sex, kennel_id, owner_id, created_by,
+                           litter_id, litter_status, sire_id, dam_id)
+  values ('Battery Filhote Divergente', 'female',
+          'c1000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000001',
+          'b1000000-0000-4000-8000-000000000001',
+          'e1000000-0000-4000-8000-000000000001', 'available',
+          'd1000000-0000-4000-8000-00000000000c', 'd1000000-0000-4000-8000-00000000000b');
+  perform pg_temp.rec(73, 'filhote com pai diferente do da ninhada', 'bloqueio',
+                      'aceitou — INVARIANTE DESPROTEGIDA', false);
+exception when others then
+  perform pg_temp.rec(73, 'filhote com pai diferente do da ninhada', 'bloqueio',
+                      sqlstate || ' ' || sqlerrm, true);
+end $$;
+
+-- 74. status sem ninhada (dogs_litter_status_requires_litter, bicondicional)
+do $$
+begin
+  update public.dogs set litter_status = 'sold'
+   where id = 'd1000000-0000-4000-8000-00000000000c';
+  perform pg_temp.rec(74, 'status de ninhada em cão sem ninhada', 'bloqueio',
+                      'aceitou — INVARIANTE DESPROTEGIDA', false);
+exception when others then
+  perform pg_temp.rec(74, 'status de ninhada em cão sem ninhada', 'bloqueio',
+                      sqlstate || ' ' || sqlerrm, true);
+end $$;
+
+-- 75. o outro lado do bicondicional: ninhada sem status
+do $$
+begin
+  update public.dogs set litter_status = null
+   where id = 'd1000000-0000-4000-8000-0000000000f1';
+  perform pg_temp.rec(75, 'filhote de ninhada sem status', 'bloqueio',
+                      'aceitou — INVARIANTE DESPROTEGIDA', false);
+exception when others then
+  perform pg_temp.rec(75, 'filhote de ninhada sem status', 'bloqueio',
+                      sqlstate || ' ' || sqlerrm, true);
+end $$;
+
+-- 76. preço em cão fora de ninhada — a fronteira do aditivo, no schema
+do $$
+begin
+  update public.dogs set price_brl = 4500
+   where id = 'd1000000-0000-4000-8000-00000000000c';
+  perform pg_temp.rec(76, 'preço em cão sem ninhada', 'bloqueio',
+                      'aceitou — FRONTEIRA DO ADITIVO DESPROTEGIDA', false);
+exception when others then
+  perform pg_temp.rec(76, 'preço em cão sem ninhada', 'bloqueio',
+                      sqlstate || ' ' || sqlerrm, true);
+end $$;
+
+-- 77. trocar o par da ninhada REESCREVE o dos filhotes (cascata, não bloqueio)
+--
+-- Prova o trigger AFTER `kennel_litters_sync_puppy_parents`. Bloquear seria a
+-- escolha errada: o criador que descobre o reprodutor depois teria de excluir e
+-- recadastrar os filhotes, queimando public_id que pode já estar impresso.
+do $$
+declare v_sire uuid;
+begin
+  -- 'Battery E' é macho e não descende de A/B, então não fecha ciclo.
+  insert into public.dogs (id, name, sex, created_by)
+  values ('d1000000-0000-4000-8000-0000000000e1', 'Battery E', 'male',
+          'b1000000-0000-4000-8000-000000000001')
+  on conflict (id) do nothing;
+
+  update public.kennel_litters set sire_id = 'd1000000-0000-4000-8000-0000000000e1'
+   where id = 'e1000000-0000-4000-8000-000000000001';
+
+  select sire_id into v_sire from public.dogs
+   where id = 'd1000000-0000-4000-8000-0000000000f1';
+
+  perform pg_temp.rec(77, 'trocar pai da ninhada cascateia para os filhotes',
+                      'filhote passa a apontar para Battery E',
+                      coalesce(v_sire::text, '(nulo)'),
+                      v_sire = 'd1000000-0000-4000-8000-0000000000e1');
+exception when others then
+  perform pg_temp.rec(77, 'trocar pai da ninhada cascateia para os filhotes',
+                      'filhote passa a apontar para Battery E',
+                      'ERRO: ' || sqlstate || ' ' || sqlerrm, false);
+end $$;
+
+-- 78. vacina sem tipo (dog_health_records_vaccine_needs_product)
+--
+-- "Vacinado em 12/08" sem dizer contra o quê não informa nada a quem compra o
+-- filhote. Vermífugo sem marca é aceito — o criador pode não lembrar.
+do $$
+begin
+  insert into public.dog_health_records (dog_id, kind, applied_on, created_by)
+  values ('d1000000-0000-4000-8000-0000000000f1', 'vaccine', current_date,
+          'b1000000-0000-4000-8000-000000000001');
+  perform pg_temp.rec(78, 'vacina sem tipo', 'bloqueio',
+                      'aceitou — INVARIANTE DESPROTEGIDA', false);
+exception when others then
+  perform pg_temp.rec(78, 'vacina sem tipo', 'bloqueio',
+                      sqlstate || ' ' || sqlerrm, true);
+end $$;
+
+-- 79. vermífugo sem marca é aceito — o contraste que prova que o CHECK 78 é
+-- específico da vacina, e não um "produto obrigatório" genérico.
+do $$
+begin
+  insert into public.dog_health_records (dog_id, kind, applied_on, created_by)
+  values ('d1000000-0000-4000-8000-0000000000f1', 'deworming', current_date,
+          'b1000000-0000-4000-8000-000000000001');
+  perform pg_temp.rec(79, 'vermífugo sem marca', 'aceita', 'aceita', true);
+exception when others then
+  perform pg_temp.rec(79, 'vermífugo sem marca', 'aceita',
+                      'ERRO: ' || sqlstate || ' ' || sqlerrm, false);
+end $$;
+
+-- 80. exame genético sem resultado
+do $$
+begin
+  insert into public.dog_genetic_tests (dog_id, name, result, created_by)
+  values ('d1000000-0000-4000-8000-00000000000a', 'L2HGA', '',
+          'b1000000-0000-4000-8000-000000000001');
+  perform pg_temp.rec(80, 'exame genético com resultado vazio', 'bloqueio',
+                      'aceitou — INVARIANTE DESPROTEGIDA', false);
+exception when others then
+  perform pg_temp.rec(80, 'exame genético com resultado vazio', 'bloqueio',
+                      sqlstate || ' ' || sqlerrm, true);
+end $$;
+
 -- -----------------------------------------------------------------------------
 -- Limpeza. Vem ANTES do relatório de propósito: a Management API devolve o
 -- resultado do último statement, então o SELECT final tem de ser o último.
@@ -1604,6 +1803,18 @@ delete from public.dog_videos where provider_uid like 'battery-%';
 delete from public.dog_identifiers
  where dog_id in (select id from public.dogs
                    where name like 'Battery%' or name = 'Rex do Dois');
+
+-- Saúde e exames antes dos cães: as duas FKs são ON DELETE CASCADE, mas apagar
+-- explicitamente mantém a limpeza legível e independente disso.
+delete from public.dog_health_records
+ where dog_id in (select id from public.dogs where name like 'Battery%');
+delete from public.dog_genetic_tests
+ where dog_id in (select id from public.dogs where name like 'Battery%');
+
+-- Filhotes antes da ninhada (dogs.litter_id é FK RESTRICT) e antes dos
+-- progenitores deles (sire_id/dam_id também são RESTRICT).
+delete from public.dogs where name like 'Battery Filhote%';
+delete from public.kennel_litters where id = 'e1000000-0000-4000-8000-000000000001';
 delete from public.dogs where name = 'Battery E';
 delete from public.dogs where name in ('Battery C', 'Battery D');
 delete from public.dogs where name like 'Battery%' or name = 'Rex do Dois';

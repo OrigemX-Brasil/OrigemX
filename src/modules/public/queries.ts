@@ -9,7 +9,12 @@ import {
 } from "@/lib/pagination";
 import { createPublicClient } from "@/lib/supabase/public";
 import { BUCKET_PUBLIC } from "@/modules/media/constraints";
-import { resolveMediaUrls, type MediaItem, type ResolvedMedia } from "@/modules/media/queries";
+import {
+  getDogCovers,
+  resolveMediaUrls,
+  type MediaItem,
+  type ResolvedMedia,
+} from "@/modules/media/queries";
 
 /**
  * ============================================================================
@@ -22,11 +27,18 @@ import { resolveMediaUrls, type MediaItem, type ResolvedMedia } from "@/modules/
  *
  * A colunas são listadas explicitamente, nunca `select *`. É o que garante que
  * campo sensível não vaze por descuido quando alguém adicionar uma coluna:
- * microchip, telefone, e-mail e endereço NÃO estão em nenhuma lista abaixo.
+ * microchip, e-mail e endereço NÃO estão em nenhuma lista abaixo.
+ *
+ * UMA EXCEÇÃO, deliberada: `kennels.whatsapp`. É telefone, mas é o telefone
+ * COMERCIAL que o dono do canil cadastra para ser encontrado — ele alimenta o
+ * botão de contato da página da ninhada, e o formulário avisa na tela que o
+ * campo é público. Nasce nulo: quem não preencher não expõe nada. O telefone
+ * PESSOAL (`profiles.phone`) continua fora de toda lista deste arquivo, e é
+ * outra coluna, em outra tabela.
  */
 
 const KENNEL_PUBLIC_COLUMNS =
-  "id, name, slug, city, state, description, website_url, instagram_handle, registration_number, founder_number, published_at";
+  "id, name, slug, city, state, description, website_url, instagram_handle, registration_number, founder_number, whatsapp, published_at";
 
 const DOG_PUBLIC_COLUMNS =
   "id, public_id, slug, name, sex, born_on, breed, color, coat, titles, weight_kg, withers_height_cm, kennel_id, owner_id, sire_id, dam_id, published_at";
@@ -42,6 +54,7 @@ export type PublicKennel = {
   instagram_handle: string | null;
   registration_number: string | null;
   founder_number: number | null;
+  whatsapp: string | null;
   published_at: string | null;
 };
 
@@ -133,6 +146,11 @@ export const PUBLIC_DOGS_PAGE_SIZE = 24;
  * que foi refeito na migration `20260804022015_perf_indexes` exatamente para
  * isto — antes o índice ordenava por `published_at` e não servia para esta
  * consulta, que levava 1,2 s com 45 mil cães.
+ *
+ * FILHOTE DE NINHADA FICA DE FORA (`litter_id is null`), pelo mesmo motivo de
+ * `listMyDogs`: ele aparece na seção de ninhadas, com foto, sexo, status e
+ * preço, e repeti-lo aqui faria o visitante ver o mesmo cão duas vezes na
+ * mesma página — a segunda sem nada daquilo.
  */
 export const listPublicDogsOfKennel = cache(
   async (
@@ -148,6 +166,7 @@ export const listPublicDogsOfKennel = cache(
       .select(`${DOG_PUBLIC_COLUMNS}, created_at`)
       .eq("kennel_id", kennelId)
       .is("deleted_at", null)
+      .is("litter_id", null)
       .not("published_at", "is", null)
       .order("created_at", { ascending: false })
       .order("id", { ascending: false })
@@ -236,7 +255,11 @@ export const getPublicMedia = cache(
 
 export type PublicLitter = {
   id: string;
+  /** Endereço da página própria da ninhada — `/n/[public_id]`. */
+  public_id: string;
   description: string | null;
+  born_on: string | null;
+  mated_on: string | null;
   /** Ordenadas por posição (1-4). `photos[0]`, quando existe, é a capa —
    * mesma extração `[principal, ...resto]` que `/d/[public_id]` já faz para
    * o mosaico do cão. */
@@ -262,7 +285,7 @@ export const getPublicLitters = cache(async (kennelId: string): Promise<PublicLi
     const supabase = createPublicClient();
     const { data } = await supabase
       .from("kennel_litters")
-      .select("id, description")
+      .select("id, public_id, description, born_on, mated_on")
       .eq("kennel_id", kennelId)
       .is("deleted_at", null)
       .order("created_at", { ascending: false })
@@ -315,6 +338,167 @@ export const getPublicLitters = cache(async (kennelId: string): Promise<PublicLi
  * E note que ela NÃO fala com o Cloudflare — só com o nosso banco. É por isso
  * que o serviço de vídeo fora do ar não tem efeito nenhum aqui.
  */
+export type PublicPuppy = PublicDog & {
+  litter_status: string | null;
+  price_brl: number | null;
+};
+
+export type PublicLitterPage = {
+  id: string;
+  public_id: string;
+  description: string | null;
+  mated_on: string | null;
+  born_on: string | null;
+  sire_id: string | null;
+  dam_id: string | null;
+  photos: ResolvedMedia[];
+  kennel: PublicKennel;
+};
+
+/**
+ * A ninhada por `public_id` — a rota `/n/[public_id]`.
+ *
+ * SEM filtro de `published_at` em lugar nenhum: a REGRA DUPLA
+ * (`kennel_litters_select` exige a ninhada E o canil publicados) já decide, e o
+ * client é o ANÔNIMO. Rederivar a regra aqui em TypeScript é a duplicação que
+ * diverge na primeira mudança — mesmo raciocínio de `getPublicLitters`.
+ *
+ * DUAS CONSULTAS, não um `kennels!inner(...)` embutido — mesmo padrão de TODA
+ * outra função deste arquivo (`getPublicDogById`, `getPublicKennelById`...):
+ * nenhuma delas faz embed entre duas tabelas com RLS na mesma chamada, e esta
+ * também não deveria ter sido a exceção. Uma consulta a mais é o preço de
+ * seguir o padrão que já está provado — o embed foi tentado e produziu `null`
+ * de dentro do runtime do Next mesmo com a linha comprovadamente visível ao
+ * anônimo (confirmado via SQL direto e via um client REST independente, no
+ * mesmo instante); não valia perseguir a causa exata dentro de uma versão do
+ * Next com mudanças de cache não documentadas (ver `AGENTS.md`) quando o resto
+ * do arquivo já mostra o caminho que funciona.
+ *
+ * NUNCA LEVANTA — devolve `null` e a rota chama `notFound()`.
+ */
+export const getPublicLitterByPublicId = cache(
+  async (publicId: string): Promise<PublicLitterPage | null> => {
+    try {
+      const supabase = createPublicClient();
+      const { data } = await supabase
+        .from("kennel_litters")
+        .select("id, kennel_id, public_id, description, mated_on, born_on, sire_id, dam_id")
+        .eq("public_id", publicId)
+        .is("deleted_at", null)
+        .maybeSingle();
+
+      if (!data) return null;
+
+      const { data: kennel } = await supabase
+        .from("kennels")
+        .select(KENNEL_PUBLIC_COLUMNS)
+        .eq("id", data.kennel_id)
+        .maybeSingle();
+
+      // A REGRA DUPLA vira, na prática, "o `select` de kennels não devolveu
+      // linha": `kennels_select` só entrega canil publicado ao anônimo, então
+      // canil ainda em rascunho faz a ninhada inteira desaparecer aqui — sem
+      // precisar checar `published_at` de novo neste arquivo.
+      if (!kennel) return null;
+
+      const { data: media } = await supabase
+        .from("media")
+        .select(MEDIA_COLUMNS)
+        .eq("litter_id", data.id)
+        .eq("role", "litter_gallery")
+        .is("deleted_at", null)
+        .order("position", { ascending: true });
+
+      const photos = await resolveMediaUrls((media ?? []) as MediaItem[], supabase);
+
+      return {
+        id: data.id,
+        public_id: data.public_id,
+        description: data.description,
+        mated_on: data.mated_on,
+        born_on: data.born_on,
+        sire_id: data.sire_id,
+        dam_id: data.dam_id,
+        photos,
+        kennel: kennel as PublicKennel,
+      };
+    } catch {
+      return null;
+    }
+  },
+);
+
+/**
+ * Filhotes publicados da ninhada, com foto.
+ *
+ * `litter_status` e `price_brl` entram aqui e em nenhuma outra consulta
+ * pública: são as duas colunas que só existem dentro de ninhada (CHECKs
+ * `dogs_litter_status_requires_litter` e `dogs_price_requires_litter`), então
+ * o único lugar que as exibe é esta página.
+ */
+export const getPublicLitterPuppies = cache(
+  async (litterId: string): Promise<Array<PublicPuppy & { cover: ResolvedMedia | null }>> => {
+    try {
+      const supabase = createPublicClient();
+      const { data } = await supabase
+        .from("dogs")
+        .select(`${DOG_PUBLIC_COLUMNS}, litter_status, price_brl`)
+        .eq("litter_id", litterId)
+        .is("deleted_at", null)
+        .not("published_at", "is", null)
+        .order("created_at", { ascending: true })
+        .limit(30);
+
+      const puppies = (data ?? []) as PublicPuppy[];
+      if (puppies.length === 0) return [];
+
+      const covers = await getDogCovers(
+        puppies.map((p) => p.id),
+        supabase,
+      );
+      return puppies.map((p) => ({ ...p, cover: covers.get(p.id) ?? null }));
+    } catch {
+      return [];
+    }
+  },
+);
+
+/** Os dois progenitores, com foto — o cabeçalho da página da ninhada. */
+export const getPublicLitterParents = cache(
+  async (
+    ids: readonly (string | null)[],
+  ): Promise<Map<string, PublicDog & { cover: ResolvedMedia | null }>> => {
+    const found = new Map<string, PublicDog & { cover: ResolvedMedia | null }>();
+    const wanted = ids.filter((id): id is string => Boolean(id));
+    if (wanted.length === 0) return found;
+
+    try {
+      const supabase = createPublicClient();
+      const { data } = await supabase
+        .from("dogs")
+        .select(DOG_PUBLIC_COLUMNS)
+        .in("id", wanted)
+        .is("deleted_at", null)
+        .limit(2);
+
+      const parents = (data ?? []) as PublicDog[];
+      if (parents.length === 0) return found;
+
+      const covers = await getDogCovers(
+        parents.map((p) => p.id),
+        supabase,
+      );
+      for (const parent of parents) {
+        found.set(parent.id, { ...parent, cover: covers.get(parent.id) ?? null });
+      }
+    } catch {
+      return found;
+    }
+
+    return found;
+  },
+);
+
 export const getPublicDogVideo = cache(
   async (dogId: string): Promise<PublicDogVideo | null> => {
     try {
@@ -462,6 +646,10 @@ export const countPublishedDogsByKennel = cache(
       .select("kennel_id")
       .in("kennel_id", kennelIds)
       .is("deleted_at", null)
+      // Mesmo recorte de `listPublicDogsOfKennel`: este número aparece ao lado
+      // do canil na busca e precisa bater com o que a página dele lista. Contar
+      // filhote aqui e não listá-lo lá seria um "12 cães" que abre com 5.
+      .is("litter_id", null)
       .not("published_at", "is", null)
       .limit(kennelIds.length * 200);
 

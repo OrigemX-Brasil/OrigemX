@@ -96,9 +96,35 @@ Deploy Vercel.
 
 Não implementar, nem "preparar tabela":
 
-IA, marketplace, financeiro, pagamentos, dossiê de saúde, agenda/lembretes, ninhadas,
-rede social, notificação por e-mail/push/WhatsApp/SMS, multi-espécies, fusão automática de
-duplicados, cache distribuído, filas.
+IA, marketplace, financeiro, pagamentos, agenda/lembretes, rede social, notificação por
+e-mail/push/WhatsApp/SMS, multi-espécies, fusão automática de duplicados, cache
+distribuído, filas.
+
+### Ninhadas — DENTRO do escopo desde 18/08/2026 (aditivo contratual)
+
+Ninhada saiu desta lista. A versão básica (texto + até 4 fotos) entrou em 14/08/2026; a
+completa — progenitores, filhotes individuais, saúde, exames genéticos, preço e página
+pública — foi orçada à parte e aprovada pelo cliente.
+
+**Preço é a exceção, e ela é estreita.** `dogs.price_brl` é campo INFORMATIVO, opcional,
+editável pelo dono do canil e exibido na página pública. O único fluxo de conversão é o
+CTA que abre o WhatsApp do criador: a transação acontece INTEIRAMENTE fora da plataforma.
+
+Continuam fora de escopo e exigem NOVO aditivo — não decorrem deste:
+
+- checkout, carrinho, reserva processada pelo app, pagamento, cobrança, emissão fiscal;
+- transferência de titularidade do filhote para conta do comprador;
+- formulário de lead, notificação ou mensagem enviada pelo servidor.
+
+Ter preço não autoriza carrinho.
+
+### Saúde — recorte estreito, não dossiê
+
+Dentro: log repetível de vermífugo e vacina do cão (`dog_health_records`) e laudo de
+exame genético do reprodutor (`dog_genetic_tests`).
+
+Fora, como sempre esteve: prontuário veterinário, histórico clínico, medicação, agenda
+de reforço e qualquer lembrete.
 
 ---
 
@@ -118,6 +144,14 @@ Referência rápida — o banco é quem garante, não a aplicação.
 | RLS em tudo                | migration `20260731194105_rls_policies.sql`                                     |
 | Listagem com limite        | todo acesso a dados em `src/modules/*/queries.ts`, com `limit` obrigatório      |
 | Tokens de cor              | `src/styles/tokens.css` — nenhuma cor literal em componente                     |
+| Filhote é um cão           | `dogs.litter_id` → `kennel_litters.id`. NÃO existe tabela `puppies`             |
+| Par da ninhada = par do filhote | triggers `dogs_check_litter_parents` (recusa divergência) e `kennel_litters_sync_puppy_parents` (cascateia a troca) |
+| Preço só dentro de ninhada | CHECK `dogs_price_requires_litter` — a fronteira do aditivo, no schema          |
+| Status só dentro de ninhada | CHECK `dogs_litter_status_requires_litter`, bicondicional                      |
+| Ninhada de terceiro é intocável | `dogs_insert`/`dogs_update` chamam `private.owns_litter(litter_id)`        |
+| URL da ninhada não quebra  | `kennel_litters.public_id` imutável, trigger `kennel_litters_freeze_public_id`  |
+| Exame do pai não é redigitado | `dog_genetic_tests.dog_id` — a ninhada LÊ por `sire_id`/`dam_id`, nunca copia |
+| Saúde/exame público segue o cão | policies delegam a `dogs_select` via `exists`, sem rederivar `dog_is_public` |
 
 ### Schema
 

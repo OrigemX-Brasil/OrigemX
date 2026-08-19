@@ -56,6 +56,7 @@ export function GalleryUploader({
   remaining,
   maxItems,
   registerAction,
+  onComplete,
 }: {
   entityId: string;
   ownerId: string;
@@ -63,6 +64,17 @@ export function GalleryUploader({
   remaining: number;
   maxItems: number;
   registerAction?: RegisterAction;
+  /**
+   * Chamado ao fim de UM lote (sucesso, falha parcial ou total — quem chama
+   * decide se importa). Existe para quem embute este uploader numa lista
+   * server-rendered que `registerAction`/`registerMedia` NÃO revalida
+   * sozinha: `registerMedia`, por exemplo, só revalida a página do cão
+   * (`/painel/caes/[id]`), não uma lista externa que também mostra a capa —
+   * o `PuppyManager` da ninhada é o primeiro caso disso. Opcional porque a
+   * página do cão, hoje o único outro consumidor, já se revalida por conta
+   * própria e não precisa deste empurrão a mais.
+   */
+  onComplete?: () => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [queue, setQueue] = useState<QueueItem[]>([]);
@@ -171,6 +183,8 @@ export function GalleryUploader({
         : `${succeeded} de ${items.length} enviada${succeeded === 1 ? "" : "s"} — ` +
             `${failedCount} ${failedCount === 1 ? "falhou" : "falharam"}.`,
     );
+
+    if (succeeded > 0) onComplete?.();
   }
 
   const inputId = `gallery-upload-${entityId}`;

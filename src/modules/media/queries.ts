@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/types/database";
 
-import { BUCKET_PRIVATE, isPubliclyServable, type MediaRole } from "./constraints";
+import { BUCKET_PRIVATE, isPubliclyServable, MAX_GALLERY_ITEMS, type MediaRole } from "./constraints";
 
 /**
  * As consultas aceitam um client externo para que a página pública possa passar
@@ -142,6 +142,48 @@ export async function getDogGallery(dogId: string): Promise<ResolvedMedia[]> {
   return resolveMediaUrls((data ?? []) as MediaItem[]);
 }
 
+/**
+ * A capa de cada cão em `dogIds`, em UMA consulta.
+ *
+ * Existe para a lista de filhotes da ninhada: sem isto, uma ninhada de oito
+ * filhotes faria oito `getDogGallery` — o N+1 que o resto do módulo já evita.
+ *
+ * Difere de `getLitterCovers` num ponto: a galeria do cão NÃO tem posição fixa
+ * (toda foto nasce em `position = 0`, e só `setDogGalleryCover` escreve outra),
+ * então não dá para filtrar `position = 1` como lá. A ordenação replica a de
+ * `getDogGallery` e o primeiro de cada cão vence — `Map.set` só grava quando a
+ * chave ainda não existe.
+ *
+ * Aceita client externo pelo mesmo motivo do resto do arquivo: a página pública
+ * passa o anônimo.
+ */
+export async function getDogCovers(
+  dogIds: readonly string[],
+  client?: SupabaseClientLike,
+): Promise<Map<string, ResolvedMedia>> {
+  if (dogIds.length === 0) return new Map();
+
+  const supabase = client ?? (await createClient());
+  const { data } = await supabase
+    .from("media")
+    .select(COLUMNS)
+    .in("dog_id", dogIds)
+    .eq("role", "dog_gallery")
+    .is("deleted_at", null)
+    .order("position", { ascending: true })
+    .order("created_at", { ascending: true })
+    .limit(dogIds.length * 4);
+
+  const resolved = await resolveMediaUrls((data ?? []) as MediaItem[], client);
+
+  const covers = new Map<string, ResolvedMedia>();
+  for (const item of resolved) {
+    if (!item.dog_id || covers.has(item.dog_id)) continue;
+    covers.set(item.dog_id, item);
+  }
+  return covers;
+}
+
 export async function countDogGallery(dogId: string): Promise<number> {
   const supabase = await createClient();
   const { count } = await supabase
@@ -152,6 +194,47 @@ export async function countDogGallery(dogId: string): Promise<number> {
     .is("deleted_at", null);
 
   return count ?? 0;
+}
+
+/**
+ * Agrupa linhas `{dog_id}` em `Map<dog_id, contagem>` — a parte PURA de
+ * `countDogGalleries`, extraída só para ser testável sem banco. Cão sem
+ * nenhuma foto simplesmente não entra no Map; quem chama trata ausência
+ * como zero, mesmo padrão de `getDogCovers`.
+ */
+export function groupCountsByDogId(rows: readonly { dog_id: string | null }[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    if (!row.dog_id) continue;
+    counts.set(row.dog_id, (counts.get(row.dog_id) ?? 0) + 1);
+  }
+  return counts;
+}
+
+/**
+ * `countDogGallery`, em lote — para a lista de filhotes da ninhada saber o
+ * `remaining` de cada `GalleryUploader` inline sem uma consulta por filhote.
+ *
+ * Traz as linhas (não `count: exact`) e agrupa em memória: um `count` por
+ * `dog_id` seria `dogIds.length` idas ao banco, exatamente o N+1 que este
+ * módulo evita em toda outra função batched (`getDogCovers`,
+ * `getLitterCovers`).
+ */
+export async function countDogGalleries(
+  dogIds: readonly string[],
+): Promise<Map<string, number>> {
+  if (dogIds.length === 0) return new Map();
+
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("media")
+    .select("dog_id")
+    .in("dog_id", dogIds)
+    .eq("role", "dog_gallery")
+    .is("deleted_at", null)
+    .limit(dogIds.length * MAX_GALLERY_ITEMS);
+
+  return groupCountsByDogId(data ?? []);
 }
 
 /**

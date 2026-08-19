@@ -2499,6 +2499,89 @@ async function main() {
       .eq("id", kennelLitters.id);
   }
 
+  // ---------------------------------------------------------------------------
+  // FILHOTE NA NINHADA ALHEIA — o buraco que `dogs.litter_id` abriria.
+  //
+  // Antes da migration `ninhada_completa_estrutura`, `dogs_insert` validava
+  // `kennel_id` (via owns_kennel) e NADA olhava `litter_id`. B conseguiria
+  // inserir um cão apontando para a ninhada de A, e ele apareceria na página
+  // pública dela — conteúdo de terceiro dentro do canil de outro criador.
+  //
+  // O conserto é a cláusula `private.owns_litter(litter_id)` no WITH CHECK das
+  // duas policies. Isto é RLS pura: a bateria SQL roda como superusuário e não
+  // alcança este caso. Se algum dia alguém recriar `dogs_insert` sem a
+  // cláusula, é AQUI que aparece.
+  // ---------------------------------------------------------------------------
+  if (litterA) {
+    const invasao = await B.client
+      .from("dogs")
+      .insert({
+        name: "Filhote Invasor",
+        sex: "male",
+        litter_id: litterA.id,
+        litter_status: "available",
+        created_by: B.id,
+        owner_id: B.id,
+      })
+      .select("id");
+
+    record(
+      "19. Ninhadas",
+      "B NÃO consegue cadastrar filhote na ninhada de A (owns_litter no WITH CHECK)",
+      "recusado",
+      describe(invasao.error, invasao.data ?? undefined),
+      Boolean(invasao.error) || (invasao.data ?? []).length === 0,
+    );
+
+    // O contraste que prova que a cláusula não bloqueia o caso legítimo: A, dona
+    // da ninhada, cadastra normalmente. Sem este par, uma policy que recusasse
+    // TODO mundo passaria no teste acima e ninguém notaria até a tela quebrar.
+    const legitimo = await A.client
+      .from("dogs")
+      .insert({
+        name: "Filhote Legítimo",
+        sex: "female",
+        kennel_id: kennelLitters.id,
+        litter_id: litterA.id,
+        litter_status: "available",
+        created_by: A.id,
+        owner_id: A.id,
+      })
+      .select("id");
+
+    record(
+      "19. Ninhadas",
+      "A (dona) cadastra filhote na própria ninhada",
+      "criado",
+      describe(legitimo.error, legitimo.data ?? undefined),
+      !legitimo.error && (legitimo.data ?? []).length === 1,
+    );
+
+    // Preço só existe DENTRO de ninhada — a fronteira do aditivo contratual.
+    // Aqui a prova é pela API, com RLS e grant por coluna no caminho: o CHECK
+    // `dogs_price_requires_litter` continua valendo para quem passa pelo
+    // PostgREST, não só para quem escreve SQL direto.
+    const precoForaDeNinhada = await A.client
+      .from("dogs")
+      .insert({
+        name: "Cao Com Preco Indevido",
+        sex: "male",
+        kennel_id: kennelLitters.id,
+        price_brl: 4500,
+        created_by: A.id,
+        owner_id: A.id,
+      })
+      .select("id");
+
+    record(
+      "19. Ninhadas",
+      "preço em cão FORA de ninhada é recusado (fronteira do aditivo)",
+      "recusado",
+      describe(precoForaDeNinhada.error, precoForaDeNinhada.data ?? undefined),
+      Boolean(precoForaDeNinhada.error) || (precoForaDeNinhada.data ?? []).length === 0,
+    );
+  }
+
   // A SEGUNDA ninhada — fica em rascunho de propósito, é o fixture dos testes
   // de foto abaixo (posse e o teto de 4 não dependem de publicação).
   const { data: litterFotos, error: litterFotosError } = await A.client
@@ -2744,6 +2827,278 @@ async function main() {
   }
 
   // ---------------------------------------------------------------------------
+  // 20. Exames genéticos e saúde
+  //
+  // A REGRA DE VISIBILIDADE NÃO ESTÁ EM TYPESCRIPT — está na policy, e é por
+  // isso que precisa ser provada aqui. `dog_genetic_tests_select` e
+  // `dog_health_records_select` não rederivam `dog_is_public`: elas DELEGAM,
+  // com um `exists (select 1 from public.dogs d where d.id = dog_id)` que roda
+  // sob a RLS de quem consulta. Para o anônimo — o único client que as páginas
+  // públicas usam — aquele `exists` só devolve linha quando `dogs_select`
+  // aprova o cão.
+  //
+  // É o desenho certo (uma fonte de verdade para "público") e é frágil de um
+  // jeito perigoso: alguém que "simplifique" aquele `exists` um dia continua
+  // compilando, continua passando em todo teste existente, e passa a vazar
+  // laudo de cão em RASCUNHO em silêncio. Estes casos existem para essa
+  // regressão ter onde falhar alto.
+  // ---------------------------------------------------------------------------
+  {
+    // Dois cães de A: um publicado, um em rascunho. Mesmo dono, mesma tabela,
+    // mesma policy — a ÚNICA diferença entre eles é `published_at`, que é
+    // exatamente a variável que o teste isola.
+    const { data: caoPublicado } = await A.client
+      .from("dogs")
+      .insert({ name: `RLS ${RUN} Reprodutor`, sex: "male", created_by: A.id, owner_id: A.id })
+      .select("id")
+      .single();
+
+    const { data: caoRascunho } = await A.client
+      .from("dogs")
+      .insert({ name: `RLS ${RUN} Rascunho`, sex: "male", created_by: A.id, owner_id: A.id })
+      .select("id")
+      .single();
+
+    // `owner_id` preenchido impede que o cão caia na regra do ancestral
+    // FANTASMA (`owner_id is null and kennel_id is null`), que é pública mesmo
+    // sem `published_at` — sem isso o caso do rascunho passaria por engano.
+    await admin
+      .from("dogs")
+      .update({ published_at: new Date().toISOString() })
+      .eq("id", caoPublicado!.id);
+
+    const { data: examePublicado } = await A.client
+      .from("dog_genetic_tests")
+      .insert({
+        dog_id: caoPublicado!.id,
+        name: "L2HGA",
+        result: "Livre",
+        created_by: A.id,
+      })
+      .select("id")
+      .single();
+
+    await A.client.from("dog_genetic_tests").insert({
+      dog_id: caoRascunho!.id,
+      name: "L2HGA",
+      result: "Portador",
+      created_by: A.id,
+    });
+
+    await A.client.from("dog_health_records").insert({
+      dog_id: caoRascunho!.id,
+      kind: "vaccine",
+      applied_on: "2026-08-12",
+      product: "V10",
+      created_by: A.id,
+    });
+
+    const { data: saudePublicada } = await A.client
+      .from("dog_health_records")
+      .insert({
+        dog_id: caoPublicado!.id,
+        kind: "deworming",
+        applied_on: "2026-08-10",
+        product: "Drontal",
+        created_by: A.id,
+      })
+      .select("id")
+      .single();
+
+    const anonExamePublico = await anon
+      .from("dog_genetic_tests")
+      .select("id")
+      .eq("dog_id", caoPublicado!.id);
+    record(
+      "20. Exames genéticos",
+      "anônimo lê exame de cão PUBLICADO",
+      "1 linha",
+      describe(anonExamePublico.error, anonExamePublico.data ?? undefined),
+      !anonExamePublico.error && (anonExamePublico.data ?? []).length === 1,
+    );
+
+    // O caso central do pedido: laudo de cão não publicado não vaza.
+    const anonExameRascunho = await anon
+      .from("dog_genetic_tests")
+      .select("id")
+      .eq("dog_id", caoRascunho!.id);
+    record(
+      "20. Exames genéticos",
+      "anônimo lê exame de cão em RASCUNHO",
+      "0 linhas",
+      describe(anonExameRascunho.error, anonExameRascunho.data ?? undefined),
+      !anonExameRascunho.error && (anonExameRascunho.data ?? []).length === 0,
+    );
+
+    const anonSaudeRascunho = await anon
+      .from("dog_health_records")
+      .select("id")
+      .eq("dog_id", caoRascunho!.id);
+    record(
+      "20. Exames genéticos",
+      "anônimo lê registro de saúde de cão em RASCUNHO (mesma delegação)",
+      "0 linhas",
+      describe(anonSaudeRascunho.error, anonSaudeRascunho.data ?? undefined),
+      !anonSaudeRascunho.error && (anonSaudeRascunho.data ?? []).length === 0,
+    );
+
+    // Uma listagem SEM filtro é o teste mais duro: prova que o rascunho não
+    // aparece nem quando ninguém pediu por id — que é como um bug de policy
+    // costuma vazar de verdade.
+    const anonListaGeral = await anon.from("dog_genetic_tests").select("dog_id");
+    record(
+      "20. Exames genéticos",
+      "listagem anônima sem filtro NÃO traz exame de cão em rascunho",
+      "nenhuma linha do cão em rascunho",
+      describe(anonListaGeral.error, anonListaGeral.data ?? undefined),
+      !anonListaGeral.error &&
+        !(anonListaGeral.data ?? []).some((r) => r.dog_id === caoRascunho!.id),
+    );
+
+    const bInsere = await B.client
+      .from("dog_genetic_tests")
+      .insert({
+        dog_id: caoPublicado!.id,
+        name: "Displasia coxofemoral",
+        result: "A/A",
+        created_by: B.id,
+      })
+      .select("id");
+    record(
+      "20. Exames genéticos",
+      "B cadastra exame no cão de A",
+      "recusado",
+      describe(bInsere.error, bInsere.data ?? undefined),
+      Boolean(bInsere.error) || (bInsere.data ?? []).length === 0,
+    );
+
+    // Cobre a action `updateGeneticTest`, que é nova. O UPDATE existe desde a
+    // migration, mas até agora nenhum código da aplicação o exercia.
+    const bEdita = await B.client
+      .from("dog_genetic_tests")
+      .update({ result: "Afetado" })
+      .eq("id", examePublicado!.id)
+      .select("id");
+    record(
+      "20. Exames genéticos",
+      "B edita exame do cão de A",
+      "recusado (0 linhas)",
+      describe(bEdita.error, bEdita.data ?? undefined),
+      Boolean(bEdita.error) || (bEdita.data ?? []).length === 0,
+    );
+
+    // O contraste — sem ele, uma policy que negasse TODO MUNDO passaria nos
+    // casos acima e ninguém notaria até o criador reclamar.
+    const aEdita = await A.client
+      .from("dog_genetic_tests")
+      .update({ result: "Portador" })
+      .eq("id", examePublicado!.id)
+      .select("id");
+    record(
+      "20. Exames genéticos",
+      "A edita o PRÓPRIO exame",
+      "1 linha",
+      describe(aEdita.error, aEdita.data ?? undefined),
+      !aEdita.error && (aEdita.data ?? []).length === 1,
+    );
+
+    // Exclusão é lógica aqui também: nenhuma das duas tabelas concede DELETE.
+    const aApaga = await A.client
+      .from("dog_genetic_tests")
+      .delete()
+      .eq("id", examePublicado!.id)
+      .select();
+    record(
+      "20. Exames genéticos",
+      "A apaga fisicamente o próprio exame",
+      "negado (42501)",
+      describe(aApaga.error, aApaga.data ?? undefined),
+      aApaga.error?.code === "42501",
+    );
+
+    // -------------------------------------------------------------------------
+    // `dog_health_records` — o CAMINHO DE ESCRITA POR TERCEIRO.
+    //
+    // Até esta auditoria a tabela só era exercida por "A insere" e "anônimo lê
+    // rascunho". As policies dela são gêmeas das de `dog_genetic_tests`, mas
+    // gêmeas por CÓPIA, não por compartilhamento — nada garante que continuem
+    // iguais depois da próxima migration. Provar as duas separadamente é o que
+    // transforma a semelhança em fato verificado.
+    //
+    // O caso de B editando cobre `updateHealthRecord`, action criada nesta
+    // sessão e que até aqui não tinha nenhuma prova de RLS.
+    // -------------------------------------------------------------------------
+    const anonSaudePublica = await anon
+      .from("dog_health_records")
+      .select("id")
+      .eq("dog_id", caoPublicado!.id);
+    record(
+      "20. Exames genéticos",
+      "anônimo lê saúde de cão PUBLICADO",
+      "1 linha",
+      describe(anonSaudePublica.error, anonSaudePublica.data ?? undefined),
+      !anonSaudePublica.error && (anonSaudePublica.data ?? []).length === 1,
+    );
+
+    const bInsereSaude = await B.client
+      .from("dog_health_records")
+      .insert({
+        dog_id: caoPublicado!.id,
+        kind: "vaccine",
+        applied_on: "2026-08-15",
+        product: "V8",
+        created_by: B.id,
+      })
+      .select("id");
+    record(
+      "20. Exames genéticos",
+      "B cadastra registro de saúde no cão de A",
+      "recusado",
+      describe(bInsereSaude.error, bInsereSaude.data ?? undefined),
+      Boolean(bInsereSaude.error) || (bInsereSaude.data ?? []).length === 0,
+    );
+
+    const bEditaSaude = await B.client
+      .from("dog_health_records")
+      .update({ product: "adulterado" })
+      .eq("id", saudePublicada!.id)
+      .select("id");
+    record(
+      "20. Exames genéticos",
+      "B edita registro de saúde do cão de A",
+      "recusado (0 linhas)",
+      describe(bEditaSaude.error, bEditaSaude.data ?? undefined),
+      Boolean(bEditaSaude.error) || (bEditaSaude.data ?? []).length === 0,
+    );
+
+    const aEditaSaude = await A.client
+      .from("dog_health_records")
+      .update({ product: "Drontal Plus" })
+      .eq("id", saudePublicada!.id)
+      .select("id");
+    record(
+      "20. Exames genéticos",
+      "A edita o PRÓPRIO registro de saúde",
+      "1 linha",
+      describe(aEditaSaude.error, aEditaSaude.data ?? undefined),
+      !aEditaSaude.error && (aEditaSaude.data ?? []).length === 1,
+    );
+
+    const aApagaSaude = await A.client
+      .from("dog_health_records")
+      .delete()
+      .eq("id", saudePublicada!.id)
+      .select();
+    record(
+      "20. Exames genéticos",
+      "A apaga fisicamente o próprio registro de saúde",
+      "negado (42501)",
+      describe(aApagaSaude.error, aApagaSaude.data ?? undefined),
+      aApagaSaude.error?.code === "42501",
+    );
+  }
+
+  // ---------------------------------------------------------------------------
   // Limpeza
   //
   // POR POSSE, não por padrão de slug — e esta distinção não é estilo.
@@ -2822,6 +3177,11 @@ async function main() {
   // `kennel_litters.kennel_id` também é ON DELETE RESTRICT — mesma classe de
   // problema que `dog_videos` já documenta acima. `created_by`, não
   // `owner_id`: a tabela não tem coluna de posse própria.
+  //
+  // DEPOIS DE `dogs`, obrigatoriamente: `dogs.litter_id` é FK ON DELETE
+  // RESTRICT desde a migration `ninhada_completa_estrutura`, então apagar a
+  // ninhada antes dos filhotes dela falha. A ordem atual já está certa —
+  // este comentário existe para ela não ser trocada por engano.
   await limpar("kennel_litters", () =>
     admin.from("kennel_litters").delete().in("created_by", ids),
   );

@@ -83,6 +83,114 @@ export type Database = {
           },
         ]
       }
+      dog_genetic_tests: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          dog_id: string
+          id: string
+          lab: string | null
+          name: string
+          result: string
+          tested_on: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          dog_id: string
+          id?: string
+          lab?: string | null
+          name: string
+          result: string
+          tested_on?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          dog_id?: string
+          id?: string
+          lab?: string | null
+          name?: string
+          result?: string
+          tested_on?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dog_genetic_tests_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dog_genetic_tests_dog_id_fkey"
+            columns: ["dog_id"]
+            isOneToOne: false
+            referencedRelation: "dogs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dog_health_records: {
+        Row: {
+          applied_on: string
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          dog_id: string
+          id: string
+          kind: string
+          notes: string | null
+          product: string | null
+          updated_at: string
+        }
+        Insert: {
+          applied_on: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          dog_id: string
+          id?: string
+          kind: string
+          notes?: string | null
+          product?: string | null
+          updated_at?: string
+        }
+        Update: {
+          applied_on?: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          dog_id?: string
+          id?: string
+          kind?: string
+          notes?: string | null
+          product?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dog_health_records_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dog_health_records_dog_id_fkey"
+            columns: ["dog_id"]
+            isOneToOne: false
+            referencedRelation: "dogs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dog_identifiers: {
         Row: {
           created_at: string
@@ -223,8 +331,11 @@ export type Database = {
           hidden_at: string | null
           id: string
           kennel_id: string | null
+          litter_id: string | null
+          litter_status: string | null
           name: string
           owner_id: string | null
+          price_brl: number | null
           public_id: string
           published_at: string | null
           sex: string
@@ -247,8 +358,11 @@ export type Database = {
           hidden_at?: string | null
           id?: string
           kennel_id?: string | null
+          litter_id?: string | null
+          litter_status?: string | null
           name: string
           owner_id?: string | null
+          price_brl?: number | null
           public_id?: string
           published_at?: string | null
           sex: string
@@ -271,8 +385,11 @@ export type Database = {
           hidden_at?: string | null
           id?: string
           kennel_id?: string | null
+          litter_id?: string | null
+          litter_status?: string | null
           name?: string
           owner_id?: string | null
+          price_brl?: number | null
           public_id?: string
           published_at?: string | null
           sex?: string
@@ -306,6 +423,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "dogs_litter_id_fkey"
+            columns: ["litter_id"]
+            isOneToOne: false
+            referencedRelation: "kennel_litters"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "dogs_owner_id_fkey"
             columns: ["owner_id"]
             isOneToOne: false
@@ -323,33 +447,48 @@ export type Database = {
       }
       kennel_litters: {
         Row: {
+          born_on: string | null
           created_at: string
           created_by: string | null
+          dam_id: string | null
           deleted_at: string | null
           description: string | null
           id: string
           kennel_id: string
+          mated_on: string | null
+          public_id: string
           published_at: string | null
+          sire_id: string | null
           updated_at: string
         }
         Insert: {
+          born_on?: string | null
           created_at?: string
           created_by?: string | null
+          dam_id?: string | null
           deleted_at?: string | null
           description?: string | null
           id?: string
           kennel_id: string
+          mated_on?: string | null
+          public_id?: string
           published_at?: string | null
+          sire_id?: string | null
           updated_at?: string
         }
         Update: {
+          born_on?: string | null
           created_at?: string
           created_by?: string | null
+          dam_id?: string | null
           deleted_at?: string | null
           description?: string | null
           id?: string
           kennel_id?: string
+          mated_on?: string | null
+          public_id?: string
           published_at?: string | null
+          sire_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -361,10 +500,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "kennel_litters_dam_id_fkey"
+            columns: ["dam_id"]
+            isOneToOne: false
+            referencedRelation: "dogs"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "kennel_litters_kennel_id_fkey"
             columns: ["kennel_id"]
             isOneToOne: false
             referencedRelation: "kennels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kennel_litters_sire_id_fkey"
+            columns: ["sire_id"]
+            isOneToOne: false
+            referencedRelation: "dogs"
             referencedColumns: ["id"]
           },
         ]
@@ -389,6 +542,7 @@ export type Database = {
           state: string | null
           updated_at: string
           website_url: string | null
+          whatsapp: string | null
         }
         Insert: {
           city?: string | null
@@ -409,6 +563,7 @@ export type Database = {
           state?: string | null
           updated_at?: string
           website_url?: string | null
+          whatsapp?: string | null
         }
         Update: {
           city?: string | null
@@ -429,6 +584,7 @@ export type Database = {
           state?: string | null
           updated_at?: string
           website_url?: string | null
+          whatsapp?: string | null
         }
         Relationships: [
           {

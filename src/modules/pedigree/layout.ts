@@ -86,13 +86,39 @@ export const PREVIEW_GENERATIONS: readonly GenerationSpec[] = buildSpecs(
   ["", ""],
 );
 
+/**
+ * Árvore da NINHADA (`variant="litter"`, página pública `/n/[public_id]`).
+ *
+ * Mesmas larguras de `GENERATIONS` — é a mesma árvore, só começando um passo à
+ * frente. A diferença está nos RÓTULOS: aqui a geração 0 não é renderizada.
+ *
+ * Por que a geração 0 existe no array mesmo sem aparecer: `specFor` indexa por
+ * `generationOf(pos)`, e a posição vem da numeração Ahnentafel da RPC, onde o
+ * sujeito é sempre 0. Reindexar o array para começar em 1 obrigaria a subtrair
+ * 1 em cada `specFor` — um deslocamento fácil de errar e impossível de ver num
+ * diff. O slot fica, vazio, e o componente pula.
+ *
+ * A ninhada não tem "este cão": a árvore é dos PAIS para trás, e é o que a
+ * referência visual do cliente mostra. O filhote usado na consulta é só a
+ * âncora da RPC — ele nunca chega à tela.
+ */
+export const LITTER_GENERATIONS: readonly GenerationSpec[] = buildSpecs(
+  [168, 168, 152, 140],
+  ELBOW,
+  ["", "PROGENITORES", "2ª GERAÇÃO · AVÓS", "3ª GERAÇÃO · BISAVÓS"],
+);
+
 /** Largura renderizada da árvore, da geração 0 até `depth` (inclusive). */
 export function treeWidth(
   depth: number,
   specs: readonly GenerationSpec[] = GENERATIONS,
+  /** Primeira geração RENDERIZADA — `1` na árvore da ninhada, que não desenha
+   *  a coluna do sujeito. Contar a faixa dela aqui inflaria a largura em um
+   *  card inteiro e faria a página anunciar rolagem numa árvore que cabe. */
+  from = 0,
 ): number {
   let total = 0;
-  for (let g = 0; g <= depth && g < specs.length; g += 1) total += specs[g]!.band;
+  for (let g = from; g <= depth && g < specs.length; g += 1) total += specs[g]!.band;
   return total;
 }
 
@@ -136,7 +162,8 @@ export type TreeOverflow = {
 export function treeOverflow(
   depth: number,
   specs: readonly GenerationSpec[] = GENERATIONS,
+  from = 0,
 ): TreeOverflow {
-  const width = treeWidth(depth, specs);
+  const width = treeWidth(depth, specs, from);
   return { base: width > TREE_VIEWPORT.base, xl: width > TREE_VIEWPORT.xl };
 }

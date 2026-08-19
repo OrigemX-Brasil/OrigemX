@@ -4,7 +4,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { BackLink } from "@/components/back-link";
+import { createPublicClient } from "@/lib/supabase/public";
 import { SignupInvite } from "@/modules/capture/components/signup-invite";
+import { GeneticList } from "@/modules/health/components/genetic-list";
+import { DogHealthSummary } from "@/modules/health/components/health-summary";
+import { getGeneticTestsByDog, getHealthRecordsByDog } from "@/modules/health/queries";
+import { latestByKind } from "@/modules/health/summary";
 import { aspectOf } from "@/modules/media/constraints";
 import { PedigreeTree } from "@/modules/pedigree/components/pedigree-tree";
 import { MAX_PHOTO_GENERATION } from "@/modules/pedigree/layout";
@@ -98,7 +103,12 @@ export default async function CaoPublicoPage({
   // `dog_identifiers` barra o anônimo por completo, então ela devolveria zero
   // linhas em toda regeneração de ISR. Volta no dia em que o cliente decidir
   // expor número de registro — ver o comentário na própria função.
-  const [kennel, media, pedigree, video] = await Promise.all([
+  // UMA instância do client anônimo para as duas consultas de `health`, não
+  // uma cada — `createPublicClient()` a mais é objeto e conexão a mais por
+  // regeneração de ISR, sem nada em troca.
+  const anon = createPublicClient();
+
+  const [kennel, media, pedigree, video, health, genetics] = await Promise.all([
     dog.kennel_id ? getPublicKennelById(dog.kennel_id) : Promise.resolve(null),
     getPublicMedia({ dogId: dog.id }),
     // Uma consulta para a árvore inteira, em paralelo com o resto. Entra no
@@ -107,6 +117,14 @@ export default async function CaoPublicoPage({
     // Mesmo client anônimo das outras, então continua dentro do ISR — e ela
     // NÃO fala com o Cloudflare, só com o nosso banco.
     getPublicDogVideo(dog.id),
+    // O client ANÔNIMO é passado explicitamente, e não é opcional: sem ele
+    // estas duas caem no `createClient()` de cookie, e ler cookie nesta rota
+    // derruba o ISR (ver `lib/supabase/public.ts`). Diferente de
+    // `dog_identifiers`, as policies de `dog_health_records` e
+    // `dog_genetic_tests` DELEGAM a visibilidade a `dogs_select`, então o
+    // anônimo enxerga saúde e laudo de cão publicado — e só dele.
+    getHealthRecordsByDog([dog.id], anon),
+    getGeneticTestsByDog([dog.id], anon),
   ]);
 
   // Segunda onda, e é inerente: não dá para saber os `dog_id` dos ancestrais
@@ -118,6 +136,11 @@ export default async function CaoPublicoPage({
   );
 
   const [principal, ...restante] = media;
+
+  // `getHealthRecordsByDog` devolve um Map por `dog_id` porque serve a lista de
+  // filhotes da ninhada em lote; aqui é um cão só.
+  const resumoSaude = latestByKind(health.get(dog.id) ?? []);
+  const exames = genetics.get(dog.id) ?? [];
 
   // Só entram fotos com URL resolvida — clicar num placeholder sem imagem não
   // abriria nada. `photoIndex` liga cada item de mídia (pelo id) à posição dele
@@ -232,6 +255,30 @@ export default async function CaoPublicoPage({
                 />
                 <Row label="Identificador" value={dog.public_id} mono />
               </dl>
+
+              {/* Resumo de saúde — o mais recente de cada tipo, nunca o log
+                  inteiro: o histórico completo é do dono, no painel. Some por
+                  inteiro sem registro nenhum (`DogHealthSummary` devolve null),
+                  mesmo critério de vídeo e fotos mais abaixo. */}
+              {resumoSaude.length > 0 ? (
+                <section className="flex flex-col gap-3">
+                  <h2 className="font-display text-lg font-semibold tracking-tight">Saúde</h2>
+                  <DogHealthSummary entries={resumoSaude} />
+                </section>
+              ) : null}
+
+              {/* Os laudos deste cão. Esta é a página que um criador abre para
+                  avaliar um reprodutor antes de cruzar — e é o mesmo dado que
+                  aparece sozinho em toda ninhada em que ele for pai ou mãe,
+                  lido de `dog_genetic_tests`, nunca copiado. */}
+              {exames.length > 0 ? (
+                <section className="flex flex-col gap-3">
+                  <h2 className="font-display text-lg font-semibold tracking-tight">
+                    Exames genéticos
+                  </h2>
+                  <GeneticList tests={exames} />
+                </section>
+              ) : null}
             </div>
 
             <PedigreeTree

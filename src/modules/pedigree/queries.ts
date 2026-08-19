@@ -27,36 +27,46 @@ import { buildPedigree, MAX_GENERATIONS, type Pedigree, type PedigreeRow } from 
  * NUNCA LEVANTA. Se a RPC falhar, a página renderiza sem a árvore — pelo mesmo
  * critério aplicado à foto: nome, raça e registro valem mais que o pedigree, e
  * pedigree vale mais que erro 500 na cara de quem escaneou o QR.
+ *
+ * `generations` é opcional e o padrão continua sendo o máximo — o perfil do cão
+ * não mudou. A página da ninhada pede 3, e é a PROFUNDIDADE DA CONSULTA que
+ * limita a árvore de lá: a recursão de `Branches` para por falta de nó, não por
+ * limite de layout, então cortar aqui é o único jeito de cortar de verdade.
+ *
+ * `cache()` deduplica por argumento, então pedir 3 para um cão e 5 para outro na
+ * mesma renderização são duas entradas distintas — como tem de ser.
  */
-export const getPedigree = cache(async (dogId: string): Promise<Pedigree | null> => {
-  try {
-    const supabase = createPublicClient();
-    const { data, error } = await supabase.rpc("dog_pedigree", {
-      p_dog_id: dogId,
-      p_generations: MAX_GENERATIONS,
-    });
+export const getPedigree = cache(
+  async (dogId: string, generations: number = MAX_GENERATIONS): Promise<Pedigree | null> => {
+    try {
+      const supabase = createPublicClient();
+      const { data, error } = await supabase.rpc("dog_pedigree", {
+        p_dog_id: dogId,
+        p_generations: generations,
+      });
 
-    if (error || !data) return null;
+      if (error || !data) return null;
 
-    // O gerador de tipos marca coluna de RETURNS TABLE como não-nula, o que não
-    // é verdade: `public_id`, `breed` e companhia saem NULL para ancestral
-    // restrito, e é assim que a função esconde os campos. O tipo local diz a
-    // verdade, então a conversão acontece aqui, na fronteira.
-    const rows: PedigreeRow[] = data.map((r) => ({
-      pos: Number(r.pos),
-      generation: Number(r.generation),
-      dog_id: r.dog_id,
-      name: r.name,
-      is_public: r.is_public,
-      public_id: r.public_id ?? null,
-      sex: r.sex ?? null,
-      breed: r.breed ?? null,
-      born_on: r.born_on ?? null,
-      kennel_name: r.kennel_name ?? null,
-    }));
+      // O gerador de tipos marca coluna de RETURNS TABLE como não-nula, o que
+      // não é verdade: `public_id`, `breed` e companhia saem NULL para
+      // ancestral restrito, e é assim que a função esconde os campos. O tipo
+      // local diz a verdade, então a conversão acontece aqui, na fronteira.
+      const rows: PedigreeRow[] = data.map((r) => ({
+        pos: Number(r.pos),
+        generation: Number(r.generation),
+        dog_id: r.dog_id,
+        name: r.name,
+        is_public: r.is_public,
+        public_id: r.public_id ?? null,
+        sex: r.sex ?? null,
+        breed: r.breed ?? null,
+        born_on: r.born_on ?? null,
+        kennel_name: r.kennel_name ?? null,
+      }));
 
-    return buildPedigree(rows);
-  } catch {
-    return null;
-  }
-});
+      return buildPedigree(rows);
+    } catch {
+      return null;
+    }
+  },
+);

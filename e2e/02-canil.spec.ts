@@ -7,7 +7,7 @@ import { alerta, expect, test } from "./support/fixtures";
  * React. Limpar primeiro, em passo separado, deixa o estado assentar.
  */
 async function definirSlug(page: import("@playwright/test").Page, slug: string) {
-  const campo = page.getByLabel("Endereço público");
+  const campo = page.getByLabel("URL");
   await campo.clear();
   await campo.fill(slug);
   await expect(campo).toHaveValue(slug);
@@ -97,9 +97,16 @@ test("preencher os recomendados sobe a completude", async ({ page, criador, admi
  */
 test("endereço público duplicado dá mensagem legível, não 500", async ({
   page,
+  criador,
   outroCriador,
   admin,
 }) => {
+  // `criador` não aparece no corpo do teste, mas é quem precisa estar
+  // autenticado na `page`: é ele quem vai tentar o slug já tomado pelo
+  // `outroCriador`. Sem destructurar o fixture aqui, a `page` navega anônima
+  // e o formulário nunca abre.
+  expect(criador.id).toBeTruthy();
+
   const slug = `duplicado-${Date.now().toString(36)}`;
   await admin.from("kennels").insert({
     name: "Canil Que Já Existe",

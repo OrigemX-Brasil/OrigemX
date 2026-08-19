@@ -139,16 +139,32 @@
 
      sucesso  oklch(0.800 0.140 165)  #51DAA7  10.88:1
      erro     oklch(0.700 0.190  25)  #FF645F   6.60:1
+     atenção  oklch(0.760 0.150  50)  #FC9252   8.51:1
 
-     Ambos mantêm o croma alto da paleta, então convivem com azul/ciano/violeta.
+     Todos mantêm o croma alto da paleta, então convivem com azul/ciano/violeta.
      O erro é o único MATIZ fora do manual: vermelho não existe na lista, e um
      estado destrutivo que não é vermelho contraria a expectativa de qualquer
      usuário. Levar ao cliente.
+
+     ATENÇÃO (--color-warning) — laranja, e a distância do dourado é o ponto.
+
+     Entrou para o status "Reservado" do filhote, que o cliente pediu em
+     laranja. O bloco do DOURADO logo acima diz que não existe `--color-warning`
+     apontando para `--color-selo` DE PROPÓSITO: se o laranja de um badge
+     corriqueiro fosse o mesmo dourado do selo de Criador Fundador, o selo
+     deixaria de significar raridade.
+
+     Por isso o matiz é 50, e não 74.2 do dourado — 24 pontos de distância, o
+     bastante para ninguém confundir "reservado" com "conquista" lado a lado na
+     mesma tela. Medido: 8.51:1 sobre o noite, e 6.60:1 do texto sobre
+     `--color-warning-subtle` (o par do badge).
      ---------------------------------------------------------------------- */
   --color-success: oklch(0.8 0.14 165);
   --color-success-subtle: oklch(0.28 0.058 165);
   --color-danger: oklch(0.7 0.19 25);
   --color-danger-subtle: oklch(0.27 0.085 25);
+  --color-warning: oklch(0.76 0.15 50);
+  --color-warning-subtle: oklch(0.28 0.06 50);
 
   /* -------------------------------------------------------------------------
      TIPOGRAFIA

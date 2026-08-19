@@ -4,8 +4,10 @@ import { notFound } from "next/navigation";
 
 import { BackLink } from "@/components/back-link";
 import { SignupInvite } from "@/modules/capture/components/signup-invite";
+import { isoToBr } from "@/modules/dogs/br-date";
 import { FounderBadge } from "@/modules/kennels/components/founder-badge";
 import { previewDescription } from "@/modules/litters/constraints";
+import { expectedWhelpingDate } from "@/modules/litters/gestation";
 import { PhotoTrigger, PublicGallery } from "@/modules/public/components/photo-lightbox";
 import { PublicImage } from "@/modules/public/components/public-image";
 import {
@@ -241,50 +243,59 @@ export async function KennelProfile({ slug, cursor }: { slug: string; cursor?: s
                   Ninhadas disponíveis
                 </h2>
 
+                {/* Card virou LINK para `/n/[public_id]`, não mais gatilho de
+                    lightbox. A ninhada deixou de ser "texto + até 4 fotos" e
+                    passou a ter progenitores, filhotes, saúde e pedigree — isso
+                    não cabe num modal, e o criador precisa de um endereço para
+                    divulgar. O lightbox continua existindo para a galeria do
+                    canil, acima; aqui ele mostraria uma fração da ninhada e
+                    esconderia o resto. */}
                 <ul className="flex flex-col gap-3 xl:grid xl:grid-cols-3 xl:gap-4">
-                  {litters.map((litter, i) => {
+                  {litters.map((litter) => {
                     const [capa] = litter.photos;
                     const resumo = previewDescription(litter.description);
-                    // Só fotos com URL resolvida entram no modal — clicar num
-                    // placeholder sem imagem não abriria nada. Mesmo filtro
-                    // que `/d/[public_id]` já aplica ao mosaico do cão.
-                    const fotosDoModal = litter.photos
-                      .filter((p): p is typeof p & { url: string } => Boolean(p.url))
-                      .map((p) => ({ url: p.url, alt: p.alt ?? "" }));
+                    const quando = litter.born_on
+                      ? `Nascida em ${isoToBr(litter.born_on)}`
+                      : litter.mated_on
+                        ? `Prevista para ${isoToBr(expectedWhelpingDate(litter.mated_on) ?? "")}`
+                        : null;
 
                     return (
                       <li key={litter.id}>
-                        {/* PublicGallery PRÓPRIA por ninhada, aninhada dentro
-                            da PublicGallery de página (a do logo, acima):
-                            Context isolado por provider — o modal desta
-                            ninhada nunca reage a clique em outra. */}
-                        <PublicGallery photos={fotosDoModal} description={litter.description}>
-                          <PhotoTrigger
-                            index={0}
-                            label={`Ver detalhes da ninhada ${i + 1}`}
-                            className="border-border bg-surface hover:bg-surface-hover focus-visible:outline-ring rounded-card flex w-full gap-4 border p-4 text-left transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2"
-                          >
-                            <div className="bg-surface-hover rounded-control text-fg-faint flex size-16 shrink-0 items-center justify-center overflow-hidden">
-                              {capa?.thumbUrl ? (
-                                <Image
-                                  src={capa.thumbUrl}
-                                  alt=""
-                                  width={64}
-                                  height={64}
-                                  className="size-16 object-cover"
-                                  unoptimized
-                                />
-                              ) : (
-                                <span className="text-[11px]">Sem foto</span>
-                              )}
-                            </div>
+                        <Link
+                          href={`/n/${litter.public_id}`}
+                          // Sem prefetch: mesmo motivo do card de cão acima —
+                          // com a lista cheia, cada card em viewport baixaria o
+                          // payload da ninhada inteira (progenitores, pedigree,
+                          // exames) sem o visitante nunca ter pedido.
+                          prefetch={false}
+                          className="border-border bg-surface hover:bg-surface-hover focus-visible:outline-ring rounded-card flex w-full gap-4 border p-4 text-left transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2"
+                        >
+                          <div className="bg-surface-hover rounded-control text-fg-faint flex size-16 shrink-0 items-center justify-center overflow-hidden">
+                            {capa?.thumbUrl ? (
+                              <Image
+                                src={capa.thumbUrl}
+                                alt=""
+                                width={64}
+                                height={64}
+                                className="size-16 object-cover"
+                                unoptimized
+                              />
+                            ) : (
+                              <span className="text-[11px]">Sem foto</span>
+                            )}
+                          </div>
+                          <div className="flex min-w-0 flex-col gap-1">
+                            {quando ? (
+                              <span className="text-fg text-sm font-medium">{quando}</span>
+                            ) : null}
                             {resumo ? (
                               <p className="text-fg-muted min-w-0 text-sm whitespace-pre-line">
                                 {resumo}
                               </p>
                             ) : null}
-                          </PhotoTrigger>
-                        </PublicGallery>
+                          </div>
+                        </Link>
                       </li>
                     );
                   })}

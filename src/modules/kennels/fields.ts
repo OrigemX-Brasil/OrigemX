@@ -39,6 +39,7 @@ export type KennelFieldName = Extract<
   | "state"
   | "website_url"
   | "instagram_handle"
+  | "whatsapp"
   | "registration_number"
   | "logo_url"
 >;
@@ -62,7 +63,15 @@ export const WEIGHT_VALUE: Record<FieldWeight, number> = {
   optional: 0,
 };
 
-export type KennelFieldInput = "text" | "textarea" | "slug" | "url" | "uf" | "upload" | "handle";
+export type KennelFieldInput =
+  | "text"
+  | "textarea"
+  | "slug"
+  | "url"
+  | "uf"
+  | "upload"
+  | "handle"
+  | "phone";
 
 export type KennelField = {
   name: KennelFieldName;
@@ -151,6 +160,28 @@ export const KENNEL_FIELDS: readonly KennelField[] = [
     placeholder: "@canilaurora",
     pattern: /^[A-Za-z0-9._]+$/,
     patternError: "Use letras, números, ponto e underscore — sem espaço, sem link completo.",
+  },
+  {
+    name: "whatsapp",
+    label: "WhatsApp",
+    weight: "optional",
+    input: "phone",
+    publicProfile: true,
+    help: "APARECE NA PÁGINA PÚBLICA. É o botão de contato das suas ninhadas. Com DDD e código do país; deixe em branco para não exibir.",
+    placeholder: "+55 11 98765-4321",
+    // ESPELHA `kennels_whatsapp_format` EXATAMENTE.
+    //
+    // `validateKennel` aplica o pattern sobre o valor JÁ NORMALIZADO, e a
+    // normalização de `phone` remove tudo que não é dígito — então o que chega
+    // aqui é a mesma string que o banco vai medir. Um padrão mais frouxo (por
+    // exemplo aceitando 16 dígitos) passaria na tela e estouraria no INSERT,
+    // que é o pior lugar para descobrir.
+    //
+    // Sem `maxLength`: ele também mediria o valor normalizado, mas o formulário
+    // o repassa ao atributo do <input> e cortaria a digitação no meio de
+    // "+55 11 98765-4321", que tem 17 caracteres para 13 dígitos.
+    pattern: /^[0-9]{10,15}$/,
+    patternError: "Informe o número com DDD e código do país. Ex.: +55 11 98765-4321",
   },
   {
     name: "registration_number",

@@ -34,6 +34,7 @@ export function DateField({
   defaultValue,
   ariaDescribedBy,
   onFormatError,
+  onValueChange,
 }: {
   id: string;
   name: string;
@@ -47,17 +48,33 @@ export function DateField({
    * e as duas mensagens não podem aparecer em lugares diferentes na tela.
    */
   onFormatError?: (message: string | null) => void;
+  /**
+   * O valor ISO, sempre que ele muda. Existe para quem precisa DERIVAR algo
+   * da data enquanto a pessoa digita — hoje só a previsão de parto, calculada
+   * a partir da cobrição em `LitterForm`.
+   *
+   * Não dá para observar o `<input type="hidden">` de fora: o React o
+   * atualiza programaticamente, e atribuição de `value` não dispara evento de
+   * `change`. Ou o valor sobe por callback, ou não sobe.
+   */
+  onValueChange?: (iso: string) => void;
 }) {
   const [text, setText] = useState(() => isoToBr(defaultValue));
   const [iso, setIso] = useState(defaultValue ?? "");
 
   const pickerRef = useRef<HTMLInputElement>(null);
 
+  /** Um caminho só para gravar o ISO, para nenhum deles esquecer o callback. */
+  function commitIso(value: string) {
+    setIso(value);
+    onValueChange?.(value);
+  }
+
   function commitTyped(value: string) {
     setText(value);
 
     if (value.length === 0) {
-      setIso("");
+      commitIso("");
       onFormatError?.(null);
       return;
     }
@@ -71,12 +88,12 @@ export function DateField({
 
     const parsed = parseBrDate(value);
     if (parsed) {
-      setIso(parsed);
+      commitIso(parsed);
       onFormatError?.(null);
     } else {
       // Não grava lixo no campo oculto: uma data impossível vira "não
       // informado" para o resto do formulário, não uma string quebrada.
-      setIso("");
+      commitIso("");
       onFormatError?.("Data inválida — confira dia e mês.");
     }
   }
@@ -135,7 +152,7 @@ export function DateField({
         value={iso}
         onChange={(e) => {
           const value = e.target.value;
-          setIso(value);
+          commitIso(value);
           setText(isoToBr(value));
           onFormatError?.(null);
         }}

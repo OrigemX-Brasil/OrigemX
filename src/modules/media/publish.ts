@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import type { SupabaseClientLike } from "@/modules/media/queries";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/modules/auth/queries";
 
@@ -64,9 +65,10 @@ export async function publishKennel(formData: FormData): Promise<PublishState> {
   // publicada. Ninhada em rascunho continua invisível pela regra dupla
   // (`kennel_litters_select` exige as duas publicações), então a foto dela
   // fica no privado até a própria ninhada ser publicada.
-  const [kennelRows, litterRows] = await Promise.all([
+  const [kennelRows, litterRows, litterPublicIds] = await Promise.all([
     kennelMediaRows(supabase, id),
     litterMediaRowsForKennel(supabase, id, { onlyPublished: true }),
+    publishedLitterPublicIds(supabase, id),
   ]);
   const sync = await reconcileMediaBucket(supabase, [...kennelRows, ...litterRows], BUCKET_PUBLIC);
 
@@ -90,6 +92,12 @@ export async function publishKennel(formData: FormData): Promise<PublishState> {
   }
 
   revalidateKennel(kennel.slug, id);
+  // A REGRA DUPLA depende do canil — uma ninhada JÁ publicada (`published_at`
+  // preenchido) só fica visível a partir de AGORA, e `/n/[public_id]` dela
+  // pode ter sido renderizada como "não encontrada" enquanto o canil ainda
+  // era rascunho e ficado presa nesse estado até os 300s do ISR vencerem
+  // sozinhos. Sem esta linha, publicar o canil não reabre a ninhada.
+  for (const publicId of litterPublicIds) revalidatePath(`/n/${publicId}`);
   return { ok: true };
 }
 
@@ -118,8 +126,13 @@ export async function unpublishKennel(formData: FormData): Promise<PublishState>
     return { error: "Não foi possível despublicar o canil." };
   }
 
-  // 2. Purga o cache antes de mexer em arquivo.
+  // 2. Purga o cache antes de mexer em arquivo — a ninhada TAMBÉM, e sem o
+  // filtro `onlyPublished`: a regra dupla já esconde TODA ninhada assim que o
+  // canil sai do ar, publicada ou não, então `/n/[public_id]` de qualquer uma
+  // delas precisa parar de servir a versão cacheada.
   revalidateKennel(kennel.slug, id);
+  const litterPublicIds = await publishedLitterPublicIds(supabase, id, { onlyPublished: false });
+  for (const publicId of litterPublicIds) revalidatePath(`/n/${publicId}`);
 
   // 3. Devolve os arquivos ao privado — o logo E TODA foto de TODA ninhada
   // deste canil, publicada ou não: a regra dupla já esconde a ninhada
@@ -235,6 +248,40 @@ function revalidateKennel(slug: string, id: string) {
   revalidatePath(`/c/${slug}`);
   revalidatePath("/painel/canis");
   revalidatePath(`/painel/canis/${id}`);
+}
+
+/**
+ * `public_id` das ninhadas do canil — o que falta para `publishKennel`/
+ * `unpublishKennel` saberem QUAIS `/n/[public_id]` revalidar.
+ *
+ * A REGRA DUPLA (`kennel_litters_select`) faz a visibilidade de CADA ninhada
+ * depender do `published_at` do CANIL, não só do dela — então publicar ou
+ * despublicar o canil muda o que `/n/[public_id]` de cada ninhada mostra,
+ * mesmo sem nenhuma coluna da ninhada ter mudado. Sem esta chamada, essas
+ * páginas ficavam presas na versão cacheada (inclusive um "não encontrada")
+ * até os 300s do ISR vencerem sozinhos — a mesma classe de lacuna que
+ * `litterMediaRowsForKennel` já resolve do lado do bucket de fotos.
+ *
+ * `onlyPublished`: ao PUBLICAR, só a ninhada que JÁ está com `published_at`
+ * preenchido passa a ficar visível — uma em rascunho continua invisível pela
+ * mesma regra, e revalidar a página dela seria só reafirmar o 404 que já
+ * estava lá. Ao DESPUBLICAR, o filtro é omitido: toda ninhada do canil fica
+ * invisível, publicada ou não.
+ */
+async function publishedLitterPublicIds(
+  supabase: SupabaseClientLike,
+  kennelId: string,
+  options?: { onlyPublished?: boolean },
+): Promise<string[]> {
+  let query = supabase
+    .from("kennel_litters")
+    .select("public_id")
+    .eq("kennel_id", kennelId)
+    .is("deleted_at", null);
+  if (options?.onlyPublished !== false) query = query.not("published_at", "is", null);
+
+  const { data } = await query;
+  return (data ?? []).map((l) => l.public_id);
 }
 
 /**

@@ -67,7 +67,12 @@ function Control({
       ) : (
         <input
           {...shared}
-          type={field.input === "url" ? "url" : "text"}
+          type={field.input === "url" ? "url" : field.input === "phone" ? "tel" : "text"}
+          // `inputMode="tel"` abre o teclado numérico no celular, que é onde o
+          // criador preenche isto. `type="tel"` sozinho não garante — no
+          // Android o teclado vem do inputMode.
+          inputMode={field.input === "phone" ? "tel" : undefined}
+          autoComplete={field.input === "phone" ? "tel" : undefined}
           defaultValue={defaultValue}
           onBlur={onNameBlur ? (e) => onNameBlur(e.target.value) : undefined}
         />

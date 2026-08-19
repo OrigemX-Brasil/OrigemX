@@ -4,6 +4,7 @@ import Link from "next/link";
 import { AlertPanel } from "@/modules/alerts/components/alert-panel";
 import { getAlertsForUser } from "@/modules/alerts/queries";
 import { getAuthUser, getCurrentProfile } from "@/modules/auth/queries";
+import { getMyKennel } from "@/modules/kennels/queries";
 
 export const metadata: Metadata = { title: "Painel" };
 
@@ -12,7 +13,12 @@ export default async function PainelPage() {
 
   // Alertas do Anexo I.8: derivados do dado de agora, nunca armazenados. Não
   // levantam exceção — se o levantamento falhar, o painel abre sem a seção.
-  const alerts = user ? await getAlertsForUser(user.id) : null;
+  //
+  // `kennel` decide se o atalho de Ninhadas aparece: sem canil não há onde
+  // ele levar.
+  const [alerts, kennel] = user
+    ? await Promise.all([getAlertsForUser(user.id), getMyKennel(user.id)])
+    : [null, null];
 
   return (
     <div className="flex flex-col gap-8">
@@ -77,6 +83,25 @@ export default async function PainelPage() {
             →
           </span>
         </Link>
+
+        {/* Sem canil não há onde este link levar — some em vez de apontar
+            para uma rota que só rejeitaria o usuário. */}
+        {kennel ? (
+          <Link
+            href={`/painel/canis/${kennel.id}/ninhadas/novo`}
+            className="border-border bg-surface hover:bg-surface-hover rounded-card flex items-center justify-between gap-4 border p-5 transition-colors"
+          >
+            <span className="flex flex-col gap-1">
+              <span className="text-fg font-medium">Ninhadas</span>
+              <span className="text-fg-muted text-sm">
+                Registre uma ninhada e cadastre os filhotes.
+              </span>
+            </span>
+            <span className="text-fg-faint" aria-hidden="true">
+              →
+            </span>
+          </Link>
+        ) : null}
       </div>
     </div>
   );

@@ -2,10 +2,10 @@
 
 | | |
 |---|---|
-| Data | 2026-08-14T16:55:33.747Z |
+| Data | 2026-08-19T16:46:46.260Z |
 | Projeto | `https://lcqhnfdsrioufwvnrqnt.supabase.co` |
-| Execução | `mst6tcrz` |
-| Resultado | **APROVADO** — 139/139 PASS |
+| Execução | `mt0bp6tp` |
+| Resultado | **APROVADO** — 155/155 PASS |
 
 
 ## Método
@@ -91,15 +91,15 @@ falha. O que a RLS isola é:
 | 10. Mídia | B (não é quem criou o fantasma) tenta gravar foto nele | erro de permissão | erro 42501: new row violates row-level security policy for table "media" | **PASS** |
 | 11b. Selo Fundador (concorrência) | canil sem cão não recebe selo | todos sem número | 0 com número | **PASS** |
 | 11b. Selo Fundador (concorrência) | 5 atribuições CONCORRENTES não geram número duplicado | 5 números distintos | 5 atribuídos, 5 distintos | **PASS** |
-| 11b. Selo Fundador (concorrência) | nenhum número emitido abaixo de 100 | todos >= 100 | min 555044, max 555048 | **PASS** |
-| 11b. Selo Fundador (concorrência) | exclusão lógica não devolve o número ao pool | número permanece | nº 555045 | **PASS** |
+| 11b. Selo Fundador (concorrência) | nenhum número emitido abaixo de 100 | todos >= 100 | min 555064, max 555068 | **PASS** |
+| 11b. Selo Fundador (concorrência) | exclusão lógica não devolve o número ao pool | número permanece | nº 555066 | **PASS** |
 | 11a. Selo Fundador (autorização) | usuário grava founder_number no PRÓPRIO canil | erro de permissão de coluna | erro 42501: permission denied for table kennels | **PASS** |
 | 11a. Selo Fundador (autorização) | usuário grava founder_number no canil de OUTRO | erro de permissão | erro 42501: permission denied for table kennels | **PASS** |
 | 11a. Selo Fundador (autorização) | após as duas tentativas, o número no banco não mudou | continua nulo | nulo | **PASS** |
 | 12. Bucket público | A grava no próprio prefixo do bucket público | sucesso | sucesso | **PASS** |
 | 12. Bucket público | B grava no prefixo de A no bucket público | erro de permissão | erro: new row violates row-level security policy | **PASS** |
 | 12. Bucket público | anônimo grava no bucket público | erro de permissão | erro: new row violates row-level security policy | **PASS** |
-| 12. Bucket público | URL pública não carrega token nem expiração | sem ?token= e sem expires | /storage/v1/object/public/kennel-media-public/a706734b-fc30-4d9a-94c9-f1c63cb82be7/canis/publico-mst6tcrz.png | **PASS** |
+| 12. Bucket público | URL pública não carrega token nem expiração | sem ?token= e sem expires | /storage/v1/object/public/kennel-media-public/1a35eca1-af1b-49a8-bc6d-9096a85be569/canis/publico-mt0bp6tp.png | **PASS** |
 | 12. Bucket público | anônimo BAIXA o objeto pela URL pública, sem sessão | HTTP 200 | HTTP 200 | **PASS** |
 | 12. Bucket público | A move o objeto de volta ao bucket privado (despublicar) | sucesso | sucesso | **PASS** |
 | 12. Bucket público | objeto sai do bucket público ao despublicar (fonte: Storage) | não está mais lá | removido | **PASS** |
@@ -115,7 +115,7 @@ falha. O que a RLS isola é:
 | 14. Superfície admin_* | usuário comum chama admin_set_dog_hidden | erro — insufficient_privilege | erro: apenas um admin pode ocultar ou reativar um cão | **PASS** |
 | 14. Superfície admin_* | estado de B, do canil e do cão após as quatro tentativas | nada mudou | nada mudou | **PASS** |
 | 14. Superfície admin_* | usuário comum chama admin_get_profile_email | erro — insufficient_privilege | erro: apenas um admin pode ler o e-mail de um usuário | **PASS** |
-| 14. Superfície admin_* | admin chama admin_get_profile_email para B | rls-mst6tcrz-b@origemx.test | rls-mst6tcrz-b@origemx.test | **PASS** |
+| 14. Superfície admin_* | admin chama admin_get_profile_email para B | rls-mt0bp6tp-b@origemx.test | rls-mt0bp6tp-b@origemx.test | **PASS** |
 | 15. Ciclo de suspensão | admin suspende B de verdade, pela RPC | sucesso | sucesso | **PASS** |
 | 15. Ciclo de suspensão | audit_log tem exatamente 1 linha para esta suspensão | 1 linha | 1 linha(s) | **PASS** |
 | 15. Ciclo de suspensão | B (já suspenso) tenta escrever com a sessão que já tinha aberta | 0 linhas | 0 linha(s) | **PASS** |
@@ -135,12 +135,12 @@ falha. O que a RLS isola é:
 | 16. Ciclo de ocultar canil e cão | audit_log tem exatamente 1 linha para cada reativação | 2 linhas | 2 linha(s) | **PASS** |
 | 16. Ciclo de ocultar canil e cão | sessão anônima volta a ver o canil, reativado | 1 linha | 1 linha(s) | **PASS** |
 | 16. Ciclo de ocultar canil e cão | sessão anônima volta a ver o cão, reativado | 1 linha | 1 linha(s) | **PASS** |
-| 17. Corrigir número do selo | admin tenta atribuir a um canil o número que já pertence a outro | erro — número já pertence a outro canil | erro: o número 555047 já pertence a outro canil | **PASS** |
-| 17. Corrigir número do selo | número do canil-alvo não mudou depois da tentativa de duplicidade | nº 555044 | nº 555044 | **PASS** |
+| 17. Corrigir número do selo | admin tenta atribuir a um canil o número que já pertence a outro | erro — número já pertence a outro canil | erro: o número 555068 já pertence a outro canil | **PASS** |
+| 17. Corrigir número do selo | número do canil-alvo não mudou depois da tentativa de duplicidade | nº 555065 | nº 555065 | **PASS** |
 | 17. Corrigir número do selo | admin libera o número do canil (correção real, primeira metade) | sucesso | sucesso | **PASS** |
 | 17. Corrigir número do selo | admin devolve o número certo (correção real, segunda metade) | sucesso | sucesso | **PASS** |
-| 17. Corrigir número do selo | audit_log grava as duas correções, de→para corretos | 2 linhas: {de:555046,para:null} e {de:null,para:555046} | 2 linha(s): [{"de":555046,"para":null},{"de":null,"para":555046}] | **PASS** |
-| 17. Corrigir número do selo | canil termina com o número original — round-trip fechado | nº 555046 | nº 555046 | **PASS** |
+| 17. Corrigir número do selo | audit_log grava as duas correções, de→para corretos | 2 linhas: {de:555064,para:null} e {de:null,para:555064} | 2 linha(s): [{"de":555064,"para":null},{"de":null,"para":555064}] | **PASS** |
+| 17. Corrigir número do selo | canil termina com o número original — round-trip fechado | nº 555064 | nº 555064 | **PASS** |
 | 18. Vídeo | A registra o vídeo do próprio cão | criado | criado | **PASS** |
 | 18. Vídeo | B registra vídeo no cão de A | negado (42501) | erro 42501: new row violates row-level security policy for table "dog_videos" | **PASS** |
 | 18. Vídeo | B registra vídeo forjando owner_id de A | negado (42501) | erro 42501: new row violates row-level security policy for table "dog_videos" | **PASS** |
@@ -163,6 +163,9 @@ falha. O que a RLS isola é:
 | 19. Ninhadas | anônimo lê ninhada publicada, com canil publicado | 1 linha | 1 linha(s) | **PASS** |
 | 19. Ninhadas | ninhada PUBLICADA some da leitura anônima quando o CANIL volta a rascunho | 0 linhas | 0 linha(s) | **PASS** |
 | 19. Ninhadas | o DONO continua vendo a própria ninhada com o canil em rascunho | 1 linha | 1 linha(s) | **PASS** |
+| 19. Ninhadas | B NÃO consegue cadastrar filhote na ninhada de A (owns_litter no WITH CHECK) | recusado | erro 42501: new row violates row-level security policy for table "dogs" | **PASS** |
+| 19. Ninhadas | A (dona) cadastra filhote na própria ninhada | criado | 1 linha(s) | **PASS** |
+| 19. Ninhadas | preço em cão FORA de ninhada é recusado (fronteira do aditivo) | recusado | erro 23514: new row for relation "dogs" violates check constraint "dogs_price_requires_litter" | **PASS** |
 | 19. Ninhadas | A cria uma SEGUNDA ninhada no mesmo canil — sem unicidade entre ninhadas | criada | criada | **PASS** |
 | 19. Ninhadas | A grava as 4 fotos da ninhada, uma por posição | 4 criadas | 4 criada(s) | **PASS** |
 | 19. Ninhadas | 5ª foto em position=5 (fora do intervalo 1-4) | erro CHECK media_litter_position_valid | erro 23514: new row for relation "media" violates check constraint "media_litter_position_valid" | **PASS** |
@@ -175,3 +178,16 @@ falha. O que a RLS isola é:
 | 19. Ninhadas | A exclui logicamente a PRÓPRIA ninhada (RETURNING precisa voltar a linha) | 1 linha | 1 linha(s) | **PASS** |
 | 19. Ninhadas | anônimo lê ninhada já excluída logicamente | 0 linhas | 0 linha(s) | **PASS** |
 | 19. Ninhadas | A apaga fisicamente a própria ninhada | negado (42501) | erro 42501: permission denied for table kennel_litters | **PASS** |
+| 20. Exames genéticos | anônimo lê exame de cão PUBLICADO | 1 linha | 1 linha(s) | **PASS** |
+| 20. Exames genéticos | anônimo lê exame de cão em RASCUNHO | 0 linhas | 0 linha(s) | **PASS** |
+| 20. Exames genéticos | anônimo lê registro de saúde de cão em RASCUNHO (mesma delegação) | 0 linhas | 0 linha(s) | **PASS** |
+| 20. Exames genéticos | listagem anônima sem filtro NÃO traz exame de cão em rascunho | nenhuma linha do cão em rascunho | 1 linha(s) | **PASS** |
+| 20. Exames genéticos | B cadastra exame no cão de A | recusado | erro 42501: new row violates row-level security policy for table "dog_genetic_tests" | **PASS** |
+| 20. Exames genéticos | B edita exame do cão de A | recusado (0 linhas) | 0 linha(s) | **PASS** |
+| 20. Exames genéticos | A edita o PRÓPRIO exame | 1 linha | 1 linha(s) | **PASS** |
+| 20. Exames genéticos | A apaga fisicamente o próprio exame | negado (42501) | erro 42501: permission denied for table dog_genetic_tests | **PASS** |
+| 20. Exames genéticos | anônimo lê saúde de cão PUBLICADO | 1 linha | 1 linha(s) | **PASS** |
+| 20. Exames genéticos | B cadastra registro de saúde no cão de A | recusado | erro 42501: new row violates row-level security policy for table "dog_health_records" | **PASS** |
+| 20. Exames genéticos | B edita registro de saúde do cão de A | recusado (0 linhas) | 0 linha(s) | **PASS** |
+| 20. Exames genéticos | A edita o PRÓPRIO registro de saúde | 1 linha | 1 linha(s) | **PASS** |
+| 20. Exames genéticos | A apaga fisicamente o próprio registro de saúde | negado (42501) | erro 42501: permission denied for table dog_health_records | **PASS** |

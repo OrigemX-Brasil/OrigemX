@@ -160,6 +160,37 @@ export async function litterMediaRows(client: Client, litterId: string) {
 }
 
 /**
+ * Mídia dos FILHOTES de uma ninhada — as fotos que vivem em `dogs`, não em
+ * `kennel_litters`.
+ *
+ * Existe porque o filhote é uma linha em `dogs` (ver a migration
+ * `ninhada_completa_estrutura`): a foto dele tem `role = 'dog_gallery'` e
+ * `dog_id` preenchido, então `litterMediaRows` — que filtra por `litter_id` na
+ * própria `media` — não a alcança. Publicar a ninhada precisa mover as duas
+ * coisas: a galeria da ninhada E a foto de cada filhote.
+ *
+ * Duas consultas e não um join: `media` não tem coluna que ligue direto ao
+ * `litter_id` do CÃO, e o PostgREST não faz join transitivo aqui.
+ */
+export async function litterPuppyMediaRows(client: Client, litterId: string) {
+  const { data: puppies } = await client
+    .from("dogs")
+    .select("id")
+    .eq("litter_id", litterId)
+    .is("deleted_at", null);
+
+  const puppyIds = (puppies ?? []).map((p) => p.id);
+  if (puppyIds.length === 0) return [] as MediaLocationRow[];
+
+  const { data } = await client
+    .from("media")
+    .select("id, bucket_id, storage_path, thumb_path")
+    .in("dog_id", puppyIds)
+    .is("deleted_at", null);
+  return (data ?? []) as MediaLocationRow[];
+}
+
+/**
  * Mídia de TODAS as ninhadas de um canil — o lado do cascade que
  * `publishKennel`/`unpublishKennel` precisam, e que `litterMediaRows` (acima,
  * escopada a UMA ninhada) não cobre.

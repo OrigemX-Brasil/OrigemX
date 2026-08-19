@@ -40,6 +40,11 @@ export function normalizeKennelInput(raw: KennelInput): KennelPatch {
     // Aceita com ou sem "@" na frente; guarda sempre sem, para o perfil público
     // montar o link (instagram.com/<handle>) sem duplicar o símbolo.
     if (field.input === "handle") normalized = normalized.replace(/^@/, "");
+    // Telefone vira SÓ DÍGITOS. O CHECK `kennels_whatsapp_format` exige isso, e
+    // o link wa.me também: guardar "(11) 98765-4321" produziria cinco grafias
+    // do mesmo número e nenhuma delas montaria uma URL válida. A máscara é
+    // assunto da tela; o banco guarda a forma canônica.
+    if (field.input === "phone") normalized = normalized.replace(/\D/g, "");
 
     if (normalized.length > 0) {
       assign(out, field.name, normalized);

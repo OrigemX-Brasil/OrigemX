@@ -118,7 +118,7 @@ semSessao("a landing de captura abre e chama para o cadastro", async ({ page }) 
   const resp = await page.goto("/");
   expect(resp?.status()).toBe(200);
 
-  await expect(page.getByRole("link", { name: /Criar conta/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Criar meu perfil/ })).toBeVisible();
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 });
 

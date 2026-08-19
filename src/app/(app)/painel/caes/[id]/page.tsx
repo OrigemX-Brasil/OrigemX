@@ -9,6 +9,9 @@ import { isGhostAncestor, type AncestorCandidate } from "@/modules/dogs/ancestor
 import { DogForm } from "@/modules/dogs/components/dog-form";
 import { IdentifiersForm } from "@/modules/dogs/components/identifiers-form";
 import { getDogIdentifiers, getDogsByIds, getManageableDogById } from "@/modules/dogs/queries";
+import { GeneticSection } from "@/modules/health/components/genetic-section";
+import { HealthSection } from "@/modules/health/components/health-section";
+import { getDogGeneticTests, getDogHealthRecords } from "@/modules/health/queries";
 import { getMyKennel } from "@/modules/kennels/queries";
 import { GalleryUploader } from "@/modules/media/components/gallery-uploader";
 import { MediaGallery } from "@/modules/media/components/media-gallery";
@@ -35,13 +38,24 @@ export default async function EditarCaoPage({ params }: { params: Promise<{ id: 
   if (!dog) notFound();
 
   const supabase = await createClient();
-  const [kennel, parents, gallery, usedBytes, identifiers, videoGravado] = await Promise.all([
+  const [
+    kennel,
+    parents,
+    gallery,
+    usedBytes,
+    identifiers,
+    videoGravado,
+    healthRecords,
+    geneticTests,
+  ] = await Promise.all([
     getMyKennel(user.id),
     getDogsByIds([dog.sire_id, dog.dam_id].filter((v): v is string => Boolean(v))),
     getDogGallery(dog.id),
     getUsedBytes(user.id),
     getDogIdentifiers(dog.id),
     getDogVideo(dog.id, supabase),
+    getDogHealthRecords(dog.id),
+    getDogGeneticTests(dog.id),
   ]);
 
   // Rede de segurança para quem fechou a aba no meio da transcodificação: o
@@ -119,6 +133,30 @@ export default async function EditarCaoPage({ params }: { params: Promise<{ id: 
           />
 
           <IdentifiersForm dogId={dog.id} identifiers={identifiers} />
+
+          <section className="border-border flex flex-col gap-4 border-t pt-6">
+            <div className="flex flex-col gap-1">
+              <h2 className="font-display text-base font-semibold">Saúde</h2>
+              <p className="text-fg-muted text-sm">
+                Vermífugo e vacina, com histórico — não é um campo só, porque o filhote toma
+                várias doses. Aparece no perfil público quando o cão estiver publicado.
+              </p>
+            </div>
+
+            <HealthSection dogId={dog.id} records={healthRecords} />
+          </section>
+
+          <section className="border-border flex flex-col gap-4 border-t pt-6">
+            <div className="flex flex-col gap-1">
+              <h2 className="font-display text-base font-semibold">Exames genéticos</h2>
+              <p className="text-fg-muted text-sm">
+                Displasia, L2HGA, HC — o que a raça exigir. Cadastre uma vez aqui e o laudo
+                aparece sozinho em toda ninhada em que este cão for pai ou mãe.
+              </p>
+            </div>
+
+            <GeneticSection dogId={dog.id} tests={geneticTests} />
+          </section>
 
           <section className="border-border flex flex-col gap-4 border-t pt-6">
             <div className="flex flex-col gap-1">

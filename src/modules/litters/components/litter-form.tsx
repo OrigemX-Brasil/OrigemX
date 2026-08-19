@@ -4,87 +4,91 @@ import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 
 import { FormMessage } from "@/components/form-message";
+import type { AncestorCandidate } from "@/modules/dogs/ancestors";
+import { isoToBr } from "@/modules/dogs/br-date";
+import { DateField } from "@/modules/dogs/components/date-field";
+import { ParentPicker } from "@/modules/dogs/components/parent-picker";
 
 import { createLitter, updateLitter, type LitterFormState } from "../actions";
-import { MAX_LITTER_DESCRIPTION_LENGTH } from "../constraints";
+import { expectedWhelpingDate } from "../gestation";
+import { LITTER_FIELDS, type LitterField } from "../fields";
+import { validateLitter, type FieldErrors, type LitterInput } from "../validation";
 
 /**
- * Descrição da ninhada — create e edit no mesmo componente
- * (`isEdit = Boolean(litter?.id)`, mesmo molde de `KennelForm`/`DogForm`).
+ * Ninhada — create e edit no mesmo componente (`isEdit = Boolean(litter?.id)`,
+ * mesmo molde de `KennelForm`/`DogForm`).
  *
- * SEM a máquina declarativa de `fields.ts`: é um campo só, um array de
- * configuração ali seria abstração que este formulário não precisa. O
- * `maxLength` do textarea já impede digitar além do limite — não há
- * validação de client separada para reimplementar o que o próprio campo
- * garante; quem revalida de verdade é a Server Action.
+ * Passou a usar a máquina declarativa de `fields.ts` e a reusar `DateField` e
+ * `ParentPicker` do módulo de cães. `ParentPicker` cabe aqui sem nenhum
+ * adaptador porque `LitterParent` tem a forma de `AncestorCandidate` — e cabe
+ * COM SENTIDO, não só por conveniência: escolher o pai da ninhada é
+ * exatamente o mesmo problema de escolher o pai de um cão, incluindo poder
+ * cadastrar um fantasma na hora quando o reprodutor não está na base.
  */
-export function LitterForm({
-  kennelId,
-  litter,
+
+function Control({
+  field,
+  defaultValue,
+  error,
+  onFormatError,
+  onValueChange,
+  onChange,
 }: {
-  kennelId: string;
-  litter?: { id: string; description: string | null };
+  field: LitterField;
+  defaultValue?: string;
+  error?: string;
+  onFormatError?: (message: string | null) => void;
+  onValueChange?: (iso: string) => void;
+  onChange?: (value: string) => void;
 }) {
-  const isEdit = Boolean(litter?.id);
-  const action = isEdit ? updateLitter : createLitter;
+  const errorId = error ? `${field.name}-error` : undefined;
+  const helpId = field.help ? `${field.name}-help` : undefined;
+  const describedBy = [errorId, helpId].filter(Boolean).join(" ") || undefined;
 
-  const [state, formAction] = useActionState<LitterFormState, FormData>(action, {});
-  const [text, setText] = useState(state.values?.description ?? litter?.description ?? "");
-
-  const error = state.errors?.description;
+  const cls =
+    "border-border-strong bg-bg text-fg placeholder:text-fg-faint focus-visible:border-accent rounded-control border px-3 py-2.5 text-base outline-none transition-colors";
 
   return (
-    <form action={formAction} className="flex flex-col gap-6" noValidate>
-      <input type="hidden" name="kennel_id" value={kennelId} />
-      {litter?.id ? <input type="hidden" name="id" value={litter.id} /> : null}
+    <div className="flex flex-col gap-2">
+      <label htmlFor={field.name} className="text-fg text-sm font-medium">
+        {field.label}
+      </label>
 
-      {state.formError ? (
-        <p
-          role="alert"
-          className="border-danger-subtle bg-danger-subtle text-fg rounded-control border px-3 py-2.5 text-sm"
-        >
-          {state.formError}
+      {field.input === "date" ? (
+        <DateField
+          id={field.name}
+          name={field.name}
+          defaultValue={defaultValue}
+          ariaDescribedBy={describedBy}
+          onFormatError={onFormatError}
+          onValueChange={onValueChange}
+        />
+      ) : (
+        <textarea
+          id={field.name}
+          name={field.name}
+          rows={5}
+          defaultValue={defaultValue}
+          maxLength={field.maxLength}
+          placeholder={field.placeholder}
+          aria-describedby={describedBy}
+          aria-invalid={error ? true : undefined}
+          onChange={onChange ? (e) => onChange(e.target.value) : undefined}
+          className={cls}
+        />
+      )}
+
+      {field.help ? (
+        <p id={helpId} className="text-fg-faint text-xs">
+          {field.help}
         </p>
       ) : null}
-
-      <div className="flex flex-col gap-2">
-        <label htmlFor="description" className="text-fg text-sm font-medium">
-          Descrição
-        </label>
-        <textarea
-          id="description"
-          name="description"
-          rows={5}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          maxLength={MAX_LITTER_DESCRIPTION_LENGTH}
-          aria-describedby={error ? "description-error" : undefined}
-          aria-invalid={error ? true : undefined}
-          placeholder="Quantos filhotes, cor, o que torna esta ninhada especial…"
-          className="border-border-strong bg-bg text-fg placeholder:text-fg-faint focus-visible:border-accent rounded-control border px-3 py-2.5 text-base outline-none transition-colors"
-        />
-        <div className="flex items-baseline justify-between gap-2">
-          {error ? (
-            <p id="description-error" role="alert" className="text-danger text-xs">
-              {error}
-            </p>
-          ) : (
-            <span />
-          )}
-          <span
-            aria-hidden="true"
-            className="text-fg-faint shrink-0 font-mono text-xs tabular-nums"
-          >
-            {[...text].length}/{MAX_LITTER_DESCRIPTION_LENGTH}
-          </span>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-3">
-        <Submit label={isEdit ? "Salvar alterações" : "Cadastrar ninhada"} />
-        {state.ok ? <FormMessage message="Alterações salvas." /> : null}
-      </div>
-    </form>
+      {error ? (
+        <p id={errorId} role="alert" className="text-danger text-xs">
+          {error}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -98,5 +102,146 @@ function Submit({ label }: { label: string }) {
     >
       {pending ? "Salvando…" : label}
     </button>
+  );
+}
+
+export function LitterForm({
+  kennelId,
+  ownerId,
+  litter,
+}: {
+  kennelId: string;
+  /** Sessão atual — o `ParentPicker` precisa para o upload de foto de fantasma. */
+  ownerId: string;
+  litter?: {
+    id: string;
+    description: string | null;
+    mated_on: string | null;
+    born_on: string | null;
+    sire: AncestorCandidate | null;
+    dam: AncestorCandidate | null;
+  };
+}) {
+  const isEdit = Boolean(litter?.id);
+  const action = isEdit ? updateLitter : createLitter;
+
+  const [state, formAction] = useActionState<LitterFormState, FormData>(action, {});
+  const [clientErrors, setClientErrors] = useState<FieldErrors>({});
+  const [dateFormatErrors, setDateFormatErrors] = useState<FieldErrors>({});
+
+  const [descricao, setDescricao] = useState(litter?.description ?? "");
+  const [matedOn, setMatedOn] = useState(litter?.mated_on ?? "");
+  const [sire, setSire] = useState<AncestorCandidate | null>(litter?.sire ?? null);
+  const [dam, setDam] = useState<AncestorCandidate | null>(litter?.dam ?? null);
+
+  const errors: FieldErrors = { ...clientErrors, ...state.errors, ...dateFormatErrors };
+
+  // A previsão é DERIVADA e aparece enquanto a pessoa digita — sem ida ao
+  // servidor e sem coluna no banco. `mated_on` continua sendo o único fato.
+  const previsao = expectedWhelpingDate(matedOn);
+
+  return (
+    <form
+      action={formAction}
+      noValidate
+      onSubmit={(e) => {
+        const data = new FormData(e.currentTarget);
+        const input: LitterInput = {};
+        for (const f of LITTER_FIELDS) {
+          const v = data.get(f.name);
+          if (typeof v === "string") input[f.name] = v;
+        }
+        const found = validateLitter(input);
+        setClientErrors(found);
+        if (Object.keys(found).length > 0) e.preventDefault();
+      }}
+      className="flex flex-col gap-8"
+    >
+      <input type="hidden" name="kennel_id" value={kennelId} />
+      {litter?.id ? <input type="hidden" name="id" value={litter.id} /> : null}
+
+      {state.formError ? (
+        <p
+          role="alert"
+          className="border-danger-subtle bg-danger-subtle text-fg rounded-control border px-3 py-2.5 text-sm"
+        >
+          {state.formError}
+        </p>
+      ) : null}
+
+      <div className="grid gap-6 sm:grid-cols-2">
+        {LITTER_FIELDS.filter((f) => f.input === "date").map((field) => (
+          <Control
+            key={field.name}
+            field={field}
+            defaultValue={state.values?.[field.name] ?? litter?.[field.name] ?? ""}
+            error={errors[field.name]}
+            onFormatError={(message) =>
+              setDateFormatErrors((prev) => ({ ...prev, [field.name]: message ?? undefined }))
+            }
+            onValueChange={field.name === "mated_on" ? setMatedOn : undefined}
+          />
+        ))}
+      </div>
+
+      {previsao ? (
+        <p className="border-border bg-surface rounded-card text-fg-muted border px-4 py-3 text-sm">
+          Previsão de parto:{" "}
+          <span className="text-fg font-mono font-medium tabular-nums">{isoToBr(previsao)}</span>{" "}
+          <span className="text-fg-faint">— 63 dias após a cobrição, média da espécie.</span>
+        </p>
+      ) : null}
+
+      {LITTER_FIELDS.filter((f) => f.input === "textarea").map((field) => (
+        <div key={field.name} className="flex flex-col gap-2">
+          <Control
+            field={field}
+            defaultValue={state.values?.[field.name] ?? litter?.[field.name] ?? ""}
+            error={errors[field.name]}
+            onChange={setDescricao}
+          />
+          <span
+            aria-hidden="true"
+            className="text-fg-faint shrink-0 self-end font-mono text-xs tabular-nums"
+          >
+            {[...descricao].length}/{field.maxLength}
+          </span>
+        </div>
+      ))}
+
+      <section className="border-border flex flex-col gap-6 border-t pt-6">
+        <div className="flex flex-col gap-1">
+          <h2 className="font-display text-base font-semibold">Progenitores</h2>
+          <p className="text-fg-muted text-sm">
+            Escolha entre os cães já cadastrados. É o que faz cada filhote entrar no pedigree com a
+            linhagem completa — e o que traz os exames genéticos dos pais para esta página, sem
+            redigitar nada.
+          </p>
+        </div>
+
+        <ParentPicker
+          slot="sire"
+          ownerId={ownerId}
+          selected={sire}
+          otherParentId={dam?.id}
+          error={state.parentError?.sire_id}
+          onChange={setSire}
+        />
+
+        <ParentPicker
+          slot="dam"
+          ownerId={ownerId}
+          selected={dam}
+          otherParentId={sire?.id}
+          error={state.parentError?.dam_id}
+          onChange={setDam}
+        />
+      </section>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <Submit label={isEdit ? "Salvar alterações" : "Cadastrar ninhada"} />
+        {state.ok ? <FormMessage message="Alterações salvas." /> : null}
+      </div>
+    </form>
   );
 }

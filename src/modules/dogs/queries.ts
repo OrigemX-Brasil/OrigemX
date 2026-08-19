@@ -60,6 +60,14 @@ export type DogListFilters = {
  * fantasma que cadastrou, e fantasma não tem dono por definição. Sem isso ele
  * cria o mesmo ancestral de novo — o duplicado que este módulo existe para
  * evitar.
+ *
+ * FILHOTE DE NINHADA FICA DE FORA (`litter_id is null`). Ele É um cão em todos
+ * os sentidos — é o ponto da decisão de arquitetura — mas esta lista é o
+ * PLANTEL, e três ninhadas de sete filhotes soterrariam os reprodutores que o
+ * criador realmente procura aqui. O filhote é gerenciado na página da ninhada,
+ * e continua abrindo em `/painel/caes/[id]` como qualquer outro.
+ *
+ * Usa o índice parcial `dogs_litter_id_idx`.
  */
 export async function listMyDogs(
   userId: string,
@@ -74,6 +82,7 @@ export async function listMyDogs(
     .from("dogs")
     .select(LIST_COLUMNS)
     .is("deleted_at", null)
+    .is("litter_id", null)
     .or(`owner_id.eq.${userId},created_by.eq.${userId}`)
     .order("created_at", { ascending: false })
     .order("id", { ascending: false })

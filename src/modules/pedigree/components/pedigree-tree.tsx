@@ -1,6 +1,7 @@
 import {
   ELBOW,
   GENERATIONS,
+  LITTER_GENERATIONS,
   PREVIEW_ELBOW,
   PREVIEW_GENERATIONS,
   treeOverflow,
@@ -9,6 +10,13 @@ import {
 import { generationOf, parentPositions, type Pedigree } from "../tree";
 import { AncestorCard, CompactCard, UnknownSlot } from "./pedigree-card";
 import { PedigreeGenerations } from "./pedigree-generations";
+
+/**
+ * `full`: perfil público do cão. `preview`: card da home. `litter`: página da
+ * ninhada — igual a `full`, menos a coluna do sujeito. Ver o comentário do
+ * prop `variant` em `PedigreeTree`.
+ */
+type Variant = "full" | "preview" | "litter";
 
 /**
  * ============================================================================
@@ -102,12 +110,21 @@ export function PedigreeTree({
    * `preview`: card de exemplo da home (`example-profile-card.tsx`), cujo
    * card INTEIRO já é um `<Link>`. Sem scroller/sticky/cabeçalho e — crucial —
    * NUNCA emite `<Link>` próprio, senão seria `<a>` dentro de `<a>`.
+   * `litter`: página pública da ninhada. Igual a `full`, MENOS a coluna do
+   * sujeito: a ninhada não tem "este cão", a árvore começa nos progenitores.
+   * Quem chama passa a árvore de um filhote qualquer — ele é só a âncora da
+   * RPC (a numeração Ahnentafel precisa de uma raiz) e nunca é renderizado.
    */
-  variant?: "full" | "preview";
+  variant?: Variant;
 }) {
   if (!pedigree?.subject) return null;
 
-  const specs = variant === "preview" ? PREVIEW_GENERATIONS : GENERATIONS;
+  const specs =
+    variant === "preview"
+      ? PREVIEW_GENERATIONS
+      : variant === "litter"
+        ? LITTER_GENERATIONS
+        : GENERATIONS;
 
   /**
    * Onde esta árvore transborda — ver `treeOverflow` em `layout.ts`.
@@ -117,8 +134,13 @@ export function PedigreeTree({
    * vira classe de CSS (`xl:hidden`), nunca medição no navegador: a
    * profundidade é conhecida no servidor e a página precisa continuar estática.
    */
+  /** A ninhada começa a desenhar na geração 1 — ver `LITTER_GENERATIONS`. */
+  const primeiraGeracao = variant === "litter" ? 1 : 0;
+
   const overflow =
-    variant === "full" ? treeOverflow(pedigree.depth, specs) : { base: false, xl: false };
+    variant !== "preview"
+      ? treeOverflow(pedigree.depth, specs, primeiraGeracao)
+      : { base: false, xl: false };
 
   /** Rola no base mas cabe no desktop: a affordance existe, e some lá. */
   const soNoBase = overflow.base && !overflow.xl ? "xl:hidden" : "";
@@ -126,7 +148,9 @@ export function PedigreeTree({
   return (
     <section className="flex flex-col gap-3">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h2 className="font-display text-lg font-semibold tracking-tight">Pedigree</h2>
+        <h2 className="font-display text-lg font-semibold tracking-tight">
+          {variant === "litter" ? "Pedigree dos progenitores" : "Pedigree"}
+        </h2>
         <p className="text-fg-faint text-xs">
           {pedigree.knownAncestors === 0
             ? "Nenhum ancestral cadastrado"
@@ -145,7 +169,7 @@ export function PedigreeTree({
             porquê. A `preview` fica de fora: são duas gerações dentro de um
             `<Link>`, onde `<details>` navegaria e expandiria no mesmo toque.
           */}
-          {variant === "full" ? (
+          {variant !== "preview" ? (
             <div className="sm:hidden">
               <PedigreeGenerations pedigree={pedigree} thumbs={thumbs} />
             </div>
@@ -157,24 +181,41 @@ export function PedigreeTree({
             `headers()` aqui tornaria a rota dinâmica e mataria o ISR — que é o
             que faz esta página abrir rápido a partir do QR impresso.
           */}
-          <div className={variant === "full" ? "relative hidden sm:block" : "relative"}>
+          <div className={variant !== "preview" ? "relative hidden sm:block" : "relative"}>
             <div
-              role={variant === "full" ? "group" : undefined}
-              tabIndex={variant === "full" ? 0 : undefined}
+              role={variant !== "preview" ? "group" : undefined}
+              tabIndex={variant !== "preview" ? 0 : undefined}
               aria-label={
-                variant === "full"
-                  ? `Árvore de pedigree de ${pedigree.subject.name}. Role na horizontal para ver as gerações.`
+                variant === "preview"
+                  ? undefined
+                  : variant === "litter"
+                    ? // Nunca o nome do filhote-âncora: ele não está na tela, e
+                      // anunciá-lo diria a quem usa leitor de tela algo que
+                      // quem enxerga não vê.
+                      "Árvore de pedigree dos progenitores da ninhada. Role na horizontal para ver as gerações."
+                    : `Árvore de pedigree de ${pedigree.subject.name}. Role na horizontal para ver as gerações.`
+              }
+              style={
+                variant !== "preview"
+                  ? // Sem coluna de sujeito não há card fixo para o snap
+                    // respeitar — o recuo de rolagem seria um buraco à esquerda.
+                    { scrollPaddingLeft: variant === "litter" ? 0 : SCROLL_PADDING }
                   : undefined
               }
-              style={variant === "full" ? { scrollPaddingLeft: SCROLL_PADDING } : undefined}
               className={
-                variant === "full"
+                variant !== "preview"
                   ? "border-border bg-surface rounded-card focus-visible:outline-ring snap-x snap-proximity overflow-x-auto overscroll-x-contain border px-3 py-3 focus-visible:-outline-offset-2 focus-visible:outline-2"
                   : "border-border bg-surface rounded-card overflow-hidden border p-2.5"
               }
             >
               <div className="flex w-max flex-col gap-3">
-                {variant === "full" ? <HeaderRow specs={specs} depth={pedigree.depth} /> : null}
+                {variant !== "preview" ? (
+                  <HeaderRow
+                    specs={specs}
+                    depth={pedigree.depth}
+                    from={primeiraGeracao}
+                  />
+                ) : null}
                 <SubjectRow
                   pedigree={pedigree}
                   specs={specs}
@@ -202,7 +243,7 @@ export function PedigreeTree({
         </p>
       ) : null}
 
-      {variant === "full" && pedigree.depth >= 1 ? <ColorLegend /> : null}
+      {variant !== "preview" && pedigree.depth >= 1 ? <ColorLegend /> : null}
 
       {/* `hidden sm:block`: no mobile não há árvore lateral para arrastar — a
           navegação lá é o acordeão por geração. E `xl:hidden` quando a árvore
@@ -227,20 +268,42 @@ export function PedigreeTree({
  * computar `auto` também, e o scrollport passa a ser esta caixa, que não rola
  * verticalmente — `sticky` vertical aqui teria curso zero.
  */
-function HeaderRow({ specs, depth }: { specs: readonly GenerationSpec[]; depth: number }) {
+function HeaderRow({
+  specs,
+  depth,
+  from = 0,
+}: {
+  specs: readonly GenerationSpec[];
+  depth: number;
+  /**
+   * Primeira geração renderizada. `0` em toda árvore com sujeito; `1` na da
+   * NINHADA, onde a coluna do sujeito não existe.
+   *
+   * Sem isto o cabeçalho ficaria deslocado da largura de um card inteiro: o
+   * slot 0 continua no array de specs (ver `LITTER_GENERATIONS`) e reservaria
+   * a faixa dele aqui, enquanto os cards abaixo já começam nos pais.
+   */
+  from?: number;
+}) {
   return (
     <div className="flex shrink-0">
-      {specs.slice(0, depth + 1).map((gen, g) => (
-        <div
-          key={g}
-          style={{ width: gen.band, paddingLeft: g > 0 ? ELBOW : 0 }}
-          className="shrink-0 snap-start"
-        >
-          <span className="text-fg-faint font-mono text-[0.625rem] tracking-[0.15em] uppercase">
-            {gen.label}
-          </span>
-        </div>
-      ))}
+      {specs.slice(from, depth + 1).map((gen, i) => {
+        const g = i + from;
+        return (
+          <div
+            key={g}
+            // O recuo do cotovelo existe em toda coluna que TEM uma coluna à
+            // esquerda dentro desta faixa — por isso a conta é contra `from`,
+            // não contra 0.
+            style={{ width: gen.band, paddingLeft: g > from ? ELBOW : 0 }}
+            className="shrink-0 snap-start"
+          >
+            <span className="text-fg-faint font-mono text-[0.625rem] tracking-[0.15em] uppercase">
+              {gen.label}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -257,8 +320,20 @@ function SubjectRow({
   specs: readonly GenerationSpec[];
   thumbs?: ReadonlyMap<string, string>;
   subjectPhotoUrl?: string;
-  variant: "full" | "preview";
+  variant: Variant;
 }) {
+  // A NINHADA NÃO TEM SUJEITO. A árvore dela começa nos progenitores: o cão
+  // usado na consulta é um filhote qualquer, presente só porque a numeração
+  // Ahnentafel da RPC precisa de uma raiz. Renderizá-lo obrigaria a página a
+  // responder "por que ESTE filhote?", que é uma pergunta sem resposta boa.
+  if (variant === "litter") {
+    return (
+      <div className="flex items-center">
+        <Branches pos={1} pedigree={pedigree} specs={specs} thumbs={thumbs} variant={variant} />
+      </div>
+    );
+  }
+
   const subject = pedigree.subject!;
   const card = (
     <AncestorCard
@@ -271,7 +346,7 @@ function SubjectRow({
 
   return (
     <div className="flex items-center">
-      {variant === "full" ? (
+      {variant !== "preview" ? (
         // `bg-surface` opaco: sem ele as colunas passariam por baixo ao
         // rolar. `shrink-0`: sem ele o flex comprime o card fixo. O `after:`
         // é o degradê de 12px que faz ler como "fixado", não como régua dura.
@@ -320,7 +395,7 @@ function Branches({
   pedigree: Pedigree;
   specs: readonly GenerationSpec[];
   thumbs?: ReadonlyMap<string, string>;
-  variant: "full" | "preview";
+  variant: Variant;
 }) {
   const [sirePos, damPos] = parentPositions(pos);
   if (!pedigree.byPosition.has(sirePos) && !pedigree.byPosition.has(damPos)) return null;
@@ -383,7 +458,7 @@ function Subtree({
   pedigree: Pedigree;
   specs: readonly GenerationSpec[];
   thumbs?: ReadonlyMap<string, string>;
-  variant: "full" | "preview";
+  variant: Variant;
 }) {
   const node = pedigree.byPosition.get(pos);
   // A geração sai da POSIÇÃO, não do nó: dá o mesmo número (`buildPedigree`
@@ -394,7 +469,7 @@ function Subtree({
   if (!node) return <UnknownSlot pos={pos} width={spec.card} compact={!spec.photo} />;
 
   const occurrences = pedigree.repeated.get(node.dog_id)?.length;
-  const linkable = variant === "full";
+  const linkable = variant !== "preview";
 
   const card = spec.photo ? (
     <AncestorCard

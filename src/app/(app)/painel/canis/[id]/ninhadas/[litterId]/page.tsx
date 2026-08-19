@@ -7,8 +7,9 @@ import { getManageableKennelById } from "@/modules/kennels/queries";
 import { registerLitterPhoto, softDeleteLitter } from "@/modules/litters/actions";
 import { LitterForm } from "@/modules/litters/components/litter-form";
 import { LitterPhotoGrid } from "@/modules/litters/components/litter-photo-grid";
+import { PuppyManager } from "@/modules/litters/components/puppy-manager";
 import { MAX_LITTER_PHOTOS } from "@/modules/litters/constraints";
-import { getManageableLitterById } from "@/modules/litters/queries";
+import { getLitterPuppies, getManageableLitterById } from "@/modules/litters/queries";
 import { GalleryUploader } from "@/modules/media/components/gallery-uploader";
 import { PublishToggle } from "@/modules/media/components/publish-toggle";
 import { getLitterGallery } from "@/modules/media/queries";
@@ -34,7 +35,10 @@ export default async function EditarNinhadaPage({
   // ele também possui só trocando o segmento.
   if (!kennel || !litter || litter.kennel_id !== id) notFound();
 
-  const photos = await getLitterGallery(litterId);
+  const [photos, puppies] = await Promise.all([
+    getLitterGallery(litterId),
+    getLitterPuppies(litterId),
+  ]);
 
   return (
     <div className="flex flex-col gap-8">
@@ -43,15 +47,36 @@ export default async function EditarNinhadaPage({
         <h1 className="font-display text-2xl font-semibold tracking-tight">Ninhada</h1>
       </div>
 
+      {/* O endereço público aponta para `/n/[public_id]`, não para o perfil do
+          canil: a ninhada ganhou página própria, e é o link dela que o criador
+          divulga. */}
       <PublishToggle
         kind="litter"
         id={litter.id}
-        publicPath={`/c/${kennel.slug}`}
+        publicPath={`/n/${litter.public_id}`}
         isPublished={Boolean(litter.published_at)}
         kennelPublished={Boolean(kennel.published_at)}
       />
 
-      <LitterForm kennelId={id} litter={litter} />
+      <LitterForm kennelId={id} ownerId={user.id} litter={litter} />
+
+      <section className="border-border flex flex-col gap-4 border-t pt-6">
+        <div className="flex flex-col gap-1">
+          <h2 className="font-display text-base font-semibold">Filhotes</h2>
+          <p className="text-fg-muted text-sm">
+            Cada filhote é cadastrado como um cão: entra no pedigree dos descendentes dele,
+            aceita registro CBKC e tem perfil público próprio. Publicar a ninhada publica
+            todos de uma vez.
+          </p>
+        </div>
+
+        <PuppyManager
+          litterId={litter.id}
+          puppies={puppies}
+          hasParents={Boolean(litter.sire_id || litter.dam_id)}
+          ownerId={user.id}
+        />
+      </section>
 
       <section className="border-border flex flex-col gap-4 border-t pt-6">
         <div className="flex flex-col gap-1">
