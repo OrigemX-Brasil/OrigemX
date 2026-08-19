@@ -85,10 +85,16 @@ export default async function PainelPage() {
         </Link>
 
         {/* Sem canil não há onde este link levar — some em vez de apontar
-            para uma rota que só rejeitaria o usuário. */}
+            para uma rota que só rejeitaria o usuário.
+
+            Vai pra página do canil, não direto pro formulário de criação: a
+            seção #ninhadas de lá já lista o que existe (ou mostra o
+            empty-state com "Cadastrar nova ninhada"). Pular pra `/novo`
+            jogaria quem já tem ninhada dentro de um formulário de criar
+            outra, sem ver o que já cadastrou. */}
         {kennel ? (
           <Link
-            href={`/painel/canis/${kennel.id}/ninhadas/novo`}
+            href={`/painel/canis/${kennel.id}#ninhadas`}
             className="border-border bg-surface hover:bg-surface-hover rounded-card flex items-center justify-between gap-4 border p-5 transition-colors"
           >
             <span className="flex flex-col gap-1">

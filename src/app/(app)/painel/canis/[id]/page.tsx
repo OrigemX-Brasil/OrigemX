@@ -145,7 +145,7 @@ export default async function EditarCanilPage({ params }: { params: Promise<{ id
             tela do mesmo tamanho não importa se o canil tem 1 ou 12
             ninhadas.
           */}
-          <section className="border-border flex flex-col gap-4 border-t pt-6">
+          <section id="ninhadas" className="border-border flex flex-col gap-4 border-t pt-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-col gap-1">
                 <h2 className="font-display text-base font-semibold">Ninhadas</h2>
