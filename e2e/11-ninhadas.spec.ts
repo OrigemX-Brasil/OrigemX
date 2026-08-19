@@ -585,6 +585,61 @@ test("CTA de WhatsApp: aparece com telefone, some sem telefone", async ({
   await semSessao.close();
 });
 
+/**
+ * O campo de WhatsApp mora no CANIL (`/painel/canis/[id]`), não na ninhada —
+ * reaproveitado por todas as ninhadas do mesmo dono. Reportado depois de subir
+ * pra produção: quem está criando/editando uma ninhada não tem como adivinhar
+ * que o contato se configura em outro lugar. E, cavando a causa, achei um
+ * segundo bug — mais grave — sem teste nenhum até agora: `getManageableKennelById`
+ * não selecionava a coluna `whatsapp`, então o campo nascia sempre vazio no
+ * formulário de "Meu canil", MESMO DEPOIS de salvo. As duas metades num teste
+ * só, porque são a mesma causa (o dado não chegava até a tela) com dois
+ * sintomas.
+ */
+test("aviso de WhatsApp no fluxo de ninhada, e o campo mantém o valor depois de salvar", async ({
+  page,
+  criador,
+  admin,
+}) => {
+  const canil = await criarCanil(admin, criador.id);
+
+  const aviso = () => page.getByText(/Seu canil ainda não tem WhatsApp cadastrado/);
+
+  // 1. Canil sem WhatsApp: o aviso aparece na tela de CRIAR ninhada, com link
+  // pra onde o campo realmente mora.
+  await page.goto(`/painel/canis/${canil.id}/ninhadas/novo`);
+  await expect(aviso()).toBeVisible();
+  await expect(page.getByRole("link", { name: "Adicionar WhatsApp" })).toHaveAttribute(
+    "href",
+    `/painel/canis/${canil.id}`,
+  );
+
+  // 2. O bug de round-trip: preencher em "Meu canil", salvar, RECARREGAR
+  // (força um fetch novo do servidor, não estado de client) — o campo precisa
+  // continuar com o valor, não voltar vazio.
+  await page.goto(`/painel/canis/${canil.id}`);
+  await page.getByLabel("WhatsApp").fill("11987654321");
+  await page.getByRole("button", { name: "Salvar alterações" }).click();
+  await expect(page.getByText("Alterações salvas.")).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByLabel("WhatsApp")).toHaveValue("11987654321");
+
+  // 3. Com WhatsApp cadastrado, o aviso some — tanto pra criar quanto pra
+  // editar uma ninhada já existente.
+  await page.goto(`/painel/canis/${canil.id}/ninhadas/novo`);
+  await expect(aviso()).toHaveCount(0);
+
+  const { data: litter } = await admin
+    .from("kennel_litters")
+    .insert({ kennel_id: canil.id, created_by: criador.id })
+    .select("id")
+    .single();
+
+  await page.goto(`/painel/canis/${canil.id}/ninhadas/${litter!.id}`);
+  await expect(aviso()).toHaveCount(0);
+});
+
 test("excluir ninhada é lógico, e ela some do painel e do público", async ({
   page,
   criador,

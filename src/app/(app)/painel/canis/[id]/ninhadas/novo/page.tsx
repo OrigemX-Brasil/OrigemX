@@ -5,6 +5,7 @@ import { BackLink } from "@/components/back-link";
 import { getAuthUser } from "@/modules/auth/queries";
 import { getManageableKennelById } from "@/modules/kennels/queries";
 import { LitterForm } from "@/modules/litters/components/litter-form";
+import { WhatsappNudge } from "@/modules/litters/components/whatsapp-nudge";
 
 export const metadata: Metadata = { title: "Nova ninhada" };
 
@@ -30,6 +31,8 @@ export default async function NovaNinhadaPage({ params }: { params: Promise<{ id
         <BackLink href={`/painel/canis/${kennel.id}`} label={kennel.name} />
         <h1 className="font-display text-2xl font-semibold tracking-tight">Nova ninhada</h1>
       </div>
+
+      <WhatsappNudge kennelId={kennel.id} whatsapp={kennel.whatsapp} />
 
       <LitterForm kennelId={kennel.id} ownerId={user.id} />
     </div>

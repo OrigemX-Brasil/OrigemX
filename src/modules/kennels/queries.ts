@@ -13,7 +13,7 @@ import { createClient } from "@/lib/supabase/server";
  */
 
 const LIST_COLUMNS =
-  "id, name, slug, city, state, description, logo_url, website_url, instagram_handle, registration_number, published_at, founder_number, created_at, updated_at";
+  "id, name, slug, city, state, description, logo_url, website_url, instagram_handle, whatsapp, registration_number, published_at, founder_number, created_at, updated_at";
 
 export type KennelListItem = {
   id: string;
@@ -25,6 +25,7 @@ export type KennelListItem = {
   logo_url: string | null;
   website_url: string | null;
   instagram_handle: string | null;
+  whatsapp: string | null;
   registration_number: string | null;
   published_at: string | null;
   /** Selo Criador Fundador, 1 a 100. NULL quando não há selo. */

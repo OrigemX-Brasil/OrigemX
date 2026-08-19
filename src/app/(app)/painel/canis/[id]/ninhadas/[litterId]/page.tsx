@@ -8,6 +8,7 @@ import { registerLitterPhoto, softDeleteLitter } from "@/modules/litters/actions
 import { LitterForm } from "@/modules/litters/components/litter-form";
 import { LitterPhotoGrid } from "@/modules/litters/components/litter-photo-grid";
 import { PuppyManager } from "@/modules/litters/components/puppy-manager";
+import { WhatsappNudge } from "@/modules/litters/components/whatsapp-nudge";
 import { MAX_LITTER_PHOTOS } from "@/modules/litters/constraints";
 import { getLitterPuppies, getManageableLitterById } from "@/modules/litters/queries";
 import { GalleryUploader } from "@/modules/media/components/gallery-uploader";
@@ -46,6 +47,8 @@ export default async function EditarNinhadaPage({
         <BackLink href={`/painel/canis/${id}`} label={kennel.name} />
         <h1 className="font-display text-2xl font-semibold tracking-tight">Ninhada</h1>
       </div>
+
+      <WhatsappNudge kennelId={id} whatsapp={kennel.whatsapp} />
 
       {/* O endereço público aponta para `/n/[public_id]`, não para o perfil do
           canil: a ninhada ganhou página própria, e é o link dela que o criador
