@@ -118,6 +118,12 @@ Continuam fora de escopo e exigem NOVO aditivo — não decorrem deste:
 
 Ter preço não autoriza carrinho.
 
+**`dogs.accepts_offer`** (20/08/2026) é a mesma exceção, mesma fronteira: sinalizador
+booleano, puramente informativo ("Aceita proposta", exibido como badge na página
+pública), independente de ter preço cadastrado. NÃO é canal de oferta — nenhum campo de
+"faça sua proposta", nenhuma tabela ou notificação associada. A negociação continua
+inteiramente pelo WhatsApp do criador, já existente.
+
 ### Saúde — recorte estreito, não dossiê
 
 Dentro: log repetível de vermífugo e vacina do cão (`dog_health_records`) e laudo de
@@ -174,6 +180,7 @@ Referência rápida — o banco é quem garante, não a aplicação.
 | Depoimento de cão de terceiro é impossível | trigger `testimonials_check_dog_kennel` — `dog_id` precisa pertencer ao mesmo `kennel_id` |
 | LGPD do depoimento não vira dado persistido | checkbox validado em `addTestimonial`, nunca lido em `TestimonialInput`/nunca gravado |
 | FAQ é por canil, sem FAQ global | RLS `kennel_faqs_select` (`owns_kennel`), sem `owner_id` próprio |
+| Aceita proposta é só rótulo, sem canal de oferta | CHECK `dogs_accepts_offer_requires_litter` + ausência de qualquer action/tabela de oferta |
 
 ### Schema
 

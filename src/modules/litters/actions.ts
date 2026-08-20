@@ -545,6 +545,9 @@ export async function updatePuppy(
   const litterId = String(formData.get("litter_id") ?? "");
   const status = String(formData.get("litter_status") ?? "");
   const rawPrice = String(formData.get("price_brl") ?? "").trim();
+  // Checkbox: ausente no FormData = desmarcado. Sem ambiguidade porque o
+  // `<form>` sempre submete inteiro, nunca um PATCH parcial.
+  const acceptsOffer = formData.get("accepts_offer") === "on";
 
   if (!dogId || !litterId) return { formError: "Filhote não identificado." };
   if (!isLitterStatus(status)) return { formError: "Status inválido." };
@@ -571,7 +574,7 @@ export async function updatePuppy(
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("dogs")
-    .update({ litter_status: status, price_brl: price })
+    .update({ litter_status: status, price_brl: price, accepts_offer: acceptsOffer })
     .eq("id", dogId)
     .eq("litter_id", litterId)
     .is("deleted_at", null)

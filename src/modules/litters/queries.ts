@@ -208,6 +208,7 @@ export type LitterPuppy = {
   color: string | null;
   litter_status: string | null;
   price_brl: number | null;
+  accepts_offer: boolean;
   published_at: string | null;
   created_at: string;
   cover: ResolvedMedia | null;
@@ -227,7 +228,9 @@ export async function getLitterPuppies(litterId: string): Promise<LitterPuppy[]>
   const supabase = await createClient();
   const { data } = await supabase
     .from("dogs")
-    .select("id, public_id, name, sex, color, litter_status, price_brl, published_at, created_at")
+    .select(
+      "id, public_id, name, sex, color, litter_status, price_brl, accepts_offer, published_at, created_at",
+    )
     .eq("litter_id", litterId)
     .is("deleted_at", null)
     .order("created_at", { ascending: true })

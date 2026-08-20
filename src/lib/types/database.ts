@@ -320,6 +320,7 @@ export type Database = {
       }
       dogs: {
         Row: {
+          accepts_offer: boolean
           born_on: string | null
           breed: string | null
           coat: string | null
@@ -347,6 +348,7 @@ export type Database = {
           withers_height_cm: number | null
         }
         Insert: {
+          accepts_offer?: boolean
           born_on?: string | null
           breed?: string | null
           coat?: string | null
@@ -374,6 +376,7 @@ export type Database = {
           withers_height_cm?: number | null
         }
         Update: {
+          accepts_offer?: boolean
           born_on?: string | null
           breed?: string | null
           coat?: string | null

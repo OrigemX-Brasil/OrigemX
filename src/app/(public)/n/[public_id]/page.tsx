@@ -358,6 +358,17 @@ export default async function NinhadaPublicaPage({
                             {status}
                           </span>
                         ) : null}
+                        {/* Puramente informativo — sem mecanismo de oferta.
+                            Independente do preço: pode aparecer mesmo sem
+                            valor cadastrado ("só sob consulta"). Estilo
+                            neutro (mesmo do chip de cor), não o verde de
+                            "Disponível" — os dois na mesma fileira
+                            competiriam por atenção sem diferenciar sentido. */}
+                        {puppy.accepts_offer ? (
+                          <span className="border-border-strong bg-surface-raised text-fg-muted rounded-control border px-2 py-0.5 text-xs font-medium">
+                            Aceita proposta
+                          </span>
+                        ) : null}
                       </div>
 
                       {preco ? (

@@ -445,6 +445,7 @@ export const getPublicTestimonialsForDog = cache(
 export type PublicPuppy = PublicDog & {
   litter_status: string | null;
   price_brl: number | null;
+  accepts_offer: boolean;
 };
 
 export type PublicLitterPage = {
@@ -546,7 +547,7 @@ export const getPublicLitterPuppies = cache(
       const supabase = createPublicClient();
       const { data } = await supabase
         .from("dogs")
-        .select(`${DOG_PUBLIC_COLUMNS}, litter_status, price_brl`)
+        .select(`${DOG_PUBLIC_COLUMNS}, litter_status, price_brl, accepts_offer`)
         .eq("litter_id", litterId)
         .is("deleted_at", null)
         .not("published_at", "is", null)

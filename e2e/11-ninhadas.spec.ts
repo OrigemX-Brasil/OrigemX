@@ -433,6 +433,82 @@ test("filhote fica fora do plantel e da lista pública do canil, mas tem página
 });
 
 /**
+ * "Aceita proposta" — SÓ RÓTULO. Nenhum mecanismo de oferta, nenhuma mudança
+ * no fluxo de contato (continua o mesmo WhatsApp de sempre). Independente do
+ * preço: o teste marca o checkbox SEM preencher preço nenhum, de propósito —
+ * é o caso "só sob consulta" que a decisão do dono do produto cobre.
+ */
+test("marcar \"Aceita proposta\" no filhote mostra o badge no público; desmarcar remove", async ({
+  page,
+  criador,
+  admin,
+}) => {
+  const canil = await criarCanil(admin, criador.id);
+  const pai = await criarCao(admin, criador.id, { sex: "male", kennel_id: canil.id });
+  const mae = await criarCao(admin, criador.id, { sex: "female", kennel_id: canil.id });
+
+  const { data: ninhada } = await admin
+    .from("kennel_litters")
+    .insert({
+      kennel_id: canil.id,
+      created_by: criador.id,
+      sire_id: pai.id,
+      dam_id: mae.id,
+      published_at: new Date().toISOString(),
+    })
+    .select("id, public_id")
+    .single();
+
+  const nomeFilhote = `Filhote Proposta ${Date.now().toString(36)}`;
+  await admin.from("dogs").insert({
+    name: nomeFilhote,
+    sex: "male",
+    kennel_id: canil.id,
+    litter_id: ninhada!.id,
+    litter_status: "available",
+    sire_id: pai.id,
+    dam_id: mae.id,
+    owner_id: criador.id,
+    created_by: criador.id,
+    published_at: new Date().toISOString(),
+  });
+
+  await publicar(admin, { kennelId: canil.id });
+
+  const semSessao = await page.context().browser()!.newContext();
+  const publica = await semSessao.newPage();
+
+  // 1. Sem marcar nada, o badge não existe.
+  await publica.goto(`/n/${ninhada!.public_id}`);
+  await expect(publica.getByText("Aceita proposta")).toHaveCount(0);
+
+  // 2. Marca no painel — SEM preencher preço, de propósito.
+  await page.goto(`/painel/canis/${canil.id}/ninhadas/${ninhada!.id}`);
+  const linhaFilhote = page.locator("li", { hasText: nomeFilhote });
+  await linhaFilhote.getByLabel("Aceita proposta").check();
+  await linhaFilhote.getByRole("button", { name: "Salvar" }).click();
+  await expect(page.getByText("Filhote atualizado.")).toBeVisible();
+
+  await publica.goto(`/n/${ninhada!.public_id}`);
+  await expect(publica.getByText("Aceita proposta")).toBeVisible();
+
+  // 3. Desmarca — o badge some. E o CTA de contato continua o mesmo link de
+  // sempre, sem nenhum campo de oferta na página.
+  await expect(publica.locator("form")).toHaveCount(0);
+  await expect(publica.locator("input, textarea")).toHaveCount(0);
+
+  await page.goto(`/painel/canis/${canil.id}/ninhadas/${ninhada!.id}`);
+  await linhaFilhote.getByLabel("Aceita proposta").uncheck();
+  await linhaFilhote.getByRole("button", { name: "Salvar" }).click();
+  await expect(page.getByText("Filhote atualizado.")).toBeVisible();
+
+  await publica.goto(`/n/${ninhada!.public_id}`);
+  await expect(publica.getByText("Aceita proposta")).toHaveCount(0);
+
+  await semSessao.close();
+});
+
+/**
  * 360px — o Android estreito, mais apertado que os 390px da suíte.
  *
  * Afirma AUSÊNCIA DE TRANSBORDO HORIZONTAL, não pixels: screenshot comparado

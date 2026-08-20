@@ -172,6 +172,19 @@ function PuppyRow({
           />
         </div>
 
+        {/* Independente do preço — o criador pode marcar mesmo sem valor
+            cadastrado ("só sob consulta"). É só rótulo: nenhum mecanismo de
+            enviar oferta pela plataforma, a negociação é toda por WhatsApp. */}
+        <label className="text-fg-muted flex items-center gap-2 self-end pb-2 text-sm">
+          <input
+            type="checkbox"
+            name="accepts_offer"
+            defaultChecked={puppy.accepts_offer}
+            className="accent-accent size-4"
+          />
+          Aceita proposta
+        </label>
+
         <Submit label="Salvar" compact />
       </form>
 
