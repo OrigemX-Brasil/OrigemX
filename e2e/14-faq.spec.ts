@@ -42,7 +42,12 @@ test("clicar numa sugestão preenche a pergunta, sem submeter nem preencher a re
   await page.getByRole("button", { name: "Adicionar pergunta" }).click();
 
   await expect(page.getByText("Pergunta adicionada.")).toBeVisible();
-  await expect(page.getByText("Qual a garantia de saúde?")).toBeVisible();
+
+  // Escopado à LISTA: o chip de sugestão continua na tela com o mesmo texto,
+  // e sem o escopo o seletor casaria com os dois.
+  await expect(
+    page.locator("#faq li", { hasText: "Qual a garantia de saúde?" }),
+  ).toBeVisible();
 });
 
 test("reordenar muda a ordem exibida no painel e no público", async ({ page, criador, admin }) => {

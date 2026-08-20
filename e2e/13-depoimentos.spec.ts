@@ -32,7 +32,9 @@ test("sem o checkbox de LGPD, o formulário recusa o envio", async ({ page, cria
 
   await page.goto(`/painel/canis/${canil.id}`);
   await page.getByLabel("Nome de quem deu o depoimento").fill("Maria Silva");
-  await page.getByLabel("Depoimento").fill("Ótimo criador, super recomendo!");
+  // `exact`: "Depoimento" também é substring de "Nome de quem deu o
+  // depoimento", o campo logo acima.
+  await page.getByLabel("Depoimento", { exact: true }).fill("Ótimo criador, super recomendo!");
   // De propósito: NÃO marca o checkbox de LGPD.
   await page.getByRole("button", { name: "Adicionar depoimento" }).click();
 
@@ -53,14 +55,18 @@ test("com o checkbox marcado, adiciona, publica, e a REGRA DUPLA decide a visibi
 
   await page.goto(`/painel/canis/${canil.id}`);
   await page.getByLabel("Nome de quem deu o depoimento").fill("João Pereira");
-  await page.getByLabel("Depoimento").fill("Cão chegou saudável e muito bem cuidado.");
+  // `exact`: "Depoimento" também é substring de "Nome de quem deu o
+  // depoimento", o campo logo acima.
+  await page.getByLabel("Depoimento", { exact: true }).fill("Cão chegou saudável e muito bem cuidado.");
   await page.getByLabel(/Confirmo que tenho autorização/).check();
   await page.getByRole("button", { name: "Adicionar depoimento" }).click();
 
   await expect(page.getByText("Depoimento adicionado.")).toBeVisible();
 
   // Publica o depoimento — mas o CANIL continua em rascunho.
-  await page.getByRole("button", { name: "Publicar" }).click();
+  // Escopado a `#depoimentos`: o `PublishToggle` do CANIL, mais acima na
+  // mesma tela, também tem um botão "Publicar".
+  await page.locator("#depoimentos").getByRole("button", { name: "Publicar" }).click();
 
   const semSessao = await page.context().browser()!.newContext();
   const publica = await semSessao.newPage();
