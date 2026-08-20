@@ -20,7 +20,10 @@ import { founderEligibility } from "@/modules/kennels/founder";
 import { countKennelDogs, getManageableKennelById } from "@/modules/kennels/queries";
 import { LitterCard } from "@/modules/litters/components/litter-card";
 import { getKennelLitters } from "@/modules/litters/queries";
+import { getTestimonialAvatars } from "@/modules/media/queries";
 import { QrCard } from "@/modules/qr/components/qr-card";
+import { TestimonialSection } from "@/modules/testimonials/components/testimonial-section";
+import { getKennelTestimonials, listKennelDogsForSelect } from "@/modules/testimonials/queries";
 
 export const metadata: Metadata = { title: "Meu canil" };
 
@@ -35,11 +38,17 @@ export default async function EditarCanilPage({ params }: { params: Promise<{ id
   const kennel = await getManageableKennelById(id, user.id);
   if (!kennel) notFound();
 
-  const [logo, dogCount, litters] = await Promise.all([
+  const [logo, dogCount, litters, testimonials, kennelDogs] = await Promise.all([
     getKennelLogo(kennel.id),
     countKennelDogs(kennel.id),
     getKennelLitters(kennel.id),
+    getKennelTestimonials(kennel.id),
+    listKennelDogsForSelect(kennel.id),
   ]);
+
+  // Uma consulta em lote para todos os avatares da lista — mesmo princípio
+  // que já evita N+1 no resto do painel.
+  const avatars = await getTestimonialAvatars(testimonials.map((t) => t.id));
 
   const founder = founderEligibility({
     name: kennel.name,
@@ -172,6 +181,24 @@ export default async function EditarCanilPage({ params }: { params: Promise<{ id
                 ))}
               </ul>
             )}
+          </section>
+
+          <section id="depoimentos" className="border-border flex flex-col gap-4 border-t pt-6">
+            <div className="flex flex-col gap-1">
+              <h2 className="font-display text-base font-semibold">Depoimentos</h2>
+              <p className="text-fg-muted text-sm">
+                Conteúdo que você escreve, não avaliação verificada pela OrigemX. A
+                responsabilidade pelo que é publicado aqui é sua.
+              </p>
+            </div>
+
+            <TestimonialSection
+              kennelId={kennel.id}
+              testimonials={testimonials}
+              dogs={kennelDogs}
+              avatars={avatars}
+              ownerId={user.id}
+            />
           </section>
         </div>
 

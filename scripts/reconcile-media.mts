@@ -44,6 +44,7 @@ type Row = {
   kennel_id: string | null;
   dog_id: string | null;
   litter_id: string | null;
+  testimonial_id: string | null;
 };
 
 async function objectExists(bucket: string, path: string): Promise<boolean> {
@@ -61,7 +62,7 @@ async function main() {
 
   const { data: rows, error } = await admin
     .from("media")
-    .select("id, bucket_id, storage_path, thumb_path, kennel_id, dog_id, litter_id")
+    .select("id, bucket_id, storage_path, thumb_path, kennel_id, dog_id, litter_id, testimonial_id")
     .is("deleted_at", null);
 
   if (error || !rows) {
@@ -74,8 +75,9 @@ async function main() {
   const kennelIds = [...new Set(rows.map((r) => r.kennel_id).filter(Boolean))] as string[];
   const dogIds = [...new Set(rows.map((r) => r.dog_id).filter(Boolean))] as string[];
   const litterIds = [...new Set(rows.map((r) => r.litter_id).filter(Boolean))] as string[];
+  const testimonialIds = [...new Set(rows.map((r) => r.testimonial_id).filter(Boolean))] as string[];
 
-  const [kennels, dogs, litters] = await Promise.all([
+  const [kennels, dogs, litters, testimonials] = await Promise.all([
     kennelIds.length
       ? admin.from("kennels").select("id, published_at, deleted_at").in("id", kennelIds)
       : Promise.resolve({ data: [] }),
@@ -87,6 +89,9 @@ async function main() {
       : Promise.resolve({ data: [] }),
     litterIds.length
       ? admin.from("kennel_litters").select("id, published_at, deleted_at, kennel_id").in("id", litterIds)
+      : Promise.resolve({ data: [] }),
+    testimonialIds.length
+      ? admin.from("testimonials").select("id, published_at, deleted_at, kennel_id").in("id", testimonialIds)
       : Promise.resolve({ data: [] }),
   ]);
 
@@ -115,6 +120,14 @@ async function main() {
       Boolean(l.published_at) && !l.deleted_at && (publishedKennel.get(l.kennel_id) ?? false),
     ]),
   );
+  // Mesma REGRA DUPLA de `litter_id`: o avatar de depoimento só é público se
+  // o DEPOIMENTO e o CANIL dele estiverem publicados.
+  const publishedTestimonial = new Map(
+    (testimonials.data ?? []).map((t) => [
+      t.id,
+      Boolean(t.published_at) && !t.deleted_at && (publishedKennel.get(t.kennel_id) ?? false),
+    ]),
+  );
 
   let ok = 0;
   let corrigidas = 0;
@@ -129,7 +142,9 @@ async function main() {
         ? (publishedDog.get(row.dog_id) ?? false)
         : row.litter_id
           ? (publishedLitter.get(row.litter_id) ?? false)
-          : false;
+          : row.testimonial_id
+            ? (publishedTestimonial.get(row.testimonial_id) ?? false)
+            : false;
 
     const target = isPublished ? BUCKET_PUBLIC : BUCKET_PRIVATE;
     const source = target === BUCKET_PUBLIC ? BUCKET_PRIVATE : BUCKET_PUBLIC;
@@ -158,7 +173,9 @@ async function main() {
       ? `canil ${row.kennel_id}`
       : row.dog_id
         ? `cão ${row.dog_id}`
-        : `ninhada ${row.litter_id}`;
+        : row.litter_id
+          ? `ninhada ${row.litter_id}`
+          : `depoimento ${row.testimonial_id}`;
 
     // ÓRFÃ: a linha existe, o arquivo não está em bucket nenhum. Mover é
     // impossível e tentar só geraria erro. Só relata — apagar metadata é

@@ -84,6 +84,22 @@ export async function parentPublishState(
     };
   }
 
+  if (role === "testimonial_avatar") {
+    // REGRA DUPLA, mesmo molde de litter_gallery: o avatar só é público se o
+    // DEPOIMENTO e o CANIL dele estiverem publicados — ver
+    // `testimonials_select` na migration.
+    const { data } = await supabase
+      .from("testimonials")
+      .select("published_at, kennels(published_at, slug)")
+      .eq("id", entityId)
+      .maybeSingle();
+    const kennel = kennelJoinOf(data?.kennels);
+    return {
+      isPublished: Boolean(data?.published_at) && Boolean(kennel?.published_at),
+      publicPath: kennel?.slug ? `/c/${kennel.slug}` : null,
+    };
+  }
+
   const { data } = await supabase
     .from("dogs")
     .select("published_at, public_id, owner_id, kennel_id")
@@ -166,7 +182,9 @@ export async function registerMedia(
   const height = Number(formData.get("height") ?? 0) || null;
   const alt = String(formData.get("alt") ?? "").trim() || null;
 
-  if (role !== "kennel_logo" && role !== "dog_gallery") return { error: "Tipo de mídia inválido." };
+  if (role !== "kennel_logo" && role !== "dog_gallery" && role !== "testimonial_avatar") {
+    return { error: "Tipo de mídia inválido." };
+  }
   if (!entityId || !storagePath) return { error: "Envio incompleto." };
 
   const supabase = await createClient();
@@ -210,14 +228,15 @@ export async function registerMedia(
     }
   }
 
-  // Logo é 1:1. O antigo sai antes do novo entrar, senão o índice único
-  // parcial recusa a inserção.
-  if (role === "kennel_logo") {
+  // Logo e avatar são 1:1. O antigo sai antes do novo entrar, senão o índice
+  // único parcial recusa a inserção.
+  if (role === "kennel_logo" || role === "testimonial_avatar") {
+    const ownerColumn = role === "kennel_logo" ? "kennel_id" : "testimonial_id";
     await supabase
       .from("media")
       .update({ deleted_at: new Date().toISOString() })
-      .eq("kennel_id", entityId)
-      .eq("role", "kennel_logo")
+      .eq(ownerColumn, entityId)
+      .eq("role", role)
       .is("deleted_at", null);
   }
 
@@ -229,6 +248,7 @@ export async function registerMedia(
       thumb_path: thumbPath,
       kennel_id: role === "kennel_logo" ? entityId : null,
       dog_id: role === "dog_gallery" ? entityId : null,
+      testimonial_id: role === "testimonial_avatar" ? entityId : null,
       role,
       mime: full.mime,
       size_bytes: full.size,
@@ -292,6 +312,15 @@ export async function registerMedia(
   if (role === "kennel_logo") {
     revalidatePath(`/painel/canis/${entityId}`);
     revalidatePath("/painel/canis");
+  } else if (role === "testimonial_avatar") {
+    // `entityId` aqui é o id do DEPOIMENTO, não do canil — mesma pegadinha
+    // que `litter_id` já tem em `deleteMedia`, abaixo.
+    const { data: testimonial } = await supabase
+      .from("testimonials")
+      .select("kennel_id")
+      .eq("id", entityId)
+      .maybeSingle();
+    if (testimonial?.kennel_id) revalidatePath(`/painel/canis/${testimonial.kennel_id}`);
   } else {
     revalidatePath(`/painel/caes/${entityId}`);
   }
@@ -315,7 +344,7 @@ export async function deleteMedia(formData: FormData): Promise<void> {
 
   const { data } = await supabase
     .from("media")
-    .select("id, bucket_id, storage_path, thumb_path, kennel_id, dog_id, litter_id")
+    .select("id, bucket_id, storage_path, thumb_path, kennel_id, dog_id, litter_id, testimonial_id")
     .eq("id", id)
     .eq("owner_id", user.id)
     .is("deleted_at", null)
@@ -369,6 +398,18 @@ export async function deleteMedia(formData: FormData): Promise<void> {
     }
   }
 
+  // Mesma pegadinha do `litter_id` acima: o avatar de depoimento não carrega
+  // `kennel_id` na própria linha de `media`.
+  if (data.testimonial_id) {
+    const { data: testimonial } = await supabase
+      .from("testimonials")
+      .select("kennel_id")
+      .eq("id", data.testimonial_id)
+      .maybeSingle();
+
+    if (testimonial?.kennel_id) revalidatePath(`/painel/canis/${testimonial.kennel_id}`);
+  }
+
   // Sem isto, remover o logo/foto de uma entidade JÁ PUBLICADA some no painel
   // mas o perfil público continua com a versão antiga até o ISR de 300s vencer
   // sozinho — a mesma classe de bug que `registerMedia` já trata do lado do
@@ -381,8 +422,10 @@ export async function deleteMedia(formData: FormData): Promise<void> {
       ? "dog_gallery"
       : data.litter_id
         ? "litter_gallery"
-        : null;
-  const entityId = data.kennel_id ?? data.dog_id ?? data.litter_id;
+        : data.testimonial_id
+          ? "testimonial_avatar"
+          : null;
+  const entityId = data.kennel_id ?? data.dog_id ?? data.litter_id ?? data.testimonial_id;
   if (role && entityId) {
     const parent = await parentPublishState(supabase, role, entityId);
     if (parent.isPublished && parent.publicPath) {

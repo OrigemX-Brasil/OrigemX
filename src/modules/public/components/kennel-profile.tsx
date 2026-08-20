@@ -14,9 +14,11 @@ import {
   getPublicKennelBySlug,
   getPublicLitters,
   getPublicMedia,
+  getPublicTestimonials,
   listPublicDogsOfKennel,
 } from "@/modules/public/queries";
 import { KennelSearch } from "@/modules/search/components/kennel-search";
+import { TestimonialCard } from "@/modules/testimonials/components/testimonial-card";
 
 /**
  * ============================================================================
@@ -39,13 +41,16 @@ export async function KennelProfile({ slug, cursor }: { slug: string; cursor?: s
   const kennel = await getPublicKennelBySlug(slug);
   if (!kennel) notFound();
 
-  const [media, dogs, litters] = await Promise.all([
+  const [media, dogs, litters, testimonials] = await Promise.all([
     getPublicMedia({ kennelId: kennel.id }),
     listPublicDogsOfKennel(kennel.id, { cursor }),
     // Só na primeira página: a lista de ninhadas não pagina, então repeti-la
     // em `/c/[slug]/p/[cursor]` seria a mesma seção mostrada de novo debaixo
     // de uma página de CÃES diferente — informação repetida, não nova.
     cursor ? Promise.resolve([]) : getPublicLitters(kennel.id),
+    // Mesmo raciocínio: depoimento não é filtrado por cursor de cão, repeti-lo
+    // numa página seguinte mostraria a mesma vitrine debaixo de outros cães.
+    cursor ? Promise.resolve([]) : getPublicTestimonials(kennel.id),
   ]);
 
   // Cursor apontando para o nada devolve lista vazia. Na primeira página isso é
@@ -299,6 +304,19 @@ export async function KennelProfile({ slug, cursor }: { slug: string; cursor?: s
                       </li>
                     );
                   })}
+                </ul>
+              </section>
+            ) : null}
+
+            {/* Mesmo padrão de ausência completa de "Ninhadas disponíveis":
+                depoimento é conteúdo opcional, muitos canis nunca terão um. */}
+            {testimonials.length > 0 ? (
+              <section className="border-border flex flex-col gap-4 border-t pt-8">
+                <h2 className="font-display text-lg font-semibold tracking-tight">Depoimentos</h2>
+                <ul className="flex flex-col gap-3 xl:grid xl:grid-cols-3 xl:gap-4">
+                  {testimonials.map((testimonial) => (
+                    <TestimonialCard key={testimonial.id} testimonial={testimonial} />
+                  ))}
                 </ul>
               </section>
             ) : null}

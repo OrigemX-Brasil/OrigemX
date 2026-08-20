@@ -223,4 +223,45 @@ export async function litterMediaRowsForKennel(
   return (data ?? []) as MediaLocationRow[];
 }
 
+/** Mídia de UM depoimento (o avatar). Usada por `publishTestimonial`/`unpublishTestimonial`. */
+export async function testimonialMediaRows(client: Client, testimonialId: string) {
+  const { data } = await client
+    .from("media")
+    .select("id, bucket_id, storage_path, thumb_path")
+    .eq("testimonial_id", testimonialId)
+    .is("deleted_at", null);
+  return (data ?? []) as MediaLocationRow[];
+}
+
+/**
+ * Mídia de TODOS os depoimentos de um canil — o lado do cascade que
+ * `publishKennel`/`unpublishKennel` precisam. Mesmo raciocínio de
+ * `litterMediaRowsForKennel`: ao PUBLICAR o canil, só o avatar de depoimento
+ * JÁ publicado vai ao público (um depoimento em rascunho continua invisível
+ * pela regra dupla); ao DESPUBLICAR, a chamada omite o filtro.
+ */
+export async function testimonialMediaRowsForKennel(
+  client: Client,
+  kennelId: string,
+  options?: { onlyPublished?: boolean },
+) {
+  let testimonialsQuery = client
+    .from("testimonials")
+    .select("id")
+    .eq("kennel_id", kennelId)
+    .is("deleted_at", null);
+  if (options?.onlyPublished) testimonialsQuery = testimonialsQuery.not("published_at", "is", null);
+
+  const { data: testimonials } = await testimonialsQuery;
+  const testimonialIds = (testimonials ?? []).map((t) => t.id);
+  if (testimonialIds.length === 0) return [] as MediaLocationRow[];
+
+  const { data } = await client
+    .from("media")
+    .select("id, bucket_id, storage_path, thumb_path")
+    .in("testimonial_id", testimonialIds)
+    .is("deleted_at", null);
+  return (data ?? []) as MediaLocationRow[];
+}
+
 export { targetBucketFor };

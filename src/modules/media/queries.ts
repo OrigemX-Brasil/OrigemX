@@ -14,7 +14,7 @@ export type SupabaseClientLike = SupabaseClient<Database>;
 /** Acesso a dados de mídia. Todo `.from("media")` do app passa por aqui. */
 
 const COLUMNS =
-  "id, bucket_id, storage_path, thumb_path, kennel_id, dog_id, litter_id, role, mime, size_bytes, width, height, thumb_bytes, alt, caption, position, owner_id, created_at";
+  "id, bucket_id, storage_path, thumb_path, kennel_id, dog_id, litter_id, testimonial_id, role, mime, size_bytes, width, height, thumb_bytes, alt, caption, position, owner_id, created_at";
 
 export type MediaItem = {
   id: string;
@@ -24,6 +24,7 @@ export type MediaItem = {
   kennel_id: string | null;
   dog_id: string | null;
   litter_id: string | null;
+  testimonial_id: string | null;
   role: string;
   mime: string;
   size_bytes: number;
@@ -125,6 +126,50 @@ export async function getKennelLogo(kennelId: string): Promise<ResolvedMedia | n
   if (!data) return null;
   const [resolved] = await resolveMediaUrls([data as MediaItem]);
   return resolved ?? null;
+}
+
+/** O avatar de um depoimento — 1:1 opcional, mesmo molde de `getKennelLogo`. */
+export async function getTestimonialAvatar(testimonialId: string): Promise<ResolvedMedia | null> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("media")
+    .select(COLUMNS)
+    .eq("testimonial_id", testimonialId)
+    .eq("role", "testimonial_avatar")
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (!data) return null;
+  const [resolved] = await resolveMediaUrls([data as MediaItem]);
+  return resolved ?? null;
+}
+
+/**
+ * O avatar de cada depoimento em `testimonialIds`, em UMA consulta — para a
+ * lista do painel e a seção pública não fazerem N+1. Mesmo molde de
+ * `getLitterCovers`: 1:1, então cada depoimento aparece no máximo uma vez.
+ *
+ * Aceita client externo pelo mesmo motivo do resto do arquivo: a página
+ * pública passa o anônimo.
+ */
+export async function getTestimonialAvatars(
+  testimonialIds: readonly string[],
+  client?: SupabaseClientLike,
+): Promise<Map<string, ResolvedMedia>> {
+  if (testimonialIds.length === 0) return new Map();
+
+  const supabase = client ?? (await createClient());
+  const { data } = await supabase
+    .from("media")
+    .select(COLUMNS)
+    .in("testimonial_id", testimonialIds)
+    .eq("role", "testimonial_avatar")
+    .is("deleted_at", null);
+
+  const resolved = await resolveMediaUrls((data ?? []) as MediaItem[], client);
+  return new Map(
+    resolved.filter((m) => m.testimonial_id).map((m) => [m.testimonial_id as string, m]),
+  );
 }
 
 export async function getDogGallery(dogId: string): Promise<ResolvedMedia[]> {

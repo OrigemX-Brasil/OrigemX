@@ -126,6 +126,24 @@ exame genético do reprodutor (`dog_genetic_tests`).
 Fora, como sempre esteve: prontuário veterinário, histórico clínico, medicação, agenda
 de reforço e qualquer lembrete.
 
+### Depoimentos — conteúdo do criador, não avaliação verificada
+
+Depoimento (`testimonials`) é CONTEÚDO FORNECIDO PELO CRIADOR: ele insere, edita e
+remove os próprios. A OrigemX **não verifica** identidade de quem é citado nem
+veracidade do relato — a responsabilidade pelo que é publicado é do criador, não da
+plataforma. Isso está documentado no `comment on table` da migration e repetido como
+aviso no formulário de cadastro do painel.
+
+Como o depoimento carrega nome (e, opcionalmente, foto) de um terceiro, o formulário de
+ADICIONAR exige confirmação explícita ("confirmo que tenho autorização desta pessoa
+para publicar...") antes de aceitar o envio. Essa confirmação **não é persistida** —
+não existe coluna para isso; é validação de submissão, não dado guardado. Não se
+persiste, em nenhuma hipótese, mais do que nome + texto + nota (1–5, opcional) + avatar
+opcional.
+
+Cada criador tem o próprio conjunto de depoimentos — não existe depoimento global nem
+compartilhado entre canis.
+
 ---
 
 ## Como estas invariantes estão implementadas
@@ -152,6 +170,9 @@ Referência rápida — o banco é quem garante, não a aplicação.
 | URL da ninhada não quebra  | `kennel_litters.public_id` imutável, trigger `kennel_litters_freeze_public_id`  |
 | Exame do pai não é redigitado | `dog_genetic_tests.dog_id` — a ninhada LÊ por `sire_id`/`dam_id`, nunca copia |
 | Saúde/exame público segue o cão | policies delegam a `dogs_select` via `exists`, sem rederivar `dog_is_public` |
+| Depoimento não é avaliação verificada | `comment on table testimonials` + aviso no formulário de cadastro |
+| Depoimento de cão de terceiro é impossível | trigger `testimonials_check_dog_kennel` — `dog_id` precisa pertencer ao mesmo `kennel_id` |
+| LGPD do depoimento não vira dado persistido | checkbox validado em `addTestimonial`, nunca lido em `TestimonialInput`/nunca gravado |
 
 ### Schema
 

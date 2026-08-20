@@ -24,9 +24,11 @@ import {
   getPublicDogVideo,
   getPublicKennelById,
   getPublicMedia,
+  getPublicTestimonialsForDog,
   type PublicDog,
 } from "@/modules/public/queries";
 import { KennelSearch } from "@/modules/search/components/kennel-search";
+import { TestimonialCard } from "@/modules/testimonials/components/testimonial-card";
 import { DogVideo } from "@/modules/video/components/dog-video";
 
 /**
@@ -108,7 +110,7 @@ export default async function CaoPublicoPage({
   // regeneração de ISR, sem nada em troca.
   const anon = createPublicClient();
 
-  const [kennel, media, pedigree, video, health, genetics] = await Promise.all([
+  const [kennel, media, pedigree, video, health, genetics, testimonials] = await Promise.all([
     dog.kennel_id ? getPublicKennelById(dog.kennel_id) : Promise.resolve(null),
     getPublicMedia({ dogId: dog.id }),
     // Uma consulta para a árvore inteira, em paralelo com o resto. Entra no
@@ -125,6 +127,7 @@ export default async function CaoPublicoPage({
     // anônimo enxerga saúde e laudo de cão publicado — e só dele.
     getHealthRecordsByDog([dog.id], anon),
     getGeneticTestsByDog([dog.id], anon),
+    getPublicTestimonialsForDog(dog.id),
   ]);
 
   // Segunda onda, e é inerente: não dá para saber os `dog_id` dos ancestrais
@@ -372,6 +375,20 @@ export default async function CaoPublicoPage({
                       </li>
                     );
                   })}
+                </ul>
+              </section>
+            ) : null}
+
+            {/* Só os depoimentos vinculados a ESTE cão — a vitrine geral do
+                canil fica em `/c/[slug]`. Ausência completa quando não há
+                nenhum, mesmo padrão do vídeo e das fotos acima. */}
+            {testimonials.length > 0 ? (
+              <section className="border-border flex flex-col gap-3 border-t pt-8">
+                <h2 className="font-display text-lg font-semibold tracking-tight">Depoimentos</h2>
+                <ul className="flex flex-col gap-3 xl:grid xl:grid-cols-2 xl:gap-4">
+                  {testimonials.map((testimonial) => (
+                    <TestimonialCard key={testimonial.id} testimonial={testimonial} />
+                  ))}
                 </ul>
               </section>
             ) : null}

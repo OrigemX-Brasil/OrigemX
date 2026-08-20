@@ -11,6 +11,7 @@ import { createPublicClient } from "@/lib/supabase/public";
 import { BUCKET_PUBLIC } from "@/modules/media/constraints";
 import {
   getDogCovers,
+  getTestimonialAvatars,
   resolveMediaUrls,
   type MediaItem,
   type ResolvedMedia,
@@ -225,7 +226,7 @@ export const getPublicRegistrations = cache(async (dogId: string) => {
 });
 
 const MEDIA_COLUMNS =
-  "id, bucket_id, storage_path, thumb_path, kennel_id, dog_id, litter_id, role, mime, size_bytes, width, height, thumb_bytes, alt, caption, position, owner_id, created_at";
+  "id, bucket_id, storage_path, thumb_path, kennel_id, dog_id, litter_id, testimonial_id, role, mime, size_bytes, width, height, thumb_bytes, alt, caption, position, owner_id, created_at";
 
 /**
  * Mídia pública. NUNCA levanta: se falhar, a página renderiza sem imagem.
@@ -319,6 +320,79 @@ export const getPublicLitters = cache(async (kennelId: string): Promise<PublicLi
     return [];
   }
 });
+
+export type PublicTestimonial = {
+  id: string;
+  author_name: string;
+  text: string;
+  rating: number | null;
+  dog_id: string | null;
+  avatar: ResolvedMedia | null;
+};
+
+/**
+ * Depoimentos publicados do canil, TODOS (vinculados a um cão ou não) — a
+ * página do canil é a vitrine geral. SEM filtro explícito de `published_at`:
+ * quem decide é `testimonials_select`, a REGRA DUPLA (o depoimento e o canil
+ * publicados os dois) — mesmo raciocínio de `getPublicLitters`.
+ *
+ * NUNCA LEVANTA, como o resto do arquivo.
+ */
+export const getPublicTestimonials = cache(
+  async (kennelId: string): Promise<PublicTestimonial[]> => {
+    try {
+      const supabase = createPublicClient();
+      const { data } = await supabase
+        .from("testimonials")
+        .select("id, author_name, text, rating, dog_id")
+        .eq("kennel_id", kennelId)
+        .is("deleted_at", null)
+        .order("created_at", { ascending: false })
+        .limit(30);
+
+      const testimonials = data ?? [];
+      if (testimonials.length === 0) return [];
+
+      const avatars = await getTestimonialAvatars(
+        testimonials.map((t) => t.id),
+        supabase,
+      );
+      return testimonials.map((t) => ({ ...t, avatar: avatars.get(t.id) ?? null }));
+    } catch {
+      return [];
+    }
+  },
+);
+
+/**
+ * Depoimentos publicados vinculados a UM cão/filhote específico — a página
+ * dele mostra só os que citam aquele cão, não a vitrine inteira do canil.
+ */
+export const getPublicTestimonialsForDog = cache(
+  async (dogId: string): Promise<PublicTestimonial[]> => {
+    try {
+      const supabase = createPublicClient();
+      const { data } = await supabase
+        .from("testimonials")
+        .select("id, author_name, text, rating, dog_id")
+        .eq("dog_id", dogId)
+        .is("deleted_at", null)
+        .order("created_at", { ascending: false })
+        .limit(30);
+
+      const testimonials = data ?? [];
+      if (testimonials.length === 0) return [];
+
+      const avatars = await getTestimonialAvatars(
+        testimonials.map((t) => t.id),
+        supabase,
+      );
+      return testimonials.map((t) => ({ ...t, avatar: avatars.get(t.id) ?? null }));
+    } catch {
+      return [];
+    }
+  },
+);
 
 /**
  * O vídeo PRONTO do cão, ou `null`.

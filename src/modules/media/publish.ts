@@ -12,6 +12,7 @@ import {
   kennelMediaRows,
   litterMediaRowsForKennel,
   reconcileMediaBucket,
+  testimonialMediaRowsForKennel,
 } from "./sync";
 
 /**
@@ -61,16 +62,21 @@ export async function publishKennel(formData: FormData): Promise<PublishState> {
     .maybeSingle();
   if (!kennel) return { error: "Canil não encontrado." };
 
-  // 1. Move primeiro — o logo do canil E a foto de ninhada que JÁ está
-  // publicada. Ninhada em rascunho continua invisível pela regra dupla
-  // (`kennel_litters_select` exige as duas publicações), então a foto dela
-  // fica no privado até a própria ninhada ser publicada.
-  const [kennelRows, litterRows, litterPublicIds] = await Promise.all([
+  // 1. Move primeiro — o logo do canil, a foto de ninhada JÁ publicada, e o
+  // avatar de depoimento JÁ publicado. Ninhada/depoimento em rascunho
+  // continuam invisíveis pela regra dupla, então o arquivo deles fica no
+  // privado até a própria linha ser publicada.
+  const [kennelRows, litterRows, testimonialRows, litterPublicIds] = await Promise.all([
     kennelMediaRows(supabase, id),
     litterMediaRowsForKennel(supabase, id, { onlyPublished: true }),
+    testimonialMediaRowsForKennel(supabase, id, { onlyPublished: true }),
     publishedLitterPublicIds(supabase, id),
   ]);
-  const sync = await reconcileMediaBucket(supabase, [...kennelRows, ...litterRows], BUCKET_PUBLIC);
+  const sync = await reconcileMediaBucket(
+    supabase,
+    [...kennelRows, ...litterRows, ...testimonialRows],
+    BUCKET_PUBLIC,
+  );
 
   if (sync.failed.length > 0) {
     return {
@@ -134,15 +140,20 @@ export async function unpublishKennel(formData: FormData): Promise<PublishState>
   const litterPublicIds = await publishedLitterPublicIds(supabase, id, { onlyPublished: false });
   for (const publicId of litterPublicIds) revalidatePath(`/n/${publicId}`);
 
-  // 3. Devolve os arquivos ao privado — o logo E TODA foto de TODA ninhada
-  // deste canil, publicada ou não: a regra dupla já esconde a ninhada
-  // inteira assim que o canil sai do ar, então nenhuma foto dela pode
-  // continuar acessível no bucket público.
-  const [kennelRows, litterRows] = await Promise.all([
+  // 3. Devolve os arquivos ao privado — o logo, TODA foto de TODA ninhada e
+  // TODO avatar de TODO depoimento deste canil, publicados ou não: a regra
+  // dupla já esconde tudo assim que o canil sai do ar, então nenhum arquivo
+  // pode continuar acessível no bucket público.
+  const [kennelRows, litterRows, testimonialRows] = await Promise.all([
     kennelMediaRows(supabase, id),
     litterMediaRowsForKennel(supabase, id),
+    testimonialMediaRowsForKennel(supabase, id),
   ]);
-  const sync = await reconcileMediaBucket(supabase, [...kennelRows, ...litterRows], BUCKET_PRIVATE);
+  const sync = await reconcileMediaBucket(
+    supabase,
+    [...kennelRows, ...litterRows, ...testimonialRows],
+    BUCKET_PRIVATE,
+  );
 
   if (sync.failed.length > 0) {
     return {

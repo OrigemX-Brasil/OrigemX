@@ -649,6 +649,7 @@ export type Database = {
           role: string
           size_bytes: number
           storage_path: string
+          testimonial_id: string | null
           thumb_bytes: number | null
           thumb_path: string | null
           updated_at: string
@@ -672,6 +673,7 @@ export type Database = {
           role: string
           size_bytes: number
           storage_path: string
+          testimonial_id?: string | null
           thumb_bytes?: number | null
           thumb_path?: string | null
           updated_at?: string
@@ -695,6 +697,7 @@ export type Database = {
           role?: string
           size_bytes?: number
           storage_path?: string
+          testimonial_id?: string | null
           thumb_bytes?: number | null
           thumb_path?: string | null
           updated_at?: string
@@ -734,6 +737,13 @@ export type Database = {
             columns: ["owner_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_testimonial_id_fkey"
+            columns: ["testimonial_id"]
+            isOneToOne: false
+            referencedRelation: "testimonials"
             referencedColumns: ["id"]
           },
         ]
@@ -782,6 +792,70 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      testimonials: {
+        Row: {
+          author_name: string
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          dog_id: string | null
+          id: string
+          kennel_id: string
+          published_at: string | null
+          rating: number | null
+          text: string
+          updated_at: string
+        }
+        Insert: {
+          author_name: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          dog_id?: string | null
+          id?: string
+          kennel_id: string
+          published_at?: string | null
+          rating?: number | null
+          text: string
+          updated_at?: string
+        }
+        Update: {
+          author_name?: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          dog_id?: string | null
+          id?: string
+          kennel_id?: string
+          published_at?: string | null
+          rating?: number | null
+          text?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "testimonials_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "testimonials_dog_id_fkey"
+            columns: ["dog_id"]
+            isOneToOne: false
+            referencedRelation: "dogs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "testimonials_kennel_id_fkey"
+            columns: ["kennel_id"]
+            isOneToOne: false
+            referencedRelation: "kennels"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
