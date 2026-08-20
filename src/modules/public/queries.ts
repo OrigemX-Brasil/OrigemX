@@ -42,7 +42,7 @@ const KENNEL_PUBLIC_COLUMNS =
   "id, name, slug, city, state, description, website_url, instagram_handle, registration_number, founder_number, whatsapp, published_at";
 
 const DOG_PUBLIC_COLUMNS =
-  "id, public_id, slug, name, sex, born_on, breed, color, coat, titles, weight_kg, withers_height_cm, kennel_id, owner_id, sire_id, dam_id, published_at";
+  "id, public_id, slug, name, sex, born_on, breed, color, coat, titles, weight_kg, withers_height_cm, kennel_id, owner_id, sire_id, dam_id, litter_id, published_at";
 
 export type PublicKennel = {
   id: string;
@@ -76,6 +76,9 @@ export type PublicDog = {
   owner_id: string | null;
   sire_id: string | null;
   dam_id: string | null;
+  /** Ninhada em que nasceu. NULL para todo cão cadastrado fora de ninhada —
+   *  é o que a página do cão usa para saber se há irmãos disponíveis. */
+  litter_id: string | null;
   published_at: string | null;
 };
 
@@ -244,7 +247,15 @@ export const getPublicMedia = cache(
       else if (filter.dogId) query = query.eq("dog_id", filter.dogId).eq("role", "dog_gallery");
       else return [];
 
-      const { data } = await query.order("position", { ascending: true }).limit(20);
+      // Desempate por `created_at`: toda foto de cão nasce em `position = 0`
+      // (só `setDogGalleryCover` escreve outra), então ordenar só por posição
+      // deixava a ordem da galeria pública a cargo do Postgres — podia mudar
+      // entre regenerações do ISR sem nada ter mudado no dado. É a mesma
+      // ordenação que `getDogGallery` já usa no painel.
+      const { data } = await query
+        .order("position", { ascending: true })
+        .order("created_at", { ascending: true })
+        .limit(20);
       if (!data || data.length === 0) return [];
 
       return await resolveMediaUrls(data as MediaItem[], supabase);

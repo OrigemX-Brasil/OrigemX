@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, Sora } from "next/font/google";
 
 import "./globals.css";
@@ -65,6 +65,18 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     images: [DEFAULT_OG_IMAGE.url],
   },
+};
+
+/**
+ * `viewport-fit=cover` existe por UM motivo concreto: sem ele,
+ * `env(safe-area-inset-bottom)` resolve como `0px` no iOS, e o CTA fixo no
+ * rodapé da página do cão ficaria embaixo da barra de gestos do iPhone.
+ *
+ * Não muda mais nada: as páginas não desenham até a borda, e o `<body>` não
+ * tem fundo por trás das áreas seguras que pudesse vazar.
+ */
+export const viewport: Viewport = {
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

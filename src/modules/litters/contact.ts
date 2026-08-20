@@ -1,4 +1,5 @@
 import { isoToBr } from "@/modules/dogs/br-date";
+import { publicLink, whatsappLink } from "@/modules/public/whatsapp";
 
 import { expectedWhelpingDate } from "./gestation";
 
@@ -27,15 +28,6 @@ type LitterContact = {
   /** Base pública, de `siteUrl()` (`modules/public/metadata.ts`). */
   siteUrl: string;
 };
-
-/**
- * Espelha o CHECK `kennels_whatsapp_format`. A validação é repetida aqui de
- * propósito: função pura não deve depender de quem a chama ter lido a
- * migration, e um valor malformado — vindo de um seed manual, de um import
- * futuro, do que for — precisa produzir NENHUM BOTÃO em vez de um `wa.me`
- * quebrado que o visitante clica e não vai a lugar nenhum.
- */
-const DIGITS_ONLY = /^[0-9]{10,15}$/;
 
 /**
  * A mensagem pré-preenchida.
@@ -80,12 +72,6 @@ export function whatsappHref({
   matedOn,
   siteUrl,
 }: LitterContact): string | null {
-  const digits = (phone ?? "").replace(/\D/g, "");
-  if (!DIGITS_ONLY.test(digits)) return null;
-
-  // `replace` da barra final: `new URL().origin` não a tem, mas um
-  // `NEXT_PUBLIC_SITE_URL` digitado com barra produziria `//n/xxx`.
-  const link = `${siteUrl.replace(/\/+$/, "")}/n/${publicId}`;
-
-  return `https://wa.me/${digits}?text=${encodeURIComponent(mensagem(link, bornOn, matedOn))}`;
+  const link = publicLink(siteUrl, `/n/${publicId}`);
+  return whatsappLink({ phone, message: mensagem(link, bornOn, matedOn) });
 }
