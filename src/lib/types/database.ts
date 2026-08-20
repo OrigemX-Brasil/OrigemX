@@ -445,6 +445,57 @@ export type Database = {
           },
         ]
       }
+      kennel_faqs: {
+        Row: {
+          answer: string
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          id: string
+          kennel_id: string
+          position: number
+          question: string
+          updated_at: string
+        }
+        Insert: {
+          answer: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          id?: string
+          kennel_id: string
+          position?: number
+          question: string
+          updated_at?: string
+        }
+        Update: {
+          answer?: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          id?: string
+          kennel_id?: string
+          position?: number
+          question?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kennel_faqs_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kennel_faqs_kennel_id_fkey"
+            columns: ["kennel_id"]
+            isOneToOne: false
+            referencedRelation: "kennels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       kennel_litters: {
         Row: {
           born_on: string | null

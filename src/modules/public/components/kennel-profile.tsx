@@ -5,12 +5,14 @@ import { notFound } from "next/navigation";
 import { BackLink } from "@/components/back-link";
 import { SignupInvite } from "@/modules/capture/components/signup-invite";
 import { isoToBr } from "@/modules/dogs/br-date";
+import { FaqAccordion } from "@/modules/faqs/components/faq-accordion";
 import { FounderBadge } from "@/modules/kennels/components/founder-badge";
 import { previewDescription } from "@/modules/litters/constraints";
 import { expectedWhelpingDate } from "@/modules/litters/gestation";
 import { PhotoTrigger, PublicGallery } from "@/modules/public/components/photo-lightbox";
 import { PublicImage } from "@/modules/public/components/public-image";
 import {
+  getPublicFaqs,
   getPublicKennelBySlug,
   getPublicLitters,
   getPublicMedia,
@@ -41,16 +43,18 @@ export async function KennelProfile({ slug, cursor }: { slug: string; cursor?: s
   const kennel = await getPublicKennelBySlug(slug);
   if (!kennel) notFound();
 
-  const [media, dogs, litters, testimonials] = await Promise.all([
+  const [media, dogs, litters, testimonials, faqs] = await Promise.all([
     getPublicMedia({ kennelId: kennel.id }),
     listPublicDogsOfKennel(kennel.id, { cursor }),
     // Só na primeira página: a lista de ninhadas não pagina, então repeti-la
     // em `/c/[slug]/p/[cursor]` seria a mesma seção mostrada de novo debaixo
     // de uma página de CÃES diferente — informação repetida, não nova.
     cursor ? Promise.resolve([]) : getPublicLitters(kennel.id),
-    // Mesmo raciocínio: depoimento não é filtrado por cursor de cão, repeti-lo
-    // numa página seguinte mostraria a mesma vitrine debaixo de outros cães.
+    // Mesmo raciocínio: depoimento e FAQ não são filtrados por cursor de cão,
+    // repeti-los numa página seguinte mostraria a mesma vitrine debaixo de
+    // outros cães.
     cursor ? Promise.resolve([]) : getPublicTestimonials(kennel.id),
+    cursor ? Promise.resolve([]) : getPublicFaqs(kennel.id),
   ]);
 
   // Cursor apontando para o nada devolve lista vazia. Na primeira página isso é
@@ -318,6 +322,17 @@ export async function KennelProfile({ slug, cursor }: { slug: string; cursor?: s
                     <TestimonialCard key={testimonial.id} testimonial={testimonial} />
                   ))}
                 </ul>
+              </section>
+            ) : null}
+
+            {/* Última seção antes do CTA — responde a última dúvida antes de
+                convidar pro cadastro. Mesmo padrão de ausência completa. */}
+            {faqs.length > 0 ? (
+              <section className="border-border flex flex-col gap-4 border-t pt-8">
+                <h2 className="font-display text-lg font-semibold tracking-tight">
+                  Perguntas frequentes
+                </h2>
+                <FaqAccordion faqs={faqs} />
               </section>
             ) : null}
 

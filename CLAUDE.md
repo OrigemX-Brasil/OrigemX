@@ -173,6 +173,7 @@ Referência rápida — o banco é quem garante, não a aplicação.
 | Depoimento não é avaliação verificada | `comment on table testimonials` + aviso no formulário de cadastro |
 | Depoimento de cão de terceiro é impossível | trigger `testimonials_check_dog_kennel` — `dog_id` precisa pertencer ao mesmo `kennel_id` |
 | LGPD do depoimento não vira dado persistido | checkbox validado em `addTestimonial`, nunca lido em `TestimonialInput`/nunca gravado |
+| FAQ é por canil, sem FAQ global | RLS `kennel_faqs_select` (`owns_kennel`), sem `owner_id` próprio |
 
 ### Schema
 

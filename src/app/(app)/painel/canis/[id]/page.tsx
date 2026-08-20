@@ -6,6 +6,8 @@ import Link from "next/link";
 
 import { BackLink } from "@/components/back-link";
 import { getAuthUser } from "@/modules/auth/queries";
+import { FaqSection } from "@/modules/faqs/components/faq-section";
+import { getKennelFaqs } from "@/modules/faqs/queries";
 import { softDeleteKennel } from "@/modules/kennels/actions";
 import { deleteMedia } from "@/modules/media/actions";
 import { ImageUploader } from "@/modules/media/components/image-uploader";
@@ -38,12 +40,13 @@ export default async function EditarCanilPage({ params }: { params: Promise<{ id
   const kennel = await getManageableKennelById(id, user.id);
   if (!kennel) notFound();
 
-  const [logo, dogCount, litters, testimonials, kennelDogs] = await Promise.all([
+  const [logo, dogCount, litters, testimonials, kennelDogs, faqs] = await Promise.all([
     getKennelLogo(kennel.id),
     countKennelDogs(kennel.id),
     getKennelLitters(kennel.id),
     getKennelTestimonials(kennel.id),
     listKennelDogsForSelect(kennel.id),
+    getKennelFaqs(kennel.id),
   ]);
 
   // Uma consulta em lote para todos os avatares da lista — mesmo princípio
@@ -199,6 +202,17 @@ export default async function EditarCanilPage({ params }: { params: Promise<{ id
               avatars={avatars}
               ownerId={user.id}
             />
+          </section>
+
+          <section id="faq" className="border-border flex flex-col gap-4 border-t pt-6">
+            <div className="flex flex-col gap-1">
+              <h2 className="font-display text-base font-semibold">Perguntas frequentes</h2>
+              <p className="text-fg-muted text-sm">
+                Aparecem na sua página pública como um menu de perguntas e respostas.
+              </p>
+            </div>
+
+            <FaqSection kennelId={kennel.id} faqs={faqs} />
           </section>
         </div>
 

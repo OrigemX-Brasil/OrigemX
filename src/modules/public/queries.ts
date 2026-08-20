@@ -321,6 +321,36 @@ export const getPublicLitters = cache(async (kennelId: string): Promise<PublicLi
   }
 });
 
+export type PublicFaq = {
+  id: string;
+  question: string;
+  answer: string;
+};
+
+/**
+ * Perguntas frequentes do canil, na ordem de exibição. SEM filtro explícito
+ * de "canil publicado": quem decide é `kennel_faqs_select` — mesmo
+ * raciocínio de `getPublicLitters`/`getPublicTestimonials`.
+ *
+ * NUNCA LEVANTA, como o resto do arquivo.
+ */
+export const getPublicFaqs = cache(async (kennelId: string): Promise<PublicFaq[]> => {
+  try {
+    const supabase = createPublicClient();
+    const { data } = await supabase
+      .from("kennel_faqs")
+      .select("id, question, answer")
+      .eq("kennel_id", kennelId)
+      .is("deleted_at", null)
+      .order("position", { ascending: true })
+      .limit(20);
+
+    return data ?? [];
+  } catch {
+    return [];
+  }
+});
+
 export type PublicTestimonial = {
   id: string;
   author_name: string;
