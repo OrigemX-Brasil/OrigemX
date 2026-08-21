@@ -129,7 +129,7 @@ function TestimonialFields({
 
       <div className="flex flex-col gap-1.5">
         <span className="text-fg-muted text-xs font-medium">Nota (opcional)</span>
-        <StarRatingInput defaultValue={defaults?.rating} />
+        <StarRatingInput idPrefix={idPrefix} defaultValue={defaults?.rating} />
         {errors.rating ? (
           <p role="alert" className="text-danger text-xs">
             {errors.rating}

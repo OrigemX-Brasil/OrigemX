@@ -208,3 +208,57 @@ test("excluir é lógico: some do painel e do público, a linha permanece no ban
     .single();
   expect(linha?.deleted_at).not.toBeNull();
 });
+
+/**
+ * ============================================================================
+ * A nota em estrelas — marcar N acende as N primeiras, não só a última.
+ * ============================================================================
+ *
+ * O truque de CSS (`peer-checked:text-data` com os 5 rádios em ordem
+ * inversa no DOM + `flex-row-reverse`) só funciona com `<input>` e `<label>`
+ * como IRMÃOS DIRETOS — é o combinador `~` do CSS, que só atravessa
+ * elementos que compartilham o MESMO pai. Uma versão anterior deste
+ * componente envolvia cada input no PRÓPRIO label (`<label><input/><svg/>
+ * </label>`), o que prendia cada par numa caixa separada e quebrava a
+ * cadeia: só a estrela clicada acendia, nunca as anteriores.
+ *
+ * `waitForTimeout` aqui NÃO é arbitrário — é medido: o label tem
+ * `transition-colors`, e ler `getComputedStyle` no mesmo tick do clique
+ * captura a cor NO MEIO da transição (confirmado batendo o mesmo teste sem
+ * a espera: o valor mudava a cada execução, nunca uma cor estável). 250ms
+ * cobre a transição do projeto com folga.
+ */
+test("marcar N estrelas acende as N primeiras, não só a última", async ({ page, criador, admin }) => {
+  const canil = await criarCanil(admin, criador.id);
+  await page.goto(`/painel/canis/${canil.id}`);
+
+  const secao = page.locator("#depoimentos");
+  const estrela = (n: number) => secao.locator(`label[for="testimonial-nota-${n}"]`);
+
+  async function coresApos(nota: number): Promise<string[]> {
+    await estrela(nota).click();
+    await page.waitForTimeout(250);
+    return Promise.all([1, 2, 3, 4, 5].map((n) => estrela(n).evaluate((el) => getComputedStyle(el).color)));
+  }
+
+  // 3 de 5: as três primeiras (1,2,3) na MESMA cor entre si, as duas
+  // últimas (4,5) na mesma cor entre si, e as duas cores DIFERENTES.
+  const cores3 = await coresApos(3);
+  expect(new Set(cores3.slice(0, 3)).size, "1,2,3 deveriam ter a mesma cor (acesas)").toBe(1);
+  expect(new Set(cores3.slice(3, 5)).size, "4,5 deveriam ter a mesma cor (apagadas)").toBe(1);
+  expect(cores3[0]).not.toBe(cores3[4]);
+
+  // 5 de 5 — o caso exato do relato: as CINCO precisam ficar na MESMA cor,
+  // não só a última.
+  const cores5 = await coresApos(5);
+  expect(new Set(cores5).size, `esperava 1 cor para as 5 estrelas, veio ${JSON.stringify(cores5)}`).toBe(
+    1,
+  );
+
+  // E VOLTAR para 2 confirma que não é um artefato de "sempre acende tudo"
+  // — só as duas primeiras acendem, as três de cima apagam de novo.
+  const cores2 = await coresApos(2);
+  expect(new Set(cores2.slice(0, 2)).size).toBe(1);
+  expect(new Set(cores2.slice(2, 5)).size).toBe(1);
+  expect(cores2[0]).not.toBe(cores2[2]);
+});
