@@ -32,7 +32,14 @@ export function healthKindLabel(kind: string): string {
  * primeira vacina nova e travaria quem não tem como contornar. Ver o cabeçalho
  * da migration.
  */
-export const VACCINE_SUGGESTIONS = ["V8", "V10", "Antirrábica", "Giárdia", "Gripe canina"] as const;
+export const VACCINE_SUGGESTIONS = [
+  "Puppy",
+  "V8",
+  "V10",
+  "Antirrábica",
+  "Giárdia",
+  "Gripe canina",
+] as const;
 
 export const GENETIC_TEST_SUGGESTIONS = [
   "Displasia coxofemoral",

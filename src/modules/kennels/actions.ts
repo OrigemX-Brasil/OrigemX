@@ -160,6 +160,32 @@ export async function updateKennel(
   const values = normalizeKennelInput(input);
 
   const supabase = await createClient();
+
+  // O slug é o que o QR do canil codifica (`/api/qr/kennel/[id]`), mas — ao
+  // contrário de `dogs.public_id`/`kennel_litters.public_id` — não tem
+  // trigger travando a troca. Mesma defesa em profundidade do checkbox de
+  // LGPD em depoimentos: o aviso no formulário é conveniência do client, um
+  // POST direto pula a tela inteira, então confirma de novo aqui. O campo
+  // NUNCA é persistido — não existe coluna para isso.
+  if (values.slug) {
+    const { data: atual } = await supabase
+      .from("kennels")
+      .select("slug")
+      .eq("id", id)
+      .is("deleted_at", null)
+      .maybeSingle();
+
+    const trocouSlug = Boolean(atual) && atual!.slug !== values.slug;
+    if (trocouSlug && formData.get("confirm_slug_change") !== "on") {
+      return {
+        errors: {
+          slug: "Confirme que entende que isso muda o link do canil antes de salvar.",
+        },
+        values: input,
+      };
+    }
+  }
+
   const { data, error } = await supabase
     .from("kennels")
     .update(values)

@@ -93,12 +93,12 @@ function Control({
   );
 }
 
-function Submit({ label }: { label: string }) {
+function Submit({ label, disabled }: { label: string; disabled?: boolean }) {
   const { pending } = useFormStatus();
   return (
     <button
       type="submit"
-      disabled={pending}
+      disabled={pending || disabled}
       className="bg-accent text-fg-on-accent hover:bg-accent-hover rounded-control px-4 py-2.5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60"
     >
       {pending ? "Salvando…" : label}
@@ -122,10 +122,19 @@ export function KennelForm({
 
   const [state, formAction] = useActionState<KennelFormState, FormData>(action, {});
   const [clientErrors, setClientErrors] = useState<FieldErrors>({});
-  const [slug, setSlug] = useState<string>(String(kennel?.slug ?? ""));
+  const slugOriginal = String(kennel?.slug ?? "");
+  const [slug, setSlug] = useState<string>(slugOriginal);
   const [slugTouched, setSlugTouched] = useState(Boolean(kennel?.slug));
+  const [confirmSlugChange, setConfirmSlugChange] = useState(false);
 
   const errors: FieldErrors = { ...clientErrors, ...state.errors };
+
+  /**
+   * SÓ em canil já salvo, e só quando o valor realmente diverge do que está
+   * no banco — criar um canil novo escolhe o endereço pela primeira vez, não
+   * "troca" nada, e não tem QR impresso ainda para quebrar.
+   */
+  const slugChanged = isEdit && slug !== slugOriginal;
 
   /**
    * Sugere o slug a partir do nome — mas só enquanto o dono não mexeu nele.
@@ -186,8 +195,41 @@ export function KennelForm({
         />
       ))}
 
+      {/*
+        O slug do canil é o que o QR Code codifica (`/api/qr/kennel/[id]`
+        lê `kennel.slug`, não um id opaco como o do cão/ninhada) — mas, ao
+        contrário deles, não é travado por trigger. Trocar aqui invalida
+        qualquer QR/link já impresso com o endereço atual, então o aviso é
+        explícito, com confirmação exigida antes de deixar salvar — mesma
+        técnica do checkbox de LGPD em depoimentos: aviso é conveniência do
+        client, a Server Action confirma de novo (`confirm_slug_change`),
+        porque um POST direto pula esta tela inteira.
+      */}
+      {slugChanged ? (
+        <div className="border-warning-subtle bg-warning-subtle rounded-control flex flex-col gap-2 border px-3 py-2.5">
+          <p className="text-fg text-xs">
+            Isso muda o link do seu canil. Qualquer QR Code ou link já impresso com o
+            endereço atual (<span className="font-mono">{slugOriginal}</span>) vai parar de
+            funcionar.
+          </p>
+          <label className="text-fg-faint flex items-start gap-2 text-xs">
+            <input
+              type="checkbox"
+              name="confirm_slug_change"
+              checked={confirmSlugChange}
+              onChange={(e) => setConfirmSlugChange(e.target.checked)}
+              className="mt-0.5"
+            />
+            Entendo que isso muda o link do canil.
+          </label>
+        </div>
+      ) : null}
+
       <div className="flex flex-wrap items-center gap-3">
-        <Submit label={isEdit ? "Salvar alterações" : "Criar canil"} />
+        <Submit
+          label={isEdit ? "Salvar alterações" : "Criar canil"}
+          disabled={slugChanged && !confirmSlugChange}
+        />
         {state.ok ? <FormMessage message="Alterações salvas." /> : null}
       </div>
     </form>
