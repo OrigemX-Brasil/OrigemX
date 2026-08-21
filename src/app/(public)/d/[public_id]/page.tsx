@@ -206,7 +206,13 @@ export default async function CaoPublicoPage({
   // índices se a lista de mídia bruta fosse usada direto.
   const photos = media
     .filter((item): item is typeof item & { url: string } => Boolean(item.url))
-    .map((item) => ({ url: item.url, alt: item.alt ?? dog.name, caption: item.caption }));
+    .map((item) => ({
+      url: item.url,
+      alt: item.alt ?? dog.name,
+      caption: item.caption,
+      width: item.width,
+      height: item.height,
+    }));
   const photoIndex = new Map(
     media.filter((item) => item.url).map((item, i) => [item.id, i] as const),
   );

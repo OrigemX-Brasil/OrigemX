@@ -255,6 +255,8 @@ export default async function NinhadaPublicaPage({
       url: photo.url,
       alt: photo.alt ?? `Foto da ninhada do ${litter.kennel.name}`,
       caption: photo.caption,
+      width: photo.width,
+      height: photo.height,
     }));
 
   // `id` → posição em `photos`. Uma foto sem URL no meio do caminho deslocaria

@@ -1,5 +1,5 @@
 import { criarCanil, criarCao, expect, publicar, test } from "./support/fixtures";
-import { MIME, pngDeTeste } from "./support/imagem";
+import { MIME, pngDeTeste, pngRetratoDeTeste } from "./support/imagem";
 
 /**
  * ============================================================================
@@ -1194,4 +1194,180 @@ test("og:image da ninhada é a foto de capa, com as dimensões reais", async ({
   await expect(publica.locator('meta[property="og:image:height"]')).toHaveCount(0);
 
   await semSessao.close();
+});
+
+/**
+ * ============================================================================
+ * A legenda no visualizador de foto em tela cheia (mobile) — ninhada E cão.
+ * ============================================================================
+ *
+ * Duas fotos com legenda voltavam presas em lugares ruins:
+ *
+ *   - a DESCRIÇÃO da ninhada ficava colada no topo do diálogo, acima da
+ *     foto — o mesmo componente (`PublicGallery`) é usado pela ninhada e por
+ *     todo cão/filhote, então "legenda no topo" era um bug de layout
+ *     compartilhado, não algo específico da ninhada;
+ *   - a LEGENDA de cada foto já vinha depois da imagem no HTML, mas com foto
+ *     mais larga que alta (comum: capa em paisagem) sobrava um vão vazio
+ *     enorme entre as duas — a faixa da foto absorvia todo o espaço livre do
+ *     diálogo e centralizava a imagem DENTRO dele.
+ *
+ * A correção trocou o piso fixo (`min-h-[40dvh]`) por reservar a PROPORÇÃO
+ * REAL da foto (mesma técnica do mosaico do cão) — e isso por pouco não
+ * criou uma distorção nova: `width`/`height` como atributo do `<img>` deixam
+ * de ser 'auto' no CSS, e com `max-width` e `max-height` batendo ao mesmo
+ * tempo (foto retrato) cada eixo cortava independente, esticando a imagem.
+ * O teste mede a CAIXA renderizada, não só a posição — é o que pegaria a
+ * distorção se ela voltasse.
+ */
+test("lightbox: legenda colada à foto, sem distorcer proporção retrato", async ({
+  page,
+  criador,
+  admin,
+}) => {
+  const canil = await criarCanil(admin, criador.id);
+
+  const fotoPaisagem = await pngDeTeste("ninhada paisagem", 900); // pngDeTeste é quadrada; serve de placeholder de conteúdo
+  const fotoRetrato = pngRetratoDeTeste(600, 1000);
+
+  // --- ninhada: descrição (da ninhada) + legenda (da foto), foto em RETRATO ---
+  const { data: ninhada } = await admin
+    .from("kennel_litters")
+    .insert({
+      kennel_id: canil.id,
+      created_by: criador.id,
+      description: "Descrição da ninhada, contexto de todas as fotos.",
+      published_at: new Date().toISOString(),
+    })
+    .select("id, public_id")
+    .single();
+
+  const caminhoNinhada = `${criador.id}/litter/${ninhada!.id}/capa.png`;
+  const upNinhada = await admin.storage
+    .from("kennel-media-public")
+    .upload(caminhoNinhada, fotoRetrato, { contentType: "image/png" });
+  expect(upNinhada.error, `upload da capa: ${upNinhada.error?.message}`).toBeNull();
+
+  await admin.from("media").insert({
+    bucket_id: "kennel-media-public",
+    storage_path: caminhoNinhada,
+    litter_id: ninhada!.id,
+    role: "litter_gallery",
+    mime: "image/png",
+    size_bytes: fotoRetrato.byteLength,
+    width: 600,
+    height: 1000,
+    position: 1,
+    caption: "Legenda desta foto da ninhada.",
+    owner_id: criador.id,
+    created_by: criador.id,
+  });
+
+  // --- filhote: só legenda (a página do cão não tem bloco de descrição) ---
+  const cao = await criarCao(admin, criador.id, { name: "Filhote Legenda", kennel_id: canil.id });
+  const caminhoCao = `${criador.id}/dog/${cao.id}/capa.png`;
+  const upCao = await admin.storage
+    .from("kennel-media-public")
+    .upload(caminhoCao, fotoPaisagem, { contentType: MIME });
+  expect(upCao.error, `upload do filhote: ${upCao.error?.message}`).toBeNull();
+
+  await admin.from("media").insert({
+    bucket_id: "kennel-media-public",
+    storage_path: caminhoCao,
+    dog_id: cao.id,
+    role: "dog_gallery",
+    mime: MIME,
+    size_bytes: fotoPaisagem.byteLength,
+    width: 900,
+    height: 900,
+    position: 0,
+    caption: "Legenda desta foto do filhote.",
+    owner_id: criador.id,
+    created_by: criador.id,
+  });
+
+  await publicar(admin, { kennelId: canil.id, dogIds: [cao.id] });
+
+  async function abrirEExpandirPrimeiraFoto(destino: string) {
+    const semSessao = await page.context().browser()!.newContext();
+    const aberta = await semSessao.newPage();
+    await aberta.goto(destino);
+    await aberta
+      .getByRole("button", { name: /Ampliar foto/ })
+      .first()
+      .click();
+    const img = aberta.locator("dialog img");
+    await img.waitFor({ state: "attached" });
+    // Espera o carregamento de verdade — antes disso `naturalWidth` é 0 e a
+    // caixa medida não reflete a foto real.
+    await img.evaluate(
+      (el) =>
+        new Promise<void>((resolve) => {
+          const image = el as HTMLImageElement;
+          if (image.complete && image.naturalWidth > 0) return resolve();
+          image.addEventListener("load", () => resolve(), { once: true });
+        }),
+    );
+    return { pagina: aberta, contexto: semSessao, img };
+  }
+
+  // --- ninhada ---
+  const { pagina: ninhadaAberta, contexto: ctxNinhada, img: imgNinhada } =
+    await abrirEExpandirPrimeiraFoto(`/n/${ninhada!.public_id}`);
+
+  // A proporção NÃO pode distorcer: 600×1000 é 0,6 de razão largura/altura.
+  const caixaFoto = (await imgNinhada.boundingBox())!;
+  const razaoReal = 600 / 1000;
+  const razaoRenderizada = caixaFoto.width / caixaFoto.height;
+  expect(
+    Math.abs(razaoRenderizada - razaoReal),
+    `proporção distorcida: caixa ${caixaFoto.width.toFixed(0)}×${caixaFoto.height.toFixed(0)}, razão ${razaoRenderizada.toFixed(3)} (esperado ${razaoReal.toFixed(3)})`,
+  ).toBeLessThan(0.02);
+
+  // NADA de texto ACIMA da foto quando ela existe — nem a descrição da
+  // ninhada, que antes ficava presa no topo do diálogo.
+  //
+  // Escopado ao `dialog`: a MESMA frase também aparece no corpo da página
+  // (fora do lightbox, como texto solto logo abaixo da barra de resumo), e
+  // sem o escopo o seletor casaria com as duas.
+  const descricao = ninhadaAberta
+    .locator("dialog")
+    .getByText("Descrição da ninhada, contexto de todas as fotos.");
+  const caixaDescricao = (await descricao.boundingBox())!;
+  expect(
+    caixaDescricao.y,
+    "a descrição não pode aparecer acima da foto",
+  ).toBeGreaterThanOrEqual(caixaFoto.y + caixaFoto.height);
+
+  // E colada — não presa lá embaixo com um vão vazio no meio. `< 80` cobre a
+  // legenda mais a descrição mais o espaçamento entre elas; o defeito
+  // original abria um vão de ~160px só até o PRIMEIRO texto.
+  expect(
+    caixaDescricao.y - (caixaFoto.y + caixaFoto.height),
+    "vão entre a foto e o texto voltou a aparecer",
+  ).toBeLessThan(80);
+
+  const legendaNinhada = ninhadaAberta.getByText("Legenda desta foto da ninhada.");
+  await expect(legendaNinhada).toBeVisible();
+  const caixaLegenda = (await legendaNinhada.boundingBox())!;
+  // A legenda vem DEPOIS da descrição (descrição é contexto geral, legenda é
+  // específica desta foto — a ordem de leitura importa).
+  expect(caixaLegenda.y).toBeGreaterThan(caixaDescricao.y);
+
+  await ctxNinhada.close();
+
+  // --- filhote: mesmo componente, sem descrição — só a legenda precisa
+  // colar na foto. ---
+  const { pagina: caoAberta, contexto: ctxCao, img: imgCao } = await abrirEExpandirPrimeiraFoto(
+    `/d/${cao.public_id}`,
+  );
+  const caixaFotoCao = (await imgCao.boundingBox())!;
+  const legendaCao = caoAberta.getByText("Legenda desta foto do filhote.");
+  const caixaLegendaCao = (await legendaCao.boundingBox())!;
+  expect(
+    caixaLegendaCao.y - (caixaFotoCao.y + caixaFotoCao.height),
+    "vão entre a foto do filhote e a legenda",
+  ).toBeLessThan(80);
+
+  await ctxCao.close();
 });
