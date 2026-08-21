@@ -5,17 +5,17 @@ import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { isoToBr } from "@/modules/dogs/br-date";
+import { TrustBadges } from "@/modules/dogs/components/trust-badges";
+import { FaqAccordion } from "@/modules/faqs/components/faq-accordion";
 import { GeneticList } from "@/modules/health/components/genetic-list";
 import {
   getGeneticTestsByDog,
   getHealthRecordsByDog,
   type GeneticTest,
 } from "@/modules/health/queries";
-import {
-  DogHealthSummary,
-  LitterHealthSummary,
-} from "@/modules/health/components/health-summary";
+import { DogHealthSummary, LitterHealthSummary } from "@/modules/health/components/health-summary";
 import { latestByKind, litterHealthCoverage } from "@/modules/health/summary";
+import { countAvailableBySex, describeAvailability } from "@/modules/litters/availability";
 import { whatsappHref } from "@/modules/litters/contact";
 import { expectedWhelpingDate } from "@/modules/litters/gestation";
 import { litterStatusLabel } from "@/modules/litters/constraints";
@@ -23,10 +23,13 @@ import { PedigreeTree } from "@/modules/pedigree/components/pedigree-tree";
 import { MAX_PHOTO_GENERATION } from "@/modules/pedigree/layout";
 import { getPedigree } from "@/modules/pedigree/queries";
 import { thumbnailTargets } from "@/modules/pedigree/tree";
+import { BrandX } from "@/modules/public/components/brand-x";
+import { PhotoTrigger, PublicGallery } from "@/modules/public/components/photo-lightbox";
 import { PublicImage } from "@/modules/public/components/public-image";
 import { excerpt, publicMetadata, siteUrl } from "@/modules/public/metadata";
 import {
   getPublicDogThumbs,
+  getPublicFaqs,
   getPublicLitterByPublicId,
   getPublicLitterParents,
   getPublicLitterPuppies,
@@ -125,12 +128,17 @@ export default async function NinhadaPublicaPage({
   // `dog_id` do reprodutor, e esta página só LÊ por sire_id/dam_id. Cadastrar
   // no perfil do pai basta para aparecer em toda ninhada dele.
   const supabase = createPublicClient();
-  const [genetics, health] = await Promise.all([
+  const [genetics, health, faqs] = await Promise.all([
     getGeneticTestsByDog([litter.sire_id, litter.dam_id], supabase),
     getHealthRecordsByDog(
       puppies.map((p) => p.id),
       supabase,
     ),
+    // O FAQ é do CANIL, não da ninhada — mesma fonte de `/c/[slug]`. Quem
+    // chega pela ninhada tem as mesmas dúvidas de quem chega pelo canil
+    // ("como funciona a entrega?", "qual a garantia?"), e mandá-lo a outra
+    // página para lê-las custaria a visita.
+    getPublicFaqs(litter.kennel.id),
   ]);
 
   /**
@@ -178,6 +186,57 @@ export default async function NinhadaPublicaPage({
     health,
   );
 
+  // "Restam 2 machos e 1 fêmea" — CONTADO do `litter_status` dos filhotes
+  // publicados, nunca digitado. `null` quando não sobrou nenhum, e aí a seção
+  // não existe: "restam 0" é a frase que faz o visitante fechar a página.
+  //
+  // Note que isto é DIFERENTE dos totais da barra de resumo acima (machos e
+  // fêmeas da ninhada INTEIRA, vendidos inclusive) — são duas leituras
+  // legítimas, e a barra continua respondendo "como foi a ninhada".
+  const disponibilidade = countAvailableBySex(puppies);
+  const disponiveis = describeAvailability(disponibilidade);
+  const totalDisponiveis = disponibilidade.males + disponibilidade.females;
+
+  /**
+   * A raça sai dos PROGENITORES, não dos filhotes.
+   *
+   * `dogs.breed` é texto livre e opcional em todo cão, e o filhote recém-
+   * cadastrado costuma nascer sem ele — o criador preenche o reprodutor com
+   * cuidado e despacha os filhotes. Perguntar primeiro à mãe, depois ao pai e
+   * só então ao primeiro filhote é a ordem que mais frequentemente acha um
+   * valor. Sem nenhum, a linha não é renderizada.
+   */
+  const raca = dam?.breed ?? sire?.breed ?? puppies.find((p) => p.breed)?.breed ?? null;
+
+  /**
+   * O selo de vacina só sai com cobertura COMPLETA.
+   *
+   * É a mesma regra da honestidade que `LitterHealthSummary` já aplica logo
+   * abaixo: numa ninhada de seis com um vacinado, um selo dizendo "Vacina em
+   * 20/09" afirmaria da NINHADA o que é verdade de um filhote só. Cobertura
+   * parcial continua aparecendo — com o número real ("Vacina: 1 de 6
+   * filhotes"), na seção de saúde, que é onde cabe a nuance.
+   */
+  const vacinaCompleta =
+    healthCoverage.find((c) => c.kind === "vaccine" && c.complete)?.applied_on ?? null;
+
+  // Só fotos com URL resolvida entram no lightbox — clicar num placeholder sem
+  // imagem não abriria nada. Mesmo filtro de `/d/[public_id]`.
+  const photos = litter.photos
+    .filter((photo): photo is typeof photo & { url: string } => Boolean(photo.url))
+    .map((photo) => ({
+      url: photo.url,
+      alt: photo.alt ?? `Foto da ninhada do ${litter.kennel.name}`,
+      caption: photo.caption,
+    }));
+
+  // `id` → posição em `photos`. Uma foto sem URL no meio do caminho deslocaria
+  // os índices se a lista bruta fosse usada direto — mesmo cuidado de
+  // `/d/[public_id]`.
+  const photoIndex = new Map(
+    litter.photos.filter((photo) => photo.url).map((photo, i) => [photo.id, i] as const),
+  );
+
   // Sem telefone cadastrado, `whatsappHref` devolve null e o CTA simplesmente
   // não existe — SEM fallback para Instagram ou site. Um botão escrito "Tenho
   // interesse NESTA ninhada" que abre um perfil genérico promete uma coisa e
@@ -212,60 +271,112 @@ export default async function NinhadaPublicaPage({
       </header>
 
       <main className="mx-auto w-full max-w-2xl flex-1 px-5 py-8 lg:px-8 xl:max-w-6xl">
-        <div className="flex flex-col gap-8">
-          <div className="flex flex-col gap-2">
-            <Link
-              href={`/c/${litter.kennel.slug}`}
-              prefetch={false}
-              className="text-link hover:text-link-hover focus-visible:outline-ring w-fit text-sm transition-colors focus-visible:outline-2"
-            >
-              {litter.kennel.name}
-            </Link>
-            <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">
-              Ninhada
-            </h1>
-          </div>
+        {/* `description`: o prop existe desde sempre PARA a ninhada (ver o doc
+            dele em `photo-lightbox.tsx`) e nunca teve quem o passasse — a
+            ficha da ninhada é o texto inteiro, não uma legenda presa a uma
+            foto. */}
+        <PublicGallery photos={photos} description={litter.description}>
+          <div className="flex flex-col gap-8">
+            <div className="flex flex-col gap-2">
+              <Link
+                href={`/c/${litter.kennel.slug}`}
+                prefetch={false}
+                className="text-link hover:text-link-hover focus-visible:outline-ring w-fit text-sm transition-colors focus-visible:outline-2"
+              >
+                {litter.kennel.name}
+              </Link>
 
-          {sire || dam ? (
-            <section className="border-border bg-surface rounded-card flex flex-col gap-5 border p-5">
-              <h2 className="text-fg-faint text-xs font-medium tracking-widest uppercase">
-                Progenitores
-              </h2>
+              {/*
+                O TÍTULO CARREGA A DATA, e não é enfeite: `kennel_litters` não
+                tem coluna de nome (ver `litters/contact.ts`), então "Ninhada"
+                sozinho não distingue esta das outras três do mesmo canil para
+                quem recebeu o link no WhatsApp. A mesma escolha entre
+                nascimento e previsão que a mensagem do CTA já faz.
+              */}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">
+                  {litter.born_on
+                    ? `Ninhada de ${isoToBr(litter.born_on)}`
+                    : previsao
+                      ? `Ninhada prevista para ${isoToBr(previsao)}`
+                      : "Ninhada"}
+                </h1>
 
-              {/* `max-w-3xl` e centralizado: sem o teto, numa faixa `xl` de
-                  ~1200px as duas fotos 4:3 viravam dois painéis gigantes e
-                  empurravam o resto da página para baixo da dobra. O par de
-                  progenitores é a abertura, não o conteúdo inteiro. */}
-              <div className="mx-auto grid w-full max-w-3xl grid-cols-[1fr_auto_1fr] items-start gap-3 sm:gap-6">
-                <ParentCard parent={dam} fallback="Mãe não informada" />
+                {/* A pílula responde "tem algo pra mim aqui?" antes da dobra;
+                    o detalhamento por sexo fica na faixa abaixo. Some quando
+                    não sobrou nenhum — "0 disponíveis" é a frase que faz o
+                    visitante fechar a página, e o status de cada filhote
+                    continua visível card a card. */}
+                {totalDisponiveis > 0 ? (
+                  <span className="border-success/40 bg-success-subtle text-success rounded-control inline-flex shrink-0 items-center gap-1.5 border px-2.5 py-1 text-xs font-medium">
+                    <span aria-hidden="true" className="bg-success size-1.5 rounded-full" />
+                    {totalDisponiveis} {totalDisponiveis === 1 ? "disponível" : "disponíveis"}
+                  </span>
+                ) : null}
+              </div>
+
+              {raca ? <p className="text-fg-muted text-sm">{raca}</p> : null}
+
+              {/* Cada selo só existe se o DADO existir — ver o cabeçalho de
+                  `trust-badges.tsx`, que também explica por que NÃO há
+                  "Criador Verificado" nem "vacinas em dia". */}
+              <TrustBadges
+                founderNumber={litter.kennel.founder_number}
+                vaccineDate={vacinaCompleta}
+                geneticTestCount={
+                  (genetics.get(litter.sire_id ?? "") ?? []).length +
+                  (genetics.get(litter.dam_id ?? "") ?? []).length
+                }
+                knownAncestors={litterPedigree?.knownAncestors ?? 0}
+              />
+            </div>
+
+            {sire || dam ? (
+              <section className="border-border bg-surface rounded-card flex flex-col gap-5 border p-5">
+                <h2 className="font-display text-lg font-semibold tracking-tight">Progenitores</h2>
 
                 {/*
+                DUAS LINHAS DE GRID, e é isso que centraliza o X.
+
+                `max-w-3xl` e centralizado: sem o teto, numa faixa `xl` de
+                ~1200px as duas fotos 4:3 viravam dois painéis gigantes e
+                empurravam o resto da página para baixo da dobra. O par de
+                progenitores é a abertura, não o conteúdo inteiro.
+
+                As linhas são [FOTO, NOME+SEXO]: cada `ParentCard` é
+                `row-span-2 grid-rows-subgrid`, então as duas fotos dividem a
+                linha 1 e os dois nomes a linha 2 — as fotos alinham entre si
+                mesmo com nomes de comprimentos diferentes. E o X, sendo
+                `row-start-1 self-center`, centraliza na LINHA DAS FOTOS.
+
+                Antes ele era `self-center` num grid de linha única, o que o
+                centralizava na altura do CARD INTEIRO (foto + nome + chip) e o
+                deixava visivelmente abaixo do meio das fotos.
+              */}
+                <div className="mx-auto grid w-full max-w-3xl grid-cols-[1fr_auto_1fr] grid-rows-[auto_auto] items-start gap-3 sm:gap-6">
+                  <ParentCard parent={dam} fallback="Mãe não informada" />
+
+                  {/*
                   O ELEMENTO-ASSINATURA DA PÁGINA.
 
                   Em pedigree, "×" significa "cruzado com". A marca do produto
                   também é um X. Os dois glifos são o mesmo — então aqui o
-                  símbolo do cruzamento É a marca, pintado com
-                  `text-brand-gradient` (azul→violeta), o utilitário que
-                  `tokens.css` descreve como "o mesmo do X do logo" e que até
-                  agora não tinha uso em lugar nenhum do projeto.
-
-                  `aria-hidden`: quem usa leitor de tela já ouve "Mãe · nome" e
-                  "Pai · nome" nos dois cards; um "×" solto no meio não
-                  acrescentaria nada.
+                  símbolo do cruzamento É a marca, desenhada com a mesma
+                  geometria do favicon (ver `brand-x.tsx`).
                 */}
-                <span
-                  aria-hidden="true"
-                  className="text-brand-gradient font-display self-center text-3xl leading-none font-bold sm:text-5xl"
-                >
-                  ×
-                </span>
+                  {/* `col-start-2` NÃO é decorativo: `row-start-1` sozinho torna
+                    este um item de posição definida, e o algoritmo do grid
+                    posiciona esses ANTES dos automáticos — o X ia parar na
+                    coluna 1 e empurrava mãe e pai para a direita. Fixar a
+                    coluna devolve a ordem mãe · X · pai. */}
+                  <BrandX className="col-start-2 row-start-1 size-9 self-center sm:size-14" />
 
-                <ParentCard parent={sire} fallback="Pai não informado" />
-              </div>
-            </section>
-          ) : null}
+                  <ParentCard parent={sire} fallback="Pai não informado" />
+                </div>
+              </section>
+            ) : null}
 
-          {/*
+            {/*
             Barra de resumo. 2×2 no mobile e 4 colunas a partir de `sm`, com
             divisores entre as células — a referência os usa para separar as
             quatro leituras, e sem eles os números correm juntos.
@@ -274,141 +385,187 @@ export default async function NinhadaPublicaPage({
             digitados: total que discorda das linhas é o pior tipo de bug de
             vitrine.
           */}
-          <section className="border-border bg-surface rounded-card divide-border grid grid-cols-2 divide-x divide-y border sm:grid-cols-4 sm:divide-y-0">
-            <Stat
-              icon={<CalendarIcon />}
-              label={litter.born_on ? "Nascimento" : "Previsão de parto"}
-              value={litter.born_on ? isoToBr(litter.born_on) : previsao ? isoToBr(previsao) : "—"}
-            />
-            <Stat icon={<PawIcon />} label="Filhotes" value={String(puppies.length)} />
-            <Stat icon={<MaleIcon />} label="Machos" value={String(machos)} />
-            <Stat icon={<FemaleIcon />} label="Fêmeas" value={String(femeas)} />
-          </section>
+            <section className="border-border bg-surface rounded-card divide-border grid grid-cols-2 divide-x divide-y border sm:grid-cols-4 sm:divide-y-0">
+              <Stat
+                icon={<CalendarIcon />}
+                label={litter.born_on ? "Nascimento" : "Previsão de parto"}
+                value={
+                  litter.born_on ? isoToBr(litter.born_on) : previsao ? isoToBr(previsao) : "—"
+                }
+              />
+              <Stat icon={<PawIcon />} label="Filhotes" value={String(puppies.length)} />
+              <Stat icon={<MaleIcon />} label="Machos" value={String(machos)} />
+              <Stat icon={<FemaleIcon />} label="Fêmeas" value={String(femeas)} />
+            </section>
 
-      {litter.description ? (
-        <p className="text-fg-muted text-sm whitespace-pre-line">{litter.description}</p>
-      ) : null}
+            {/* Quantos ainda estão disponíveis, DETALHADO por sexo — a pílula do
+          topo dá só o total. Contado do `litter_status`, nunca digitado; some
+          por inteiro quando não sobrou nenhum. */}
+            {disponiveis ? (
+              <section className="border-success/40 bg-success-subtle rounded-card flex items-center gap-3 border px-5 py-4">
+                <span aria-hidden="true" className="text-success shrink-0">
+                  <PawIcon />
+                </span>
+                <p className="text-fg text-sm">
+                  Restam <strong className="font-semibold">{disponiveis}</strong> disponíveis nesta
+                  ninhada.
+                </p>
+              </section>
+            ) : null}
 
-      {litter.photos.length > 0 ? (
-        <section className="flex flex-col gap-3">
-          <h2 className="text-fg-faint text-xs font-medium tracking-widest uppercase">Fotos</h2>
-          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {litter.photos.map((photo) => (
-              <li key={photo.id} className="bg-surface-hover rounded-card overflow-hidden">
-                <PublicImage
-                  src={photo.url}
-                  alt={photo.alt ?? ""}
-                  fallbackText={litter.kennel.name}
-                  width={photo.width ?? 1}
-                  height={photo.height ?? 1}
-                  className="aspect-square w-full object-cover"
-                />
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
+            {litter.description ? (
+              <p className="text-fg-muted text-sm whitespace-pre-line">{litter.description}</p>
+            ) : null}
 
-      {puppies.length > 0 ? (
-        <section className="flex flex-col gap-3">
-          <h2 className="text-fg-faint text-xs font-medium tracking-widest uppercase">Filhotes</h2>
-
-          <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {puppies.map((puppy) => {
-              const status = litterStatusLabel(puppy.litter_status);
-              const preco = formatPrice(puppy.price_brl);
-              const registros = health.get(puppy.id) ?? [];
-
-              return (
-                <li
-                  key={puppy.id}
-                  className="border-border bg-surface rounded-card flex flex-col overflow-hidden border"
-                >
-                  <Link
-                    href={`/d/${puppy.public_id}`}
-                    className="focus-visible:outline-ring flex flex-col focus-visible:outline-2 focus-visible:-outline-offset-2"
-                  >
-                    <div className="bg-surface-hover aspect-[4/3] w-full">
+            {litter.photos.length > 0 ? (
+              <section className="border-border flex flex-col gap-4 border-t pt-8">
+                <h2 className="font-display text-lg font-semibold tracking-tight">Fotos</h2>
+                <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  {litter.photos.map((photo) => {
+                    const imagem = (
                       <PublicImage
-                        src={puppy.cover?.url ?? null}
-                        alt=""
-                        fallbackText={puppy.name}
-                        width={puppy.cover?.width ?? 4}
-                        height={puppy.cover?.height ?? 3}
-                        className="size-full object-cover"
+                        src={photo.url}
+                        alt={photo.alt ?? ""}
+                        fallbackText={litter.kennel.name}
+                        width={photo.width ?? 1}
+                        height={photo.height ?? 1}
+                        className="aspect-square w-full object-cover"
                       />
-                    </div>
+                    );
 
-                    <div className="flex flex-col gap-2 p-3">
-                      <span className="text-fg font-medium">{puppy.name}</span>
-
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="border-border-strong bg-surface-raised text-fg-muted rounded-control inline-flex items-center gap-1 border px-2 py-0.5 text-xs font-medium">
-                          <span aria-hidden="true">{puppy.sex === "female" ? "♀" : "♂"}</span>
-                          {SEX_LABEL[puppy.sex]}
-                        </span>
-                        {puppy.color ? (
-                          <span className="border-border-strong bg-surface-raised text-fg-muted rounded-control border px-2 py-0.5 text-xs">
-                            {puppy.color}
-                          </span>
-                        ) : null}
-                        {status ? (
-                          <span
-                            className={`rounded-control border px-2 py-0.5 text-xs font-medium ${
-                              STATUS_CLS[puppy.litter_status ?? ""] ?? STATUS_CLS.sold
-                            }`}
+                    return (
+                      <li key={photo.id} className="bg-surface-hover rounded-card overflow-hidden">
+                        {/* Só a foto que TEM url resolvida vira gatilho — ampliar um
+                      placeholder sem imagem não abriria nada. */}
+                        {photoIndex.has(photo.id) ? (
+                          <PhotoTrigger
+                            index={photoIndex.get(photo.id)!}
+                            label={`Ampliar foto ${photoIndex.get(photo.id)! + 1} de ${photos.length} da ninhada`}
+                            className="focus-visible:outline-ring block w-full focus-visible:outline-2 focus-visible:-outline-offset-2"
                           >
-                            {status}
-                          </span>
-                        ) : null}
-                        {/* Puramente informativo — sem mecanismo de oferta.
+                            {imagem}
+                          </PhotoTrigger>
+                        ) : (
+                          imagem
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            ) : null}
+
+            {puppies.length > 0 ? (
+              <section className="border-border flex flex-col gap-4 border-t pt-8">
+                <h2 className="font-display text-lg font-semibold tracking-tight">Filhotes</h2>
+
+                <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {puppies.map((puppy) => {
+                    const status = litterStatusLabel(puppy.litter_status);
+                    const preco = formatPrice(puppy.price_brl);
+                    const registros = health.get(puppy.id) ?? [];
+
+                    return (
+                      <li
+                        key={puppy.id}
+                        className="border-border bg-surface rounded-card flex flex-col overflow-hidden border"
+                      >
+                        <Link
+                          href={`/d/${puppy.public_id}`}
+                          className="focus-visible:outline-ring flex flex-col focus-visible:outline-2 focus-visible:-outline-offset-2"
+                        >
+                          {/* O STATUS SOBE PARA A FOTO. Antes ele era o terceiro
+                        chip de uma fileira com sexo e cor, todos do mesmo
+                        tamanho — e "Disponível" vs. "Vendido" é justamente a
+                        leitura que decide se o card interessa. Sobre a
+                        imagem, com fundo próprio, ele é lido antes do nome.
+
+                        `bg-surface/90` atrás do chip: sobre foto clara, o
+                        verde de `bg-success-subtle` sozinho não teria
+                        contraste garantido. */}
+                          <div className="bg-surface-hover relative aspect-[4/3] w-full">
+                            <PublicImage
+                              src={puppy.cover?.url ?? null}
+                              alt=""
+                              fallbackText={puppy.name}
+                              width={puppy.cover?.width ?? 4}
+                              height={puppy.cover?.height ?? 3}
+                              className="size-full object-cover"
+                            />
+                            {status ? (
+                              <span
+                                className={`rounded-control bg-surface/90 absolute top-2 right-2 border px-2 py-0.5 text-xs font-medium backdrop-blur-sm ${
+                                  STATUS_CLS[puppy.litter_status ?? ""] ?? STATUS_CLS.sold
+                                }`}
+                              >
+                                {status}
+                              </span>
+                            ) : null}
+                          </div>
+
+                          <div className="flex flex-col gap-2 p-3">
+                            <span className="text-fg font-medium">{puppy.name}</span>
+
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="border-border-strong bg-surface-raised text-fg-muted rounded-control inline-flex items-center gap-1 border px-2 py-0.5 text-xs font-medium">
+                                <span aria-hidden="true">{puppy.sex === "female" ? "♀" : "♂"}</span>
+                                {SEX_LABEL[puppy.sex]}
+                              </span>
+                              {puppy.color ? (
+                                <span className="border-border-strong bg-surface-raised text-fg-muted rounded-control border px-2 py-0.5 text-xs">
+                                  {puppy.color}
+                                </span>
+                              ) : null}
+                              {/* Puramente informativo — sem mecanismo de oferta.
                             Independente do preço: pode aparecer mesmo sem
                             valor cadastrado ("só sob consulta"). Estilo
                             neutro (mesmo do chip de cor), não o verde de
                             "Disponível" — os dois na mesma fileira
                             competiriam por atenção sem diferenciar sentido. */}
-                        {puppy.accepts_offer ? (
-                          <span className="border-border-strong bg-surface-raised text-fg-muted rounded-control border px-2 py-0.5 text-xs font-medium">
-                            Aceita proposta
-                          </span>
-                        ) : null}
-                      </div>
+                              {puppy.accepts_offer ? (
+                                <span className="border-border-strong bg-surface-raised text-fg-muted rounded-control border px-2 py-0.5 text-xs font-medium">
+                                  Aceita proposta
+                                </span>
+                              ) : null}
+                            </div>
 
-                      {preco ? (
-                        <span className="text-fg font-mono text-sm font-medium tabular-nums">
-                          {preco}
-                        </span>
-                      ) : null}
+                            {/* Preço com mais peso que os chips: é a segunda
+                          pergunta de quem já decidiu que o filhote serve. */}
+                            {preco ? (
+                              <span className="text-fg font-mono text-base font-semibold tabular-nums">
+                                {preco}
+                              </span>
+                            ) : null}
 
-                      {/* O mais recente de CADA tipo, não as N primeiras
+                            {/* O mais recente de CADA tipo, não as N primeiras
                           linhas do log: três doses de vacina empurrariam o
                           vermífugo fora da lista e o card diria menos do que
                           o filhote tem. */}
-                      <DogHealthSummary entries={latestByKind(registros)} />
-                    </div>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      ) : null}
+                            <DogHealthSummary entries={latestByKind(registros)} />
+                          </div>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            ) : null}
 
-      {/* Saúde da ninhada, entre Filhotes e Pedigree — a ordem da referência.
+            {/* Saúde da ninhada, entre Filhotes e Pedigree — a ordem da referência.
           Ausente por inteiro quando nenhum filhote tem registro: título sobre
           caixa vazia é pior que seção nenhuma. */}
-      {healthCoverage.length > 0 ? (
-        <section className="border-border bg-surface rounded-card flex flex-col gap-4 border p-5">
-          <h2 className="text-fg-faint text-xs font-medium tracking-widest uppercase">
-            Saúde e garantias
-          </h2>
-          <LitterHealthSummary coverage={healthCoverage} />
-        </section>
-      ) : null}
+            {healthCoverage.length > 0 ? (
+              <section className="border-border flex flex-col gap-4 border-t pt-8">
+                <h2 className="font-display text-lg font-semibold tracking-tight">
+                  Saúde e garantias
+                </h2>
+                <LitterHealthSummary coverage={healthCoverage} />
+              </section>
+            ) : null}
 
-      <GeneticBlock sire={sire} dam={dam} genetics={genetics} />
+            <GeneticBlock sire={sire} dam={dam} genetics={genetics} />
 
-      {/* UMA árvore, começando nos progenitores — `variant="litter"` omite a
+            {/* UMA árvore, começando nos progenitores — `variant="litter"` omite a
           coluna do sujeito. Antes eram DUAS (materna e paterna), com dois
           cabeçalhos de pedigree na mesma página; a referência mostra uma só,
           e é também a leitura correta: os avós maternos e paternos são ramos
@@ -416,38 +573,101 @@ export default async function NinhadaPublicaPage({
 
           `pedigree` vem de um filhote (ver `pedigreeDaNinhada`), que serve só
           de âncora para a numeração da RPC e nunca aparece na tela. */}
-      {litterPedigree ? (
-        <PedigreeTree pedigree={litterPedigree} thumbs={pedigreeThumbs} variant="litter" />
-      ) : null}
+            {/* `min-w-0`: a árvore rola dentro de si, e sem isto um filho de flex
+          com conteúdo largo estoura o container em vez de rolar — que é
+          exatamente o que o teste de 360px existe para pegar. */}
+            {litterPedigree ? (
+              <div className="border-border flex min-w-0 flex-col border-t pt-8">
+                <PedigreeTree pedigree={litterPedigree} thumbs={pedigreeThumbs} variant="litter" />
+              </div>
+            ) : null}
 
-      {contatoHref ? (
-        <a
-          href={contatoHref}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="bg-accent text-fg-on-accent hover:bg-accent-hover rounded-card focus-visible:outline-ring w-full px-4 py-4 text-center text-sm font-semibold transition-colors focus-visible:outline-2"
-        >
-          Tenho interesse nesta ninhada
-        </a>
-      ) : null}
+            {/* FAQ do CANIL, não da ninhada — quem chega por aqui tem as mesmas
+          dúvidas de quem chega por `/c/[slug]`, e mandá-lo a outra página
+          para lê-las custaria a visita. Some quando o canil não cadastrou
+          nenhuma pergunta. */}
+            {faqs.length > 0 ? (
+              <section className="border-border flex flex-col gap-4 border-t pt-8">
+                <h2 className="font-display text-lg font-semibold tracking-tight">
+                  Perguntas frequentes
+                </h2>
+                <FaqAccordion faqs={faqs} />
+              </section>
+            ) : null}
 
-          {/* A referência traz "Responda em até 24h" ao lado do nome do canil.
+            {/* A referência traz "Responda em até 24h" ao lado do nome do canil.
               Fica de fora: é uma promessa sobre o comportamento do CRIADOR que
               a plataforma não tem como garantir, e exibi-la seria o produto
               assumindo um compromisso por terceiro. Nome e praça, que são
-              fatos. */}
-          <p className="text-fg-faint text-center text-sm">
-            <Link
-              href={`/c/${litter.kennel.slug}`}
-              prefetch={false}
-              className="text-link hover:text-link-hover"
-            >
-              {litter.kennel.name}
-            </Link>
-            {litter.kennel.city ? ` · ${litter.kennel.city}` : ""}
-            {litter.kennel.state ? `/${litter.kennel.state}` : ""}
-          </p>
-        </div>
+              fatos.
+
+              SOBE PARA ANTES DO CTA: `sticky` só gruda enquanto o elemento
+              está no fluxo do container, e o container acaba no último filho.
+              Com o rodapé DEPOIS do CTA, o botão descolaria antes do fim da
+              página. */}
+            <p className="text-fg-faint text-center text-sm">
+              <Link
+                href={`/c/${litter.kennel.slug}`}
+                prefetch={false}
+                className="text-link hover:text-link-hover"
+              >
+                {litter.kennel.name}
+              </Link>
+              {litter.kennel.city ? ` · ${litter.kennel.city}` : ""}
+              {litter.kennel.state ? `/${litter.kennel.state}` : ""}
+            </p>
+
+            {/*
+            CTA STICKY — o mesmo bloco de `/d/[public_id]`.
+
+            `sticky` e não `fixed`: funciona porque este é o ÚLTIMO filho do
+            container de fluxo. `-mx-5 px-5` sangra contra o `px-5` do `main`
+            (e `lg:-mx-8 lg:px-8` contra o `lg:px-8`), então a barra ocupa a
+            largura inteira sem furar o container.
+
+            `pb-[max(...,env(safe-area-inset-bottom))]` depende de
+            `viewport-fit=cover`, que está no `layout.tsx` raiz — sem o par, o
+            `env()` resolve 0 no iOS e o botão fica sob a barra de gestos.
+          */}
+            {contatoHref ? (
+              <div className="sticky bottom-0 z-20 -mx-5 mt-2 px-5 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:-mx-8 lg:px-8">
+                <div className="bg-surface supports-[backdrop-filter]:bg-glass backdrop-blur-panel border-border-glass rounded-card flex flex-col gap-2 border p-2">
+                  <a
+                    href={contatoHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="bg-accent text-fg-on-accent hover:bg-accent-hover rounded-control focus-visible:outline-ring flex w-full items-center justify-center gap-2 px-4 py-3.5 text-center text-sm font-semibold transition-colors focus-visible:outline-2"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      width={18}
+                      height={18}
+                      fill="currentColor"
+                      aria-hidden="true"
+                      className="shrink-0"
+                    >
+                      <path d="M12.04 2a9.9 9.9 0 0 0-8.5 15l-1.3 4.7 4.83-1.27A9.9 9.9 0 1 0 12.04 2Zm5.75 14.06c-.24.68-1.2 1.25-1.96 1.4-.52.1-1.2.19-3.5-.75-2.94-1.22-4.82-4.2-4.97-4.4-.14-.19-1.18-1.57-1.18-3s.75-2.13 1.02-2.42c.27-.29.58-.36.78-.36l.56.01c.18.01.42-.07.66.5.24.58.83 2 .9 2.15.07.14.12.31.02.5-.1.2-.15.31-.29.48-.15.17-.3.38-.43.51-.15.14-.3.3-.13.58.17.29.76 1.25 1.63 2.02 1.12.99 2.06 1.3 2.35 1.45.29.14.46.12.63-.07.17-.2.72-.85.91-1.14.2-.29.39-.24.66-.14.27.1 1.69.8 1.98.94.29.15.48.22.55.34.07.12.07.68-.17 1.36Z" />
+                    </svg>
+                    Tenho interesse nesta ninhada
+                  </a>
+
+                  {/* O QUE ACONTECE AO CLICAR, dito antes do clique. O botão
+                    abre uma conversa com o CRIADOR — a OrigemX não recebe a
+                    mensagem, não guarda quem clicou e não intermedeia. É a
+                    fronteira do produto (a negociação acontece toda fora da
+                    plataforma) escrita onde o visitante a lê. */}
+                  {/* Compacto de propósito: a barra fica FIXA no rodapé, e
+                      cada linha aqui é altura permanentemente subtraída da
+                      tela de quem lê a página num celular. */}
+                  <p className="text-fg-faint px-2 pb-0.5 text-center text-[0.6875rem] leading-snug">
+                    Ao clicar, você fala direto com o criador pelo WhatsApp — a OrigemX não
+                    participa da negociação.
+                  </p>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </PublicGallery>
       </main>
     </div>
   );
@@ -535,9 +755,12 @@ function ParentCard({
   parent: (PublicDog & { cover: ResolvedMedia | null }) | null;
   fallback: string;
 }) {
+  // `row-span-2` também na ausência: as duas colunas precisam ocupar as mesmas
+  // duas linhas, senão a auto-alocação do grid empurra o X para fora do lugar
+  // quando só um dos progenitores é conhecido.
   if (!parent) {
     return (
-      <div className="text-fg-faint flex flex-col items-center gap-2 text-center text-sm">
+      <div className="text-fg-faint row-span-2 flex items-center justify-center text-center text-sm">
         {fallback}
       </div>
     );
@@ -546,7 +769,11 @@ function ParentCard({
   return (
     <Link
       href={`/d/${parent.public_id}`}
-      className="focus-visible:outline-ring flex flex-col items-center gap-2 text-center focus-visible:outline-2"
+      // `grid-rows-subgrid`: as duas linhas deste card SÃO as duas do grid dos
+      // progenitores, então as fotos alinham entre si e os nomes também —
+      // mesmo com um nome de uma linha e outro de duas. Exatamente DOIS
+      // filhos, um por linha; o nome e o chip de sexo vão juntos no segundo.
+      className="focus-visible:outline-ring row-span-2 grid grid-rows-subgrid gap-2 text-center focus-visible:outline-2"
     >
       <div className="bg-surface-hover rounded-card aspect-[4/3] w-full overflow-hidden">
         <PublicImage
@@ -558,10 +785,18 @@ function ParentCard({
           className="size-full object-cover"
         />
       </div>
-      <span className="text-fg text-sm font-semibold">{parent.name}</span>
-      <span className="border-border-strong bg-surface-raised text-fg-muted rounded-control border px-2 py-0.5 text-xs font-medium">
-        {SEX_LABEL[parent.sex]}
-      </span>
+
+      {/* `justify-between` com o bloco esticado na linha 2: o chip de sexo
+          encosta no fim da linha nos DOIS cards, então eles alinham entre si
+          mesmo quando um nome ocupa três linhas e o outro uma — que é o caso
+          real de "Ring Legend's Athena da Casa Grande" ao lado de "Power
+          Chronos" num celular de 360px. */}
+      <div className="flex flex-col items-center justify-between gap-2">
+        <span className="text-fg text-sm font-semibold">{parent.name}</span>
+        <span className="border-border-strong bg-surface-raised text-fg-muted rounded-control border px-2 py-0.5 text-xs font-medium">
+          {SEX_LABEL[parent.sex]}
+        </span>
+      </div>
     </Link>
   );
 }
@@ -595,8 +830,8 @@ function GeneticBlock({
   if (blocos.length === 0) return null;
 
   return (
-    <section className="flex flex-col gap-3">
-      <h2 className="text-fg-faint text-xs font-medium tracking-widest uppercase">
+    <section className="border-border flex flex-col gap-4 border-t pt-8">
+      <h2 className="font-display text-lg font-semibold tracking-tight">
         Exames genéticos dos progenitores
       </h2>
 

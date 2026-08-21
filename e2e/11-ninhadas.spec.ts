@@ -934,3 +934,139 @@ test("excluir ninhada é lógico, e ela some do painel e do público", async ({
   await expect(publica.getByText("Ninhada a ser excluída.")).toHaveCount(0);
   await semSessao.close();
 });
+
+/**
+ * ============================================================================
+ * O refinamento visual da página pública da ninhada.
+ * ============================================================================
+ *
+ * O que precisa ficar provado, e nenhum destes é decorativo:
+ *
+ *   - o X da marca fica CENTRADO NAS FOTOS dos progenitores. A primeira
+ *     tentativa o colocou na coluna errada: `row-start-1` torna o item de
+ *     posição definida, e o grid posiciona esses ANTES dos automáticos, então
+ *     o X caía na coluna 1 e empurrava mãe e pai para a direita. É um bug de
+ *     uma linha de CSS, invisível em review e óbvio na tela — exatamente o
+ *     que uma medição pega e uma asserção de presença não pegaria;
+ *   - o CTA diz O QUE ACONTECE ao clicar, antes do clique;
+ *   - "Restam ..." é CONTADO do status dos filhotes, não digitado — e o
+ *     vendido não entra na conta;
+ *   - o FAQ do canil aparece também na ninhada.
+ */
+test("página da ninhada: X centrado nas fotos, CTA explicado, disponíveis contados e FAQ", async ({
+  page,
+  criador,
+  admin,
+}) => {
+  const canil = await criarCanil(admin, criador.id);
+  await admin.from("kennels").update({ whatsapp: "5511987654321" }).eq("id", canil.id);
+
+  // Nomes de comprimentos MUITO diferentes de propósito: é o caso que quebra
+  // o alinhamento quando um deles ocupa três linhas e o outro uma.
+  const pai = await criarCao(admin, criador.id, {
+    name: "Chronos",
+    sex: "male",
+    kennel_id: canil.id,
+  });
+  const mae = await criarCao(admin, criador.id, {
+    name: "Ring Legend's Athena da Casa Grande do Vale",
+    sex: "female",
+    kennel_id: canil.id,
+  });
+
+  const { data: ninhada } = await admin
+    .from("kennel_litters")
+    .insert({
+      kennel_id: canil.id,
+      created_by: criador.id,
+      sire_id: pai.id,
+      dam_id: mae.id,
+      born_on: "2026-08-15",
+      published_at: new Date().toISOString(),
+    })
+    .select("id, public_id")
+    .single();
+
+  // 2 machos e 1 fêmea disponíveis, 1 macho vendido — o vendido NÃO entra.
+  const filhotes: Array<{ sex: "male" | "female"; status: string }> = [
+    { sex: "male", status: "available" },
+    { sex: "male", status: "available" },
+    { sex: "male", status: "sold" },
+    { sex: "female", status: "available" },
+  ];
+
+  for (const [i, f] of filhotes.entries()) {
+    await admin.from("dogs").insert({
+      name: `Filhote ${i + 1}`,
+      sex: f.sex,
+      kennel_id: canil.id,
+      litter_id: ninhada!.id,
+      litter_status: f.status,
+      sire_id: pai.id,
+      dam_id: mae.id,
+      owner_id: criador.id,
+      created_by: criador.id,
+      published_at: new Date().toISOString(),
+    });
+  }
+
+  await admin.from("kennel_faqs").insert({
+    kennel_id: canil.id,
+    question: "Como funciona a entrega?",
+    answer: "Entrego pessoalmente ou por transporte aéreo credenciado.",
+    position: 0,
+    created_by: criador.id,
+  });
+
+  await publicar(admin, { kennelId: canil.id, dogIds: [pai.id, mae.id] });
+
+  const semSessao = await page.context().browser()!.newContext();
+  const publica = await semSessao.newPage();
+  await publica.goto(`/n/${ninhada!.public_id}`);
+
+  // O título carrega a data — sem ela, "Ninhada" não distingue esta das
+  // outras do mesmo canil para quem recebeu o link.
+  await expect(publica.getByRole("heading", { name: "Ninhada de 15/08/2026" })).toBeVisible();
+
+  // --- o X da marca, centrado nas FOTOS ---
+  const progenitores = publica.locator("section", { hasText: "Progenitores" }).first();
+  const marca = progenitores.locator("svg").first();
+  const fotoMae = progenitores.getByRole("link").first().locator("div").first();
+
+  const caixaMarca = await marca.boundingBox();
+  const caixaFoto = await fotoMae.boundingBox();
+  expect(caixaMarca && caixaFoto).toBeTruthy();
+
+  const centroMarca = caixaMarca!.y + caixaMarca!.height / 2;
+  const centroFoto = caixaFoto!.y + caixaFoto!.height / 2;
+  expect(
+    Math.abs(centroMarca - centroFoto),
+    `o X não está centrado na foto (X em ${Math.round(centroMarca)}, foto em ${Math.round(centroFoto)})`,
+  ).toBeLessThanOrEqual(2);
+
+  // E ENTRE as duas fotos, não antes delas: o bug original punha o X na
+  // primeira coluna, com os dois progenitores à direita dele.
+  const fotoPai = progenitores.getByRole("link").nth(1).locator("div").first();
+  const caixaPai = await fotoPai.boundingBox();
+  expect(caixaFoto!.x, "a mãe deve estar à ESQUERDA do X").toBeLessThan(caixaMarca!.x);
+  expect(caixaPai!.x, "o pai deve estar à DIREITA do X").toBeGreaterThan(caixaMarca!.x);
+
+  // --- o CTA explica o que acontece ao clicar ---
+  await expect(publica.getByRole("link", { name: /Tenho interesse/ })).toBeVisible();
+  await expect(publica.getByText(/fala direto com o criador pelo WhatsApp/)).toBeVisible();
+  await expect(publica.getByText(/não participa da negociação/)).toBeVisible();
+
+  // A FRONTEIRA continua: sinalizar interesse é um link, nunca um formulário.
+  await expect(publica.locator("form")).toHaveCount(0);
+
+  // --- disponíveis, contados do status ---
+  await expect(publica.getByText(/Restam/)).toContainText("2 machos e 1 fêmea");
+  // A pílula do topo dá o total — 3, não 4: o vendido não conta.
+  await expect(publica.getByText("3 disponíveis", { exact: true })).toBeVisible();
+
+  // --- o FAQ do canil aparece na ninhada ---
+  await expect(publica.getByRole("heading", { name: "Perguntas frequentes" })).toBeVisible();
+  await expect(publica.getByText("Como funciona a entrega?")).toBeVisible();
+
+  await semSessao.close();
+});
