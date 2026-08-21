@@ -4,24 +4,15 @@ import { DOG_FIELDS } from "./fields";
 import { normalizeDogInput, validateDog } from "./validation";
 
 /**
- * `weight_kg`, `withers_height_cm` (input "number") e `titles` (input "list")
- * são os únicos campos cujo `DogPatch` não é string — o resto da suíte de
- * `dogs` já cobre a cadeia inteiramente string-based.
+ * `titles` (input "list") é o único campo cujo `DogPatch` não é string — o
+ * resto da suíte de `dogs` já cobre a cadeia inteiramente string-based.
+ *
+ * Peso e cernelha saíram de `DOG_FIELDS` (viraram histórico datado em
+ * `modules/measurements/`) — a cobertura de campo numérico genérico continua
+ * em `dog-form.tsx`/`validation.ts` via este mesmo mecanismo, só sem um
+ * campo real de `dogs` para exercitá-lo hoje.
  */
-const NUMERIC_FIELDS = DOG_FIELDS.filter((f) => f.input === "number");
 const LIST_FIELDS = DOG_FIELDS.filter((f) => f.input === "list");
-
-describe("normalizeDogInput — campos numéricos", () => {
-  it("converte string em número", () => {
-    const out = normalizeDogInput({ weight_kg: "4.5" }, NUMERIC_FIELDS);
-    expect(out.weight_kg).toBe(4.5);
-  });
-
-  it("string vazia vira null, campo é opcional", () => {
-    const out = normalizeDogInput({ weight_kg: "" }, NUMERIC_FIELDS);
-    expect(out.weight_kg).toBeNull();
-  });
-});
 
 describe("normalizeDogInput — campo de lista (titles)", () => {
   it("quebra por linha, descartando linha em branco", () => {
@@ -40,26 +31,6 @@ describe("normalizeDogInput — campo de lista (titles)", () => {
   it("só linhas em branco também vira null", () => {
     const out = normalizeDogInput({ titles: "\n  \n" }, LIST_FIELDS);
     expect(out.titles).toBeNull();
-  });
-});
-
-describe("validateDog — campos numéricos", () => {
-  it("aceita número positivo", () => {
-    expect(validateDog({ weight_kg: "4.5" }, NUMERIC_FIELDS)).toEqual({});
-  });
-
-  it("rejeita valor não numérico", () => {
-    const errors = validateDog({ weight_kg: "abc" }, NUMERIC_FIELDS);
-    expect(errors.weight_kg).toMatch(/número maior que zero/);
-  });
-
-  it("rejeita zero e negativo", () => {
-    expect(validateDog({ weight_kg: "0" }, NUMERIC_FIELDS).weight_kg).toBeDefined();
-    expect(validateDog({ weight_kg: "-2" }, NUMERIC_FIELDS).weight_kg).toBeDefined();
-  });
-
-  it("campo vazio não gera erro — é opcional", () => {
-    expect(validateDog({ weight_kg: "" }, NUMERIC_FIELDS)).toEqual({});
   });
 });
 

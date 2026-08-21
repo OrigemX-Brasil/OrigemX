@@ -14,6 +14,8 @@ import { GeneticList } from "@/modules/health/components/genetic-list";
 import { DogHealthSummary } from "@/modules/health/components/health-summary";
 import { getGeneticTestsByDog, getHealthRecordsByDog } from "@/modules/health/queries";
 import { latestByKind } from "@/modules/health/summary";
+import { getMeasurementsByDog } from "@/modules/measurements/queries";
+import { latestMeasurement } from "@/modules/measurements/summary";
 import { aspectOf } from "@/modules/media/constraints";
 import { PedigreeTree } from "@/modules/pedigree/components/pedigree-tree";
 import { MAX_PHOTO_GENERATION } from "@/modules/pedigree/layout";
@@ -116,7 +118,7 @@ export default async function CaoPublicoPage({
   // regeneração de ISR, sem nada em troca.
   const anon = createPublicClient();
 
-  const [kennel, media, pedigree, video, health, genetics, testimonials, irmaos] =
+  const [kennel, media, pedigree, video, health, genetics, measurements, testimonials, irmaos] =
     await Promise.all([
       dog.kennel_id ? getPublicKennelById(dog.kennel_id) : Promise.resolve(null),
       getPublicMedia({ dogId: dog.id }),
@@ -127,13 +129,15 @@ export default async function CaoPublicoPage({
       // NÃO fala com o Cloudflare, só com o nosso banco.
       getPublicDogVideo(dog.id),
       // O client ANÔNIMO é passado explicitamente, e não é opcional: sem ele
-      // estas duas caem no `createClient()` de cookie, e ler cookie nesta rota
+      // estas caem no `createClient()` de cookie, e ler cookie nesta rota
       // derruba o ISR (ver `lib/supabase/public.ts`). Diferente de
-      // `dog_identifiers`, as policies de `dog_health_records` e
-      // `dog_genetic_tests` DELEGAM a visibilidade a `dogs_select`, então o
-      // anônimo enxerga saúde e laudo de cão publicado — e só dele.
+      // `dog_identifiers`, as policies de `dog_health_records`,
+      // `dog_genetic_tests` e `dog_measurements` DELEGAM a visibilidade a
+      // `dogs_select`, então o anônimo enxerga saúde, laudo e medição de cão
+      // publicado — e só dele.
       getHealthRecordsByDog([dog.id], anon),
       getGeneticTestsByDog([dog.id], anon),
+      getMeasurementsByDog([dog.id], anon),
       getPublicTestimonialsForDog(dog.id),
       // Irmãos de ninhada, para o contador de disponibilidade. Só quando o cão
       // É filhote — cão adulto não tem `litter_id`, e aí a seção nem existe.
@@ -155,6 +159,14 @@ export default async function CaoPublicoPage({
   // filhotes da ninhada em lote; aqui é um cão só.
   const resumoSaude = latestByKind(health.get(dog.id) ?? []);
   const exames = genetics.get(dog.id) ?? [];
+  const medicoes = measurements.get(dog.id) ?? [];
+
+  // A ficha mostra só a medição MAIS RECENTE de cada tipo — o histórico
+  // inteiro (a evolução) é o que a Story Timeline, abaixo, existe para
+  // contar. `dogs.weight_kg`/`withers_height_cm` saíram do schema; isto é o
+  // que os substitui.
+  const pesoAtual = latestMeasurement(medicoes, "weight");
+  const cernelhaAtual = latestMeasurement(medicoes, "withers_height");
 
   // A HISTÓRIA — eventos com data REAL, não fotos com data de upload. Ver o
   // cabeçalho de `dogs/timeline.ts`: `media` não guarda quando a foto foi
@@ -164,6 +176,7 @@ export default async function CaoPublicoPage({
     bornOn: dog.born_on,
     health: health.get(dog.id) ?? [],
     genetics: exames,
+    measurements: medicoes,
   });
 
   // "Restam 2 machos e 1 fêmea" — CONTADO dos irmãos publicados, nunca
@@ -301,10 +314,10 @@ export default async function CaoPublicoPage({
                 <Row label="Cor" value={dog.color} />
                 <Row label="Pelagem" value={dog.coat} />
                 <Row label="Títulos" value={dog.titles?.length ? dog.titles.join(" · ") : null} />
-                <Row label="Peso" value={dog.weight_kg != null ? `${dog.weight_kg} kg` : null} />
+                <Row label="Peso" value={pesoAtual ? `${pesoAtual.value} kg` : null} />
                 <Row
                   label="Cernelha"
-                  value={dog.withers_height_cm != null ? `${dog.withers_height_cm} cm` : null}
+                  value={cernelhaAtual ? `${cernelhaAtual.value} cm` : null}
                 />
                 <Row label="Identificador" value={dog.public_id} mono />
               </dl>

@@ -176,3 +176,61 @@ test("excluir o canil libera a vaga, mas não o endereço", async ({ page, criad
   await expect(alerta(page).first()).toBeVisible();
   await expect(page.locator("body")).toContainText(/endereço/i);
 });
+
+/**
+ * O slug do canil é o que o QR Code codifica (`/api/qr/kennel/[id]`), mas
+ * não é travado por trigger como `dogs.public_id`/`kennel_litters.public_id`
+ * — continua editável de propósito. O que precisa existir é o AVISO: trocar
+ * o endereço de um canil JÁ SALVO invalida QR/link impresso, e salvar sem
+ * confirmar isso não pode passar batido.
+ *
+ * SÓ em edição: criar o canil pela primeira vez escolhe o endereço, não
+ * "troca" nada — não há QR impresso ainda para quebrar, e as demais
+ * criações neste arquivo (`/painel/canis/novo`) já provam isso ao continuar
+ * passando sem tocar em nenhum checkbox.
+ */
+test("editar o endereço de um canil já salvo exige confirmar antes de salvar", async ({
+  page,
+  criador,
+  admin,
+}) => {
+  const token = Date.now().toString(36);
+  const slugOriginal = `original-${token}`;
+  const slugNovo = `novo-${token}`;
+
+  const { data } = await admin
+    .from("kennels")
+    .insert({
+      name: "Canil Para Editar",
+      slug: slugOriginal,
+      owner_id: criador.id,
+      created_by: criador.id,
+    })
+    .select("id")
+    .single();
+
+  await page.goto(`/painel/canis/${data!.id}`);
+
+  // Antes de mexer no endereço, nenhum aviso na tela.
+  await expect(page.getByText(/Isso muda o link do seu canil/)).toHaveCount(0);
+
+  await definirSlug(page, slugNovo);
+
+  // O aviso aparece, e o botão de salvar fica bloqueado até confirmar.
+  await expect(page.getByText(/Isso muda o link do seu canil/)).toBeVisible();
+  const salvar = page.getByRole("button", { name: "Salvar alterações" });
+  await expect(salvar).toBeDisabled();
+
+  await page.getByRole("checkbox", { name: /Entendo que isso muda o link do canil/ }).check();
+  await expect(salvar).toBeEnabled();
+  await salvar.click();
+
+  await expect(page.getByText("Alterações salvas.")).toBeVisible();
+
+  const { data: atualizado } = await admin
+    .from("kennels")
+    .select("slug")
+    .eq("id", data!.id)
+    .single();
+  expect(atualizado?.slug).toBe(slugNovo);
+});

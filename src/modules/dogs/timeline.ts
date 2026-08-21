@@ -1,5 +1,7 @@
 import { healthKindLabel } from "@/modules/health/constraints";
 import type { GeneticTest, HealthRecord } from "@/modules/health/queries";
+import { measurementKindName, measurementUnit } from "@/modules/measurements/constraints";
+import type { Measurement } from "@/modules/measurements/queries";
 
 /**
  * ============================================================================
@@ -18,9 +20,12 @@ import type { GeneticTest, HealthRecord } from "@/modules/health/queries";
  *
  * Então a linha é feita do que TEM data de verdade e já está na página:
  * nascimento (`dogs.born_on`), vermífugo e vacina
- * (`dog_health_records.applied_on`) e exames genéticos
- * (`dog_genetic_tests.tested_on`). Cada evento é um fato datado que o criador
- * digitou sabendo a data.
+ * (`dog_health_records.applied_on`), exames genéticos
+ * (`dog_genetic_tests.tested_on`) e peso/cernelha
+ * (`dog_measurements.measured_on`). Cada evento é um fato datado que o criador
+ * digitou sabendo a data — e é por isso que TODA medição entra, não só a mais
+ * recente: é a evolução que a Story Timeline existe para mostrar, e a última
+ * pesagem sozinha já aparece no resumo da ficha (`latestMeasurement`).
  *
  * Sem teto de itens: as duas consultas de origem já limitam (60 registros de
  * saúde e 30 exames por cão), e um cão real tem poucos. O trilho rola na
@@ -33,9 +38,10 @@ export type TimelineEvent = {
   /** ISO `yyyy-mm-dd`. */
   date: string;
   label: string;
-  /** Segunda linha, quando há: produto da vacina, resultado do exame. */
+  /** Segunda linha, quando há: produto da vacina, resultado do exame, valor
+   *  da medição. */
   detail: string | null;
-  kind: "birth" | "health" | "genetic";
+  kind: "birth" | "health" | "genetic" | "measurement";
 };
 
 /**
@@ -47,10 +53,12 @@ export function buildDogTimeline({
   bornOn,
   health,
   genetics,
+  measurements,
 }: {
   bornOn: string | null;
   health: readonly HealthRecord[];
   genetics: readonly GeneticTest[];
+  measurements: readonly Measurement[];
 }): TimelineEvent[] {
   const events: TimelineEvent[] = [];
 
@@ -76,6 +84,16 @@ export function buildDogTimeline({
       label: test.name,
       detail: test.result,
       kind: "genetic",
+    });
+  }
+
+  for (const measurement of measurements) {
+    events.push({
+      id: `measurement-${measurement.id}`,
+      date: measurement.measured_on,
+      label: measurementKindName(measurement.kind),
+      detail: `${measurement.value} ${measurementUnit(measurement.kind)}`,
+      kind: "measurement",
     });
   }
 

@@ -245,6 +245,60 @@ export type Database = {
           },
         ]
       }
+      dog_measurements: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          dog_id: string
+          id: string
+          kind: string
+          measured_on: string
+          notes: string | null
+          updated_at: string
+          value: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          dog_id: string
+          id?: string
+          kind: string
+          measured_on: string
+          notes?: string | null
+          updated_at?: string
+          value: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          dog_id?: string
+          id?: string
+          kind?: string
+          measured_on?: string
+          notes?: string | null
+          updated_at?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dog_measurements_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dog_measurements_dog_id_fkey"
+            columns: ["dog_id"]
+            isOneToOne: false
+            referencedRelation: "dogs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dog_videos: {
         Row: {
           created_at: string
@@ -344,8 +398,6 @@ export type Database = {
           slug: string | null
           titles: string[] | null
           updated_at: string
-          weight_kg: number | null
-          withers_height_cm: number | null
         }
         Insert: {
           accepts_offer?: boolean
@@ -372,8 +424,6 @@ export type Database = {
           slug?: string | null
           titles?: string[] | null
           updated_at?: string
-          weight_kg?: number | null
-          withers_height_cm?: number | null
         }
         Update: {
           accepts_offer?: boolean
@@ -400,8 +450,6 @@ export type Database = {
           slug?: string | null
           titles?: string[] | null
           updated_at?: string
-          weight_kg?: number | null
-          withers_height_cm?: number | null
         }
         Relationships: [
           {

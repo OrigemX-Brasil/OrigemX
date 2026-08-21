@@ -128,6 +128,65 @@ test("selos, história com datas reais e CTA aparecem quando o dado existe", asy
   await semSessao.close();
 });
 
+/**
+ * Peso e cernelha deixaram de ser coluna única (`dogs.weight_kg`/
+ * `withers_height_cm`) e viraram histórico datado (`dog_measurements`). Dois
+ * lugares LEEM esse histórico de formas diferentes, e os dois precisam estar
+ * certos ao mesmo tempo:
+ *
+ *   - a FICHA mostra só a medição MAIS RECENTE de cada tipo;
+ *   - a HISTÓRIA mostra a EVOLUÇÃO inteira — inclusive a pesagem antiga que a
+ *     ficha não exibe mais.
+ */
+test("peso e cernelha: a ficha mostra a mais recente, a história mostra a evolução", async ({
+  page,
+  criador,
+  admin,
+}) => {
+  const canil = await criarCanil(admin, criador.id);
+  const cao = await criarCao(admin, criador.id, {
+    name: `Poeira ${Date.now().toString(36)}`,
+    sex: "male",
+    kennel_id: canil.id,
+  });
+
+  // Duas pesagens (a evolução) e uma cernelha única.
+  await admin.from("dog_measurements").insert([
+    { dog_id: cao.id, kind: "weight", value: 1.2, measured_on: "2026-08-01", created_by: criador.id },
+    { dog_id: cao.id, kind: "weight", value: 2.4, measured_on: "2026-08-15", created_by: criador.id },
+    {
+      dog_id: cao.id,
+      kind: "withers_height",
+      value: 20,
+      measured_on: "2026-08-10",
+      created_by: criador.id,
+    },
+  ]);
+
+  await publicar(admin, { kennelId: canil.id, dogIds: [cao.id] });
+
+  const semSessao = await page.context().browser()!.newContext();
+  const publica = await semSessao.newPage();
+  await publica.goto(`/d/${cao.public_id}`);
+
+  // A ficha: só a medição mais recente de cada tipo. A pesagem de 01/08 NÃO
+  // aparece aqui — só na história.
+  const ficha = publica.locator("dl");
+  await expect(ficha.getByText("2.4 kg", { exact: true })).toBeVisible();
+  await expect(ficha.getByText("20 cm", { exact: true })).toBeVisible();
+  await expect(ficha).not.toContainText("1.2 kg");
+
+  // A história: as DUAS pesagens, em ordem cronológica com a cernelha entre
+  // elas — é a evolução, não só o valor mais recente.
+  const eventos = publica.getByRole("list", { name: "Linha do tempo" }).getByRole("listitem");
+  await expect(eventos).toHaveCount(3);
+  await expect(eventos.nth(0)).toContainText("1.2 kg");
+  await expect(eventos.nth(1)).toContainText("20 cm");
+  await expect(eventos.nth(2)).toContainText("2.4 kg");
+
+  await semSessao.close();
+});
+
 test("contador de irmãos disponíveis é contado do status, não digitado", async ({
   page,
   criador,

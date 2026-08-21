@@ -22,16 +22,7 @@ type DogRow = Database["public"]["Tables"]["dogs"]["Row"];
  */
 export type DogFieldName = Extract<
   keyof DogRow,
-  | "name"
-  | "sex"
-  | "born_on"
-  | "breed"
-  | "color"
-  | "coat"
-  | "slug"
-  | "titles"
-  | "weight_kg"
-  | "withers_height_cm"
+  "name" | "sex" | "born_on" | "breed" | "color" | "coat" | "slug" | "titles"
 >;
 
 export type FieldWeight = "required" | "recommended" | "optional";
@@ -136,22 +127,6 @@ export const DOG_FIELDS: readonly DogField[] = [
     maxLength: 80,
     help: "Um título por linha, ex.: Campeão Nacional.",
     placeholder: "Campeão Nacional",
-  },
-  {
-    name: "weight_kg",
-    label: "Peso (kg)",
-    weight: "optional",
-    input: "number",
-    publicProfile: true,
-    placeholder: "Ex.: 4.5",
-  },
-  {
-    name: "withers_height_cm",
-    label: "Cernelha (cm)",
-    weight: "optional",
-    input: "number",
-    publicProfile: true,
-    placeholder: "Ex.: 45",
   },
   {
     name: "slug",

@@ -107,6 +107,14 @@ export async function addMeasurement(
   }
 
   const values = normalizeMeasurement(input);
+
+  // `validateMeasurement` já garantiu `value` numérico e positivo, mas o
+  // TypeScript não tem como saber: a checagem mora em `validation.ts`, que é
+  // dado de runtime. Mesma guarda de `createKennel` para `name`/`slug`.
+  if (values.value === null) {
+    return { formError: "Informe um número maior que zero.", values: input };
+  }
+
   const { error } = await supabase.from("dog_measurements").insert({
     dog_id: dogId,
     kind: values.kind,
@@ -174,6 +182,13 @@ export async function updateMeasurement(
   if (Object.keys(errors).length > 0) return { errors, values: input };
 
   const values = normalizeMeasurement(input);
+
+  // Mesma guarda de `addMeasurement`: `validateMeasurement` já garantiu
+  // `value` numérico e positivo, o tipo é que não sabe.
+  if (values.value === null) {
+    return { formError: "Informe um número maior que zero.", values: input };
+  }
+
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("dog_measurements")

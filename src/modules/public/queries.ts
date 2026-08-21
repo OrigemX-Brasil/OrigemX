@@ -42,7 +42,7 @@ const KENNEL_PUBLIC_COLUMNS =
   "id, name, slug, city, state, description, website_url, instagram_handle, registration_number, founder_number, whatsapp, published_at";
 
 const DOG_PUBLIC_COLUMNS =
-  "id, public_id, slug, name, sex, born_on, breed, color, coat, titles, weight_kg, withers_height_cm, kennel_id, owner_id, sire_id, dam_id, litter_id, published_at";
+  "id, public_id, slug, name, sex, born_on, breed, color, coat, titles, kennel_id, owner_id, sire_id, dam_id, litter_id, published_at";
 
 export type PublicKennel = {
   id: string;
@@ -70,8 +70,6 @@ export type PublicDog = {
   color: string | null;
   coat: string | null;
   titles: string[] | null;
-  weight_kg: number | null;
-  withers_height_cm: number | null;
   kennel_id: string | null;
   owner_id: string | null;
   sire_id: string | null;
