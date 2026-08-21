@@ -1070,3 +1070,128 @@ test("página da ninhada: X centrado nas fotos, CTA explicado, disponíveis cont
 
   await semSessao.close();
 });
+
+/**
+ * ============================================================================
+ * A prévia de compartilhamento (og:image) da ninhada.
+ * ============================================================================
+ *
+ * Todo link de ninhada mostrava o MESMO card fixo de marca no WhatsApp,
+ * tivesse foto ou não. Agora a capa vira o card.
+ *
+ * NÃO PRECISA DE UPLOAD REAL: `getPublicUrl` do Supabase só concatena string
+ * (bucket + caminho), sem ida à rede. Inserir a linha de `media` com o bucket
+ * público e um caminho conhecido exercita exatamente o mesmo caminho de
+ * código que uma foto de verdade, e a suíte não paga um upload.
+ *
+ * As três metades da regra, num teste só porque a fixture de usuário é cara:
+ * capa presente, ninhada sem foto, e dimensão desconhecida.
+ */
+test("og:image da ninhada é a foto de capa, com as dimensões reais", async ({
+  page,
+  criador,
+  admin,
+}) => {
+  const canil = await criarCanil(admin, criador.id);
+
+  async function criarNinhada(descricao: string) {
+    const { data } = await admin
+      .from("kennel_litters")
+      .insert({
+        kennel_id: canil.id,
+        created_by: criador.id,
+        description: descricao,
+        born_on: "2026-08-15",
+        published_at: new Date().toISOString(),
+      })
+      .select("id, public_id")
+      .single();
+    return data!;
+  }
+
+  const comFoto = await criarNinhada("Ninhada com capa.");
+  const semFoto = await criarNinhada("Ninhada sem foto nenhuma.");
+  const semDimensao = await criarNinhada("Ninhada com foto de dimensão desconhecida.");
+
+  const caminhoCapa = `${criador.id}/litter/${comFoto.id}/capa.webp`;
+  const caminhoSemDim = `${criador.id}/litter/${semDimensao.id}/antiga.webp`;
+
+  const { error: erroMidia } = await admin.from("media").insert([
+    {
+      // O bucket PÚBLICO é o que faz `resolveMediaUrls` devolver
+      // `getPublicUrl` em vez de uma URL assinada que expira — é a diferença
+      // que decide se o crawler do WhatsApp consegue baixar a imagem.
+      bucket_id: "kennel-media-public",
+      storage_path: caminhoCapa,
+      litter_id: comFoto.id,
+      role: "litter_gallery",
+      mime: "image/webp",
+      size_bytes: 120_000,
+      width: 1600,
+      height: 1200,
+      // Foto de ninhada ocupa um slot 1..4 (`media_litter_position_valid`),
+      // não a posição 0 da galeria de cão. `position` 1 é a capa.
+      position: 1,
+      owner_id: criador.id,
+      created_by: criador.id,
+    },
+    {
+      // Linha ANTIGA: as colunas de dimensão nasceram depois de já haver
+      // mídia gravada, então nulo aqui é o estado real de parte do banco.
+      bucket_id: "kennel-media-public",
+      storage_path: caminhoSemDim,
+      litter_id: semDimensao.id,
+      role: "litter_gallery",
+      mime: "image/webp",
+      size_bytes: 90_000,
+      width: null,
+      height: null,
+      position: 1,
+      owner_id: criador.id,
+      created_by: criador.id,
+    },
+  ]);
+  expect(erroMidia, `falhou ao inserir mídia: ${erroMidia?.message}`).toBeNull();
+
+  await publicar(admin, { kennelId: canil.id });
+
+  const semSessao = await page.context().browser()!.newContext();
+  const publica = await semSessao.newPage();
+
+  const conteudo = (seletor: string) =>
+    publica.locator(seletor).first().getAttribute("content");
+
+  // --- com capa: a foto, absoluta, com as dimensões reais ---
+  await publica.goto(`/n/${comFoto.public_id}`);
+
+  const ogImage = await conteudo('meta[property="og:image"]');
+  expect(ogImage, "og:image deve ser a capa, não a imagem de marca").toContain(caminhoCapa);
+  expect(ogImage, "crawler não resolve URL relativa").toMatch(/^https?:\/\//);
+  expect(ogImage).not.toContain("preview-wpp");
+  // Sem token de expiração: URL assinada morreria antes do crawler voltar.
+  expect(ogImage, "a URL não pode ser assinada").not.toContain("token=");
+
+  expect(await conteudo('meta[property="og:image:width"]')).toBe("1600");
+  expect(await conteudo('meta[property="og:image:height"]')).toBe("1200");
+
+  // O Twitter recebe a mesma URL.
+  expect(await conteudo('meta[name="twitter:image"]')).toContain(caminhoCapa);
+
+  // --- sem foto: cai na imagem de marca, nunca sem og:image ---
+  await publica.goto(`/n/${semFoto.public_id}`);
+  const ogFallback = await conteudo('meta[property="og:image"]');
+  expect(ogFallback, "sem foto, a marca — nunca ausente").toContain("preview-wpp");
+  expect(await conteudo('meta[property="og:image:width"]')).toBe("1536");
+  expect(await conteudo('meta[property="og:image:height"]')).toBe("864");
+
+  // --- foto sem dimensão: usa a foto, mas NÃO inventa width/height ---
+  await publica.goto(`/n/${semDimensao.public_id}`);
+  expect(await conteudo('meta[property="og:image"]')).toContain(caminhoSemDim);
+  await expect(
+    publica.locator('meta[property="og:image:width"]'),
+    "dimensão desconhecida não pode virar número inventado",
+  ).toHaveCount(0);
+  await expect(publica.locator('meta[property="og:image:height"]')).toHaveCount(0);
+
+  await semSessao.close();
+});

@@ -42,6 +42,8 @@ export function publicMetadata({
   path,
   imageUrl,
   imageAlt,
+  imageWidth,
+  imageHeight,
   type = "website",
 }: {
   title: string;
@@ -50,6 +52,15 @@ export function publicMetadata({
   path: string;
   imageUrl?: string | null;
   imageAlt?: string;
+  /**
+   * Dimensões REAIS da foto, quando conhecidas.
+   *
+   * `media.width`/`media.height` são NULLABLE — as colunas nasceram depois de
+   * já haver mídia gravada (ver `media/constraints.ts`), então linha antiga
+   * não tem dimensão. Passar o que se sabe e omitir o resto é o contrato.
+   */
+  imageWidth?: number | null;
+  imageHeight?: number | null;
   type?: "website" | "profile" | "article";
 }): Metadata {
   const base = siteUrl();
@@ -57,8 +68,20 @@ export function publicMetadata({
 
   // Foto real quando existe; senão a imagem de marca — nunca sem imagem
   // nenhuma, `DEFAULT_OG_IMAGE` é estática e não tem como quebrar.
+  //
+  // DIMENSÃO SÓ QUANDO SE SABE AS DUAS, e a omissão é deliberada: `og:image:
+  // width`/`height` são dicas que o crawler acredita. Anunciar 1200×1200 de
+  // uma foto 1600×1200 — que era o que este arquivo fazia para QUALQUER foto —
+  // faz o WhatsApp cortar o card ou desistir de renderizá-lo. Sem as tags ele
+  // baixa a imagem e mede sozinho: mais lento, e certo.
   const images = imageUrl
-    ? [{ url: imageUrl, alt: imageAlt ?? title, width: 1200, height: 1200 }]
+    ? [
+        {
+          url: imageUrl,
+          alt: imageAlt ?? title,
+          ...(imageWidth && imageHeight ? { width: imageWidth, height: imageHeight } : {}),
+        },
+      ]
     : [
         {
           url: DEFAULT_OG_IMAGE.url,

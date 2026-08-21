@@ -56,6 +56,10 @@ export async function generateMetadata({
     path: `/c/${kennel.slug}`,
     imageUrl: media[0]?.url ?? null,
     imageAlt: `Logo do ${kennel.name}`,
+    // Dimensões REAIS — ver o comentário em `publicMetadata` sobre o
+    // 1200×1200 cravado que valia para qualquer foto.
+    imageWidth: media[0]?.width ?? null,
+    imageHeight: media[0]?.height ?? null,
     type: "profile",
   });
 }

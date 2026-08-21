@@ -97,10 +97,37 @@ export async function generateMetadata({
 
   const fallback = [quando, `Ninhada do ${litter.kennel.name}.`].filter(Boolean).join(" · ");
 
+  /**
+   * A CAPA vira o card de compartilhamento.
+   *
+   * `photos[0]` é a capa por construção — `getPublicLitterByPublicId` ordena
+   * por `position`, mesmo conceito de `media[0]` em `/d/` e `/c/`. Nenhuma
+   * consulta a mais: aquele objeto já foi buscado acima, e a função é
+   * `cache()`, então a chamada do corpo da página deduplica com esta.
+   *
+   * `url` e não `thumbUrl`: a miniatura tem 320px no lado maior, abaixo do
+   * mínimo prático do WhatsApp para card grande. A imagem cheia tem até
+   * 1600px e no máximo 600 KB.
+   *
+   * A URL é PERMANENTE, não assinada: ninhada visível ao anônimo passou pela
+   * REGRA DUPLA, e `publishLitter` só publica depois de mover a mídia para
+   * `kennel-media-public`, de onde `resolveMediaUrls` devolve `getPublicUrl`
+   * — sem token e sem expiração, que é o que um crawler exige.
+   *
+   * `url` nulo cai no fallback de marca junto com o caso "sem foto": acontece
+   * se a mudança de bucket falhou e a linha ficou no bucket privado, onde o
+   * anônimo não tem grant. Melhor a imagem de marca que um link morto.
+   */
+  const capa = litter.photos[0];
+
   return publicMetadata({
     title: `Ninhada — ${litter.kennel.name}`,
     description: excerpt(litter.description) ?? fallback,
     path: `/n/${litter.public_id}`,
+    imageUrl: capa?.url ?? null,
+    imageAlt: `Ninhada do ${litter.kennel.name}`,
+    imageWidth: capa?.width ?? null,
+    imageHeight: capa?.height ?? null,
   });
 }
 

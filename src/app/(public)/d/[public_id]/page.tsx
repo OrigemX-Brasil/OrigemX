@@ -96,6 +96,10 @@ export async function generateMetadata({
     path: `/d/${dog.public_id}`,
     imageUrl: media[0]?.url ?? null,
     imageAlt: dog.name,
+    // Dimensões REAIS. Antes o helper cravava 1200×1200 para toda foto, o que
+    // era falso em quase todas — ver o comentário em `publicMetadata`.
+    imageWidth: media[0]?.width ?? null,
+    imageHeight: media[0]?.height ?? null,
     type: "profile",
   });
 }
