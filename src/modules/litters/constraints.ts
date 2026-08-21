@@ -35,6 +35,26 @@ export function isLitterStatus(value: string): value is LitterStatus {
 }
 
 /**
+ * A cor de cada status, num lugar só.
+ *
+ * Vivia na página da ninhada; subiu para cá quando a página pública do cão
+ * passou a mostrar o mesmo status no herói. Duas telas pintando "Reservado" de
+ * cores diferentes é o tipo de divergência que ninguém nota até um cliente
+ * notar.
+ *
+ * Vendido é cinza de propósito: não é erro nem alerta, é um fato encerrado.
+ */
+const STATUS_CLS: Record<string, string> = {
+  available: "border-success/40 bg-success-subtle text-success",
+  reserved: "border-data/40 bg-data-subtle text-data",
+  sold: "border-border-strong bg-surface-raised text-fg-faint",
+};
+
+export function litterStatusClass(status: string | null): string | null {
+  return status ? (STATUS_CLS[status] ?? null) : null;
+}
+
+/**
  * Teto do preço. `dogs.price_brl` é `numeric(10,2)`, que comportaria oito
  * dígitos inteiros; o limite aqui é MENOR de propósito — um filhote de R$ 10
  * milhões é dedo escorregando no teclado, não venda. O CHECK do banco garante

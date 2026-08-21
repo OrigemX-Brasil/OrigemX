@@ -1,5 +1,6 @@
 import { isoToBr } from "@/modules/dogs/br-date";
 import { FounderBadge } from "@/modules/kennels/components/founder-badge";
+import { formatFounderDigits } from "@/modules/kennels/founder";
 
 /**
  * ============================================================================
@@ -141,5 +142,113 @@ export function TrustBadges({
         </li>
       ) : null}
     </ul>
+  );
+}
+
+/**
+ * ============================================================================
+ * A MESMA verdade, na forma de faixa — o desktop do mockup do filhote.
+ * ============================================================================
+ *
+ * `assets/fotos/filhote-mockup.jpg` desenha quatro células grandes: ícone à
+ * esquerda, rótulo em cima, estado embaixo. Esta função adota essa FORMA, e
+ * só ela — os rótulos continuam sendo os de `TrustBadges`, pelas razões que o
+ * cabeçalho deste arquivo já registra:
+ *
+ *   - o mockup escreve "Criador Verificado"; aqui é "Criador Fundador", com o
+ *     número. A OrigemX não verifica criador nenhum, e um selo que diz o
+ *     contrário é pior que selo nenhum;
+ *   - o mockup escreve "Vacinas · Em dia" e "Exames · Em dia"; aqui é a DATA
+ *     da última vacina e a CONTAGEM de laudos. "Em dia" é juízo clínico sobre
+ *     um calendário vacinal que a plataforma não conhece.
+ *
+ * O dourado da célula de fundador é o uso RESERVADO do token — é literalmente
+ * o selo, o mesmo que `FounderBadge` carrega. Nas outras três, não.
+ *
+ * `hidden lg:grid`: no mobile quem aparece é `TrustBadges`, em chips. Os dois
+ * leem exatamente os mesmos props, então não há como um afirmar o que o outro
+ * nega.
+ */
+function ShieldIcon() {
+  return (
+    <svg {...ICON_PROPS} width={28} height={28} aria-hidden="true">
+      <path d="M12 3l7 3v5.5c0 4-2.9 7.6-7 8.5-4.1-.9-7-4.5-7-8.5V6l7-3Z" />
+      <path d="m9 12 2 2 4-4" />
+    </svg>
+  );
+}
+
+function Cell({
+  icon,
+  label,
+  state,
+  gold = false,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  state: string;
+  gold?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-4 p-5">
+      <span aria-hidden="true" className={`shrink-0 ${gold ? "text-selo" : "text-fg-faint"}`}>
+        {icon}
+      </span>
+      <span className="flex min-w-0 flex-col gap-0.5">
+        <span className={`text-base font-semibold ${gold ? "text-selo" : "text-fg"}`}>{label}</span>
+        <span className="text-fg-muted text-sm">{state}</span>
+      </span>
+    </div>
+  );
+}
+
+export function TrustStrip({
+  founderNumber,
+  vaccineDate,
+  geneticTestCount,
+  knownAncestors,
+}: {
+  founderNumber: number | null | undefined;
+  vaccineDate: string | null;
+  geneticTestCount: number;
+  knownAncestors: number;
+}) {
+  const temAlgum =
+    Boolean(founderNumber) || Boolean(vaccineDate) || geneticTestCount > 0 || knownAncestors > 0;
+
+  // Mesma regra da fileira de chips: sem nenhum dado, a faixa inteira some.
+  if (!temAlgum) return null;
+
+  return (
+    <section className="border-border bg-surface rounded-card divide-border hidden border lg:grid lg:grid-cols-[repeat(auto-fit,minmax(200px,1fr))] lg:divide-x">
+      {founderNumber ? (
+        <Cell
+          gold
+          icon={<ShieldIcon />}
+          label="Criador Fundador"
+          state={`OrigemX · nº ${formatFounderDigits(founderNumber)}`}
+        />
+      ) : null}
+
+      {vaccineDate ? (
+        <Cell icon={<SyringeIcon />} label="Vacinas" state={`Última em ${isoToBr(vaccineDate)}`} />
+      ) : null}
+
+      {geneticTestCount > 0 ? (
+        <Cell
+          icon={<FlaskIcon />}
+          label="Exames"
+          state={`${geneticTestCount} ${geneticTestCount === 1 ? "laudo" : "laudos"}`}
+        />
+      ) : null}
+
+      {knownAncestors > 0 ? (
+        <Cell
+          icon={<TreeIcon />}
+          label="Pedigree"
+          state={`${knownAncestors} ${knownAncestors === 1 ? "ancestral" : "ancestrais"}`}
+        />
+      ) : null}
+    </section>
   );
 }

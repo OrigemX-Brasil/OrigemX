@@ -85,7 +85,27 @@ test("vincula pai e mãe pela BUSCA e o pedigree aparece no perfil público", as
 
   await page.goto(`/d/${salvo!.public_id}`);
 
-  const arvore = page.locator("section", { hasText: "Pedigree" }).first();
+  /**
+   * A árvore é localizada pelo `<h2>`, e não por `hasText`, em TODOS os
+   * `arvore` deste arquivo — o motivo é o mesmo em todos.
+   *
+   * A faixa de selos do desktop (`TrustStrip`) tem uma célula "Pedigree",
+   * então ela também é uma `<section>` que CONTÉM a palavra, e vem antes da
+   * árvore no HTML: `.first()` passou a pegar a faixa e a comparar o nome do
+   * avô com "Pedigree · 10 ancestrais".
+   *
+   * Filtrar por visibilidade resolveria nos testes de 390px, mas NÃO no
+   * `describe` de geometria mais abaixo, que roda a 1440px de propósito — lá
+   * as duas seções estão visíveis. O `<h2>` distingue as duas em qualquer
+   * largura: na faixa, "Pedigree" é um `<span>`, não um cabeçalho.
+   *
+   * `exact` porque a variante de ninhada da mesma árvore se chama "Pedigree
+   * dos progenitores".
+   */
+  const arvore = page
+    .locator("section")
+    .filter({ has: page.getByRole("heading", { name: "Pedigree", exact: true }) })
+    .first();
   await expect(arvore).toContainText(`Tupã ${token}`);
   await expect(arvore).toContainText(`Aurora ${token}`);
   // Segunda geração: a árvore desce além de pai e mãe.
@@ -227,7 +247,10 @@ test("foto do ancestral fantasma aparece na árvore do descendente publicado", a
   // colunas desktop (`hidden sm:block`) — e só uma fica visível por vez via
   // CSS. Nos 390px do viewport padrão, sem `:visible` o locator bate nas
   // duas e o modo estrito do Playwright recusa a ambiguidade.
-  const arvore = page.locator("section", { hasText: "Pedigree" }).first();
+  const arvore = page
+    .locator("section")
+    .filter({ has: page.getByRole("heading", { name: "Pedigree", exact: true }) })
+    .first();
   const cardFantasma = arvore.locator("article:visible", { hasText: `Fantasma Visível ${token}` });
   await expect(cardFantasma).toBeVisible();
 
@@ -283,7 +306,10 @@ test("linebreeding: o mesmo ancestral aparece nos dois caminhos", async ({
 
   await page.goto(`/d/${filho.public_id}`);
 
-  const arvore = page.locator("section", { hasText: "Pedigree" }).first();
+  const arvore = page
+    .locator("section")
+    .filter({ has: page.getByRole("heading", { name: "Pedigree", exact: true }) })
+    .first();
   const ocorrencias = arvore.getByRole("link", { name: `Guará Comum ${token}` });
 
   await expect(ocorrencias).toHaveCount(2);
@@ -322,7 +348,10 @@ test("ancestral não cadastrado vira lacuna, sem deslocar o resto", async ({
   await publicar(admin, { kennelId: canil.id, dogIds: [filho.id, pai.id] });
   await page.goto(`/d/${filho.public_id}`);
 
-  const arvore = page.locator("section", { hasText: "Pedigree" }).first();
+  const arvore = page
+    .locator("section")
+    .filter({ has: page.getByRole("heading", { name: "Pedigree", exact: true }) })
+    .first();
   await expect(arvore).toContainText(`Só o pai ${token}`);
   await expect(arvore).toContainText("Não informado");
   await expect(arvore).toContainText("1 de 2 ancestrais");
@@ -387,7 +416,10 @@ test.describe("geometria da árvore em colunas", () => {
     await publicar(admin, { kennelId: canil.id, dogIds: [...ids.values()] });
     await page.goto(`/d/${sujeito.public_id}`);
 
-    const arvore = page.locator("section", { hasText: "Pedigree" }).first();
+    const arvore = page
+      .locator("section")
+      .filter({ has: page.getByRole("heading", { name: "Pedigree", exact: true }) })
+      .first();
     await expect(arvore).toContainText(nome(11));
 
     const centros = new Map<number, number>();
@@ -395,7 +427,10 @@ test.describe("geometria da árvore em colunas", () => {
       // `visible: true` porque o pedigree tem DUAS apresentações no DOM e o
       // CSS escolhe qual aparece — sem o filtro o card escondido do mobile
       // entraria na conta com caixa zerada.
-      const card = arvore.locator("article").filter({ hasText: nome(pos) }).filter({ visible: true });
+      const card = arvore
+        .locator("article")
+        .filter({ hasText: nome(pos) })
+        .filter({ visible: true });
       const box = await card.boundingBox();
       if (!box) throw new Error(`sem caixa para o card da posição ${pos}`);
       centros.set(pos, box.y + box.height / 2);

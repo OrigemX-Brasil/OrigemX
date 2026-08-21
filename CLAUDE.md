@@ -92,6 +92,12 @@ Deploy Vercel.
 
 ---
 
+## DESIGN DE REFERÊNCIA
+A página pública do filhote (/d/[public_id]) em DESKTOP deve seguir
+assets/fotos/filhote-mockup.jpg como norte visual. Tema dark, tokens
+do projeto. Mobile tem layout próprio (não segue o mockup — decisão
+acordada com o cliente).
+
 ## FORA DE ESCOPO
 
 Não implementar, nem "preparar tabela":

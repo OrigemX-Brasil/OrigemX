@@ -171,7 +171,12 @@ test("peso e cernelha: a ficha mostra a mais recente, a história mostra a evolu
 
   // A ficha: só a medição mais recente de cada tipo. A pesagem de 01/08 NÃO
   // aparece aqui — só na história.
-  const ficha = publica.locator("dl");
+  //
+  // `visible: true` porque a ficha é o único bloco que a página renderiza nas
+  // DUAS árvores (mobile e desktop) — ver o comentário em `fichaTecnica`. Sem
+  // o filtro, `locator("dl")` casaria com as duas e o modo estrito recusaria.
+  // A suíte roda a 390px, então a visível é a do mobile.
+  const ficha = publica.locator("dl").filter({ visible: true });
   await expect(ficha.getByText("2.4 kg", { exact: true })).toBeVisible();
   await expect(ficha.getByText("20 cm", { exact: true })).toBeVisible();
   await expect(ficha).not.toContainText("1.2 kg");
@@ -244,7 +249,12 @@ test("contador de irmãos disponíveis é contado do status, não digitado", asy
   const publica = await semSessao.newPage();
   await publica.goto(`/d/${ids[0]}`);
 
-  await expect(publica.getByText(/Restam/)).toContainText("2 machos e 1 fêmea");
+  // `visible: true`: mobile e desktop têm frases diferentes para o mesmo
+  // contador ("…nesta ninhada." × "…disponíveis"), então as duas existem no
+  // HTML e só uma é exibida. A suíte roda a 390px — a visível é a do mobile.
+  await expect(publica.getByText(/Restam/).filter({ visible: true })).toContainText(
+    "2 machos e 1 fêmea",
+  );
 
   await semSessao.close();
 });
@@ -308,4 +318,138 @@ test("layout do cão não transborda a 360px", async ({ page, criador, admin }) 
   ).toBeLessThanOrEqual(transbordo.client);
 
   await semSessao.close();
+});
+
+/**
+ * ============================================================================
+ * O desktop segue o mockup; o mobile NÃO muda. Um teste para as duas metades.
+ * ============================================================================
+ *
+ * `assets/fotos/filhote-mockup.jpg` é o norte visual do DESKTOP desta rota, e
+ * `CLAUDE.md` registra que o mobile tem layout próprio — decisão de produto,
+ * não omissão. As seções que o mockup trouxe (Progenitores, faixa da ninhada,
+ * FAQ, aviso de responsabilidade) nascem `hidden lg:…`.
+ *
+ * Este teste existe porque essa fronteira é invisível no código de quem chegar
+ * depois: um `lg:` esquecido faz a seção vazar para o celular sem quebrar nada
+ * — a página continua abrindo, só deixa de cumprir o combinado com o cliente.
+ * Por isso ele afirma os DOIS lados na MESMA montagem de dados: presente a
+ * 1440px, ausente a 390px.
+ *
+ * E mede transbordo a 1440px pelo mesmo motivo do teste de 360px acima: a
+ * faixa da ninhada tem SETE células e o pedigree rola dentro de si.
+ */
+test("o desenho de desktop aparece a 1440px e não vaza para o mobile", async ({
+  page,
+  criador,
+  admin,
+}) => {
+  const canil = await criarCanil(admin, criador.id, { city: "São Paulo", state: "SP" });
+  await admin.from("kennels").update({ whatsapp: "5511987654321" }).eq("id", canil.id);
+
+  const pai = await criarCao(admin, criador.id, {
+    name: "Power Chronos",
+    sex: "male",
+    kennel_id: canil.id,
+  });
+  const mae = await criarCao(admin, criador.id, {
+    name: "Ring Legends Athena",
+    sex: "female",
+    kennel_id: canil.id,
+  });
+
+  const { data: ninhada } = await admin
+    .from("kennel_litters")
+    .insert({
+      kennel_id: canil.id,
+      created_by: criador.id,
+      born_on: "2026-08-15",
+      sire_id: pai.id,
+      dam_id: mae.id,
+    })
+    .select("id")
+    .single();
+
+  const filhote = await criarCao(admin, criador.id, {
+    name: "Thor Desktop",
+    sex: "male",
+    kennel_id: canil.id,
+    sire_id: pai.id,
+    dam_id: mae.id,
+  });
+  await admin
+    .from("dogs")
+    .update({ litter_id: ninhada!.id, litter_status: "available", born_on: "2026-08-15" })
+    .eq("id", filhote.id);
+
+  await admin.from("kennel_faqs").insert({
+    kennel_id: canil.id,
+    question: "Como funciona a entrega?",
+    answer: "Combinamos pelo WhatsApp.",
+    position: 1,
+    created_by: criador.id,
+  });
+
+  await publicar(admin, { kennelId: canil.id, dogIds: [filhote.id, pai.id, mae.id] });
+
+  const semSessao = await page.context().browser()!.newContext({
+    viewport: { width: 1440, height: 900 },
+  });
+  const larga = await semSessao.newPage();
+  await larga.goto(`/d/${filhote.public_id}`);
+
+  // ---- DESKTOP: as seções do mockup existem e são VISÍVEIS ----
+  await expect(larga.getByRole("heading", { name: "Progenitores" })).toBeVisible();
+  await expect(larga.getByRole("link", { name: /Ver perfil completo/ }).first()).toBeVisible();
+  await expect(larga.getByRole("heading", { name: "Perguntas frequentes" })).toBeVisible();
+  await expect(larga.getByText("A linhagem é de responsabilidade do criador.")).toBeVisible();
+  await expect(larga.getByText("Localização", { exact: true })).toBeVisible();
+
+  // O selo de status do herói — só existe porque o cão é filhote de ninhada.
+  await expect(larga.getByText("Disponível", { exact: true })).toBeVisible();
+
+  // E o CTA é SÓ o do WhatsApp. "Reservar filhote" está no mockup e está fora
+  // de escopo por contrato — provar a ausência é o ponto, não um detalhe.
+  await expect(larga.getByRole("link", { name: /Falar no WhatsApp/ })).toBeVisible();
+  await expect(larga.getByText(/Reservar/i)).toHaveCount(0);
+
+  const transbordo = await larga.evaluate(() => {
+    const el = document.documentElement;
+    return { scroll: el.scrollWidth, client: el.clientWidth };
+  });
+  expect(
+    transbordo.scroll,
+    `a página rola na horizontal a 1440px (${transbordo.scroll}px de conteúdo em ${transbordo.client}px)`,
+  ).toBeLessThanOrEqual(transbordo.client);
+
+  await semSessao.close();
+
+  // ---- MOBILE: as MESMAS seções não aparecem ----
+  const semSessaoMobile = await page.context().browser()!.newContext({
+    viewport: { width: 390, height: 844 },
+  });
+  const estreita = await semSessaoMobile.newPage();
+  await estreita.goto(`/d/${filhote.public_id}`);
+
+  // A página abre normalmente — o que falta é seção de desktop, não conteúdo.
+  await expect(
+    estreita.getByRole("heading", { name: "Thor Desktop", exact: true }),
+  ).toBeVisible();
+
+  // `filter({ visible: true })` e não `toHaveCount(0)`: as seções ESTÃO no
+  // HTML, escondidas por `display:none`. O que este teste afirma é que nenhuma
+  // delas é EXIBIDA — que é a promessa feita ao cliente.
+  for (const texto of [
+    "Progenitores",
+    "Perguntas frequentes",
+    "A linhagem é de responsabilidade do criador.",
+    "Ver perfil completo",
+  ]) {
+    await expect(
+      estreita.getByText(texto).filter({ visible: true }),
+      `"${texto}" é seção de desktop e não pode aparecer a 390px`,
+    ).toHaveCount(0);
+  }
+
+  await semSessaoMobile.close();
 });

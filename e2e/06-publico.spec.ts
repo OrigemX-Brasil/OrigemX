@@ -56,10 +56,20 @@ test("cão e canil publicados abrem sem sessão, com os dados e o pedigree", asy
   expect(resp?.status()).toBe(200);
 
   await expect(aba.getByRole("heading", { name: `Rex Público ${token}` })).toBeVisible();
-  await expect(aba.getByText(cao.public_id)).toBeVisible();
-  await expect(aba.locator("section", { hasText: "Pedigree" }).first()).toContainText(
-    `Pai Público ${token}`,
-  );
+  // `visible: true`: a ficha do cão é renderizada nas duas árvores (mobile e
+  // desktop) da página, então o identificador está duas vezes no HTML e só uma
+  // aparece. Ver o comentário em `fichaTecnica`, em `d/[public_id]/page.tsx`.
+  await expect(aba.getByText(cao.public_id).filter({ visible: true })).toBeVisible();
+  // A árvore pelo `<h2>`, não por `hasText`: a faixa de selos do desktop
+  // (`TrustStrip`) tem uma célula "Pedigree" e também é uma `section` que
+  // contém a palavra, antes da árvore no HTML. Ver o comentário longo em
+  // `03-cao-pedigree.spec.ts`.
+  await expect(
+    aba
+      .locator("section")
+      .filter({ has: aba.getByRole("heading", { name: "Pedigree", exact: true }) })
+      .first(),
+  ).toContainText(`Pai Público ${token}`);
 
   // E o canil também.
   const respCanil = await aba.goto(`/c/${canil.slug}`);

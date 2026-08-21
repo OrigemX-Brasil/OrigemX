@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import type { ReactNode } from "react";
 
 import { isoToBr } from "@/modules/dogs/br-date";
 import { TrustBadges } from "@/modules/dogs/components/trust-badges";
@@ -18,12 +17,20 @@ import { latestByKind, litterHealthCoverage } from "@/modules/health/summary";
 import { countAvailableBySex, describeAvailability } from "@/modules/litters/availability";
 import { whatsappHref } from "@/modules/litters/contact";
 import { expectedWhelpingDate } from "@/modules/litters/gestation";
-import { litterStatusLabel } from "@/modules/litters/constraints";
+import { litterStatusClass, litterStatusLabel } from "@/modules/litters/constraints";
 import { PedigreeTree } from "@/modules/pedigree/components/pedigree-tree";
 import { MAX_PHOTO_GENERATION } from "@/modules/pedigree/layout";
 import { getPedigree } from "@/modules/pedigree/queries";
 import { thumbnailTargets } from "@/modules/pedigree/tree";
 import { BrandX } from "@/modules/public/components/brand-x";
+import { ParentCard } from "@/modules/public/components/parent-card";
+import {
+  CalendarIcon,
+  FemaleIcon,
+  MaleIcon,
+  PawIcon,
+  Stat,
+} from "@/modules/public/components/stat-strip";
 import { PhotoTrigger, PublicGallery } from "@/modules/public/components/photo-lightbox";
 import { PublicImage } from "@/modules/public/components/public-image";
 import { excerpt, publicMetadata, siteUrl } from "@/modules/public/metadata";
@@ -33,10 +40,8 @@ import {
   getPublicLitterByPublicId,
   getPublicLitterParents,
   getPublicLitterPuppies,
-  type PublicDog,
 } from "@/modules/public/queries";
 import { KennelSearch } from "@/modules/search/components/kennel-search";
-import type { ResolvedMedia } from "@/modules/media/queries";
 import { createPublicClient } from "@/lib/supabase/public";
 
 /**
@@ -68,12 +73,6 @@ export function generateStaticParams() {
 }
 
 const SEX_LABEL: Record<string, string> = { male: "Macho", female: "Fêmea" };
-
-const STATUS_CLS: Record<string, string> = {
-  available: "border-success/40 bg-success-subtle text-success",
-  reserved: "border-data/40 bg-data-subtle text-data",
-  sold: "border-border-strong bg-surface-raised text-fg-faint",
-};
 
 function formatPrice(value: number | null): string | null {
   if (value === null) return null;
@@ -524,7 +523,7 @@ export default async function NinhadaPublicaPage({
                             {status ? (
                               <span
                                 className={`rounded-control bg-surface/90 absolute top-2 right-2 border px-2 py-0.5 text-xs font-medium backdrop-blur-sm ${
-                                  STATUS_CLS[puppy.litter_status ?? ""] ?? STATUS_CLS.sold
+                                  litterStatusClass(puppy.litter_status) ?? ""
                                 }`}
                               >
                                 {status}
@@ -699,134 +698,6 @@ export default async function NinhadaPublicaPage({
         </PublicGallery>
       </main>
     </div>
-  );
-}
-
-function Stat({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
-  return (
-    <div className="flex items-center gap-3 p-4">
-      <span aria-hidden="true" className="text-fg-faint shrink-0">
-        {icon}
-      </span>
-      <span className="flex min-w-0 flex-col gap-0.5">
-        <span className="text-fg-faint text-[0.625rem] font-medium tracking-widest uppercase">
-          {label}
-        </span>
-        <span className="text-fg font-mono text-base font-medium tabular-nums">{value}</span>
-      </span>
-    </div>
-  );
-}
-
-/**
- * Os quatro ícones da barra de resumo.
- *
- * SVG inline, como todo ícone deste projeto (não há biblioteca) — mesmo
- * precedente do `CalendarIcon` em `dogs/components/date-field.tsx`. Todos com
- * `currentColor` e sem `aria`: quem anuncia é o rótulo de texto ao lado, e o
- * `aria-hidden` está no `<span>` que os envolve em `Stat`.
- */
-const ICON_PROPS = {
-  viewBox: "0 0 24 24",
-  width: 20,
-  height: 20,
-  fill: "none",
-  stroke: "currentColor",
-  strokeWidth: 1.75,
-  strokeLinecap: "round",
-  strokeLinejoin: "round",
-} as const;
-
-function CalendarIcon() {
-  return (
-    <svg {...ICON_PROPS}>
-      <rect x="3" y="4" width="18" height="18" rx="2" />
-      <path d="M16 2v4M8 2v4M3 10h18" />
-    </svg>
-  );
-}
-
-/** Pata — quatro dedos e o coxim, a marca da contagem de filhotes. */
-function PawIcon() {
-  return (
-    <svg {...ICON_PROPS}>
-      <ellipse cx="8" cy="7" rx="1.9" ry="2.5" />
-      <ellipse cx="16" cy="7" rx="1.9" ry="2.5" />
-      <ellipse cx="4.5" cy="12.5" rx="1.7" ry="2.2" />
-      <ellipse cx="19.5" cy="12.5" rx="1.7" ry="2.2" />
-      <path d="M12 12.5c3 0 5 2.2 5 4.5 0 2-1.7 3.2-3.4 2.7-1-.3-2.2-.3-3.2 0C8.7 20.2 7 19 7 17c0-2.3 2-4.5 5-4.5Z" />
-    </svg>
-  );
-}
-
-function MaleIcon() {
-  return (
-    <svg {...ICON_PROPS}>
-      <circle cx="10" cy="14" r="5" />
-      <path d="M15 9l5-5M15 4h5v5" />
-    </svg>
-  );
-}
-
-function FemaleIcon() {
-  return (
-    <svg {...ICON_PROPS}>
-      <circle cx="12" cy="9" r="5" />
-      <path d="M12 14v7M9 18h6" />
-    </svg>
-  );
-}
-
-function ParentCard({
-  parent,
-  fallback,
-}: {
-  parent: (PublicDog & { cover: ResolvedMedia | null }) | null;
-  fallback: string;
-}) {
-  // `row-span-2` também na ausência: as duas colunas precisam ocupar as mesmas
-  // duas linhas, senão a auto-alocação do grid empurra o X para fora do lugar
-  // quando só um dos progenitores é conhecido.
-  if (!parent) {
-    return (
-      <div className="text-fg-faint row-span-2 flex items-center justify-center text-center text-sm">
-        {fallback}
-      </div>
-    );
-  }
-
-  return (
-    <Link
-      href={`/d/${parent.public_id}`}
-      // `grid-rows-subgrid`: as duas linhas deste card SÃO as duas do grid dos
-      // progenitores, então as fotos alinham entre si e os nomes também —
-      // mesmo com um nome de uma linha e outro de duas. Exatamente DOIS
-      // filhos, um por linha; o nome e o chip de sexo vão juntos no segundo.
-      className="focus-visible:outline-ring row-span-2 grid grid-rows-subgrid gap-2 text-center focus-visible:outline-2"
-    >
-      <div className="bg-surface-hover rounded-card aspect-[4/3] w-full overflow-hidden">
-        <PublicImage
-          src={parent.cover?.url ?? null}
-          alt=""
-          fallbackText={parent.name}
-          width={parent.cover?.width ?? 4}
-          height={parent.cover?.height ?? 3}
-          className="size-full object-cover"
-        />
-      </div>
-
-      {/* `justify-between` com o bloco esticado na linha 2: o chip de sexo
-          encosta no fim da linha nos DOIS cards, então eles alinham entre si
-          mesmo quando um nome ocupa três linhas e o outro uma — que é o caso
-          real de "Ring Legend's Athena da Casa Grande" ao lado de "Power
-          Chronos" num celular de 360px. */}
-      <div className="flex flex-col items-center justify-between gap-2">
-        <span className="text-fg text-sm font-semibold">{parent.name}</span>
-        <span className="border-border-strong bg-surface-raised text-fg-muted rounded-control border px-2 py-0.5 text-xs font-medium">
-          {SEX_LABEL[parent.sex]}
-        </span>
-      </div>
-    </Link>
   );
 }
 

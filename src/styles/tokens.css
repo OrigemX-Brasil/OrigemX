@@ -167,6 +167,25 @@
   --color-warning-subtle: oklch(0.28 0.06 50);
 
   /* -------------------------------------------------------------------------
+     VERDE DO WHATSAPP — cor de marca de TERCEIRO, não estado nosso.
+
+     Fica aqui embaixo, fora da rampa semântica, porque não é papel: é a cor
+     que o usuário reconhece como "isto abre o WhatsApp" antes de ler o rótulo.
+     Vale só no CTA de contato do desktop do filhote, que segue o mockup do
+     cliente; o CTA mobile continua `--color-accent`.
+
+     POR QUE NÃO REUSAR `--color-success`: aquele é menta (matiz 165), 13 pontos
+     de distância do verde do WhatsApp (152) — o bastante para parecer "quase",
+     que é pior que ser outro. E emprestar a cor de sucesso a um botão de link
+     externo desgastaria os dois significados.
+
+     #25D366 convertido: contraste 1.98:1 sobre o noite, então NÃO serve de cor
+     de texto — só de fundo, com `--color-noite` por cima (11.5:1).
+     ---------------------------------------------------------------------- */
+  --color-whatsapp: oklch(0.752 0.169 152.2);
+  --color-whatsapp-hover: oklch(0.7 0.161 152.2);
+
+  /* -------------------------------------------------------------------------
      TIPOGRAFIA
 
      Display: Sora. O manual indica EXA, que não está no Google Fonts; enquanto
