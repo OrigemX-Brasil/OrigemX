@@ -4,7 +4,6 @@ import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 
 import { isoToBr } from "@/modules/dogs/br-date";
-import { DateField } from "@/modules/dogs/components/date-field";
 
 import {
   addHealthRecord,
@@ -12,14 +11,10 @@ import {
   updateHealthRecord,
   type HealthRecordFormState,
 } from "../actions";
-import {
-  HEALTH_KIND_OPTIONS,
-  MAX_NOTES_LENGTH,
-  MAX_PRODUCT_LENGTH,
-  healthKindLabel,
-  VACCINE_SUGGESTIONS,
-} from "../constraints";
+import { healthKindLabel, VACCINE_SUGGESTIONS } from "../constraints";
 import type { HealthRecord } from "../queries";
+
+import { DATALIST_VACINAS, RecordFields } from "./record-fields";
 
 /**
  * ============================================================================
@@ -31,17 +26,10 @@ import type { HealthRecord } from "../queries";
  * há "índice do array" para sincronizar com id de banco, e uma linha que falha
  * não derruba o que já foi salvo.
  *
- * O `<datalist>` do tipo de vacina oferece os valores comuns SEM fechar o
- * campo: o banco aceita texto livre de propósito (ver o cabeçalho da migration),
- * porque um enum erra na primeira vacina nova e trava quem não tem contorno.
+ * Os campos do registro (`RecordFields`, com o `<datalist>` do tipo de vacina)
+ * moram em `record-fields.tsx` — o lançamento em lote da ninhada
+ * (`litter-health-form.tsx`) reusa o mesmo componente, pelo mesmo registro.
  */
-
-const INPUT_CLS =
-  "border-border-strong bg-bg text-fg placeholder:text-fg-faint focus-visible:border-accent rounded-control border px-3 py-2 text-sm outline-none transition-colors";
-
-/** Renderizado UMA vez pela seção e referenciado por id pelos formulários de
- *  adicionar e de editar — repetir por linha duplicaria o id no documento. */
-const DATALIST_VACINAS = "vacinas-comuns";
 
 function Submit({ label }: { label: string }) {
   const { pending } = useFormStatus();
@@ -53,111 +41,6 @@ function Submit({ label }: { label: string }) {
     >
       {pending ? "Salvando…" : label}
     </button>
-  );
-}
-
-/**
- * Os campos do registro, compartilhados por adicionar e editar — para os dois
- * não divergirem em rótulo, limite ou sugestão.
- *
- * O `kind` é estado local porque o rótulo e o `<datalist>` do campo seguinte
- * dependem dele: "Tipo da vacina" com sugestões vs. "Marca do vermífugo" sem.
- */
-function RecordFields({
-  idPrefix,
-  errors,
-  defaults,
-}: {
-  idPrefix: string;
-  errors: Partial<Record<"kind" | "applied_on" | "product" | "notes", string>>;
-  defaults?: Pick<HealthRecord, "kind" | "applied_on" | "product" | "notes">;
-}) {
-  const [kind, setKind] = useState<string>(defaults?.kind ?? "vaccine");
-
-  return (
-    <>
-      <div className="grid gap-3 sm:grid-cols-3">
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor={`${idPrefix}-kind`} className="text-fg-muted text-xs font-medium">
-            Tipo
-          </label>
-          <select
-            id={`${idPrefix}-kind`}
-            name="kind"
-            value={kind}
-            onChange={(e) => setKind(e.target.value)}
-            className={INPUT_CLS}
-          >
-            {HEALTH_KIND_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-          {errors.kind ? (
-            <p role="alert" className="text-danger text-xs">
-              {errors.kind}
-            </p>
-          ) : null}
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor={`${idPrefix}-applied-on`} className="text-fg-muted text-xs font-medium">
-            Data
-          </label>
-          <DateField
-            id={`${idPrefix}-applied-on`}
-            name="applied_on"
-            defaultValue={defaults?.applied_on}
-          />
-          {errors.applied_on ? (
-            <p role="alert" className="text-danger text-xs">
-              {errors.applied_on}
-            </p>
-          ) : null}
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor={`${idPrefix}-product`} className="text-fg-muted text-xs font-medium">
-            {kind === "vaccine" ? "Tipo da vacina" : "Marca do vermífugo"}
-          </label>
-          <input
-            id={`${idPrefix}-product`}
-            name="product"
-            type="text"
-            list={kind === "vaccine" ? DATALIST_VACINAS : undefined}
-            defaultValue={defaults?.product ?? undefined}
-            maxLength={MAX_PRODUCT_LENGTH}
-            placeholder={kind === "vaccine" ? "V10" : "Opcional"}
-            className={INPUT_CLS}
-          />
-          {errors.product ? (
-            <p role="alert" className="text-danger text-xs">
-              {errors.product}
-            </p>
-          ) : null}
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor={`${idPrefix}-notes`} className="text-fg-muted text-xs font-medium">
-          Observação (opcional)
-        </label>
-        <input
-          id={`${idPrefix}-notes`}
-          name="notes"
-          type="text"
-          defaultValue={defaults?.notes ?? undefined}
-          maxLength={MAX_NOTES_LENGTH}
-          className={INPUT_CLS}
-        />
-        {errors.notes ? (
-          <p role="alert" className="text-danger text-xs">
-            {errors.notes}
-          </p>
-        ) : null}
-      </div>
-    </>
   );
 }
 
@@ -272,7 +155,7 @@ export function HealthSection({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Uma vez por seção — ver o comentário da constante acima. */}
+      {/* Uma vez por seção — ver o comentário de `DATALIST_VACINAS` em `record-fields.tsx`. */}
       <datalist id={DATALIST_VACINAS}>
         {VACCINE_SUGGESTIONS.map((v) => (
           <option key={v} value={v} />

@@ -348,6 +348,185 @@ test("saúde da ninhada: cobertura parcial mostra a contagem, não um checkmark 
 });
 
 /**
+ * O pedigree da ninhada tinha 3 gerações hardcoded (`getPedigree(ancora.id,
+ * 3)`), enquanto a página do cão sempre mostrou 5. Não basta trocar o número:
+ * `LITTER_GENERATIONS` precisa de uma entrada por geração, senão a 4ª e a 5ª
+ * caem no fallback de largura/rótulo da 3ª. Este caso só precisa de UM
+ * caminho até a 5ª geração — não da árvore inteira — para provar a
+ * profundidade de verdade.
+ */
+test("pedigree da ninhada desce até a 5ª geração de progenitores", async ({
+  page,
+  criador,
+  admin,
+}) => {
+  const canil = await criarCanil(admin, criador.id);
+  const token = Date.now().toString(36);
+
+  // Uma única linha paterna, funda até a 5ª geração — o resto da árvore fica
+  // com lacunas de propósito, o que já é coberto pelo teste de "4 de 6
+  // ancestrais" em 03-cao-pedigree.spec.ts.
+  const tetravo = await criarCao(admin, criador.id, {
+    name: `Tetravô ${token}`,
+    sex: "male",
+    kennel_id: canil.id,
+  });
+  const trisavo = await criarCao(admin, criador.id, {
+    name: `Trisavô ${token}`,
+    sex: "male",
+    kennel_id: canil.id,
+    sire_id: tetravo.id,
+  });
+  const bisavo = await criarCao(admin, criador.id, {
+    name: `Bisavô ${token}`,
+    sex: "male",
+    kennel_id: canil.id,
+    sire_id: trisavo.id,
+  });
+  const avo = await criarCao(admin, criador.id, {
+    name: `Avô ${token}`,
+    sex: "male",
+    kennel_id: canil.id,
+    sire_id: bisavo.id,
+  });
+  const pai = await criarCao(admin, criador.id, {
+    name: `Pai ${token}`,
+    sex: "male",
+    kennel_id: canil.id,
+    sire_id: avo.id,
+  });
+  const mae = await criarCao(admin, criador.id, {
+    name: `Mãe ${token}`,
+    sex: "female",
+    kennel_id: canil.id,
+  });
+
+  const { data: ninhada } = await admin
+    .from("kennel_litters")
+    .insert({
+      kennel_id: canil.id,
+      created_by: criador.id,
+      sire_id: pai.id,
+      dam_id: mae.id,
+      published_at: new Date().toISOString(),
+    })
+    .select("id, public_id")
+    .single();
+
+  await admin.from("dogs").insert({
+    name: `Filhote ${token}`,
+    sex: "male",
+    kennel_id: canil.id,
+    litter_id: ninhada!.id,
+    litter_status: "available",
+    sire_id: pai.id,
+    dam_id: mae.id,
+    owner_id: criador.id,
+    created_by: criador.id,
+    published_at: new Date().toISOString(),
+  });
+
+  await publicar(admin, {
+    kennelId: canil.id,
+    dogIds: [pai.id, mae.id, avo.id, bisavo.id, trisavo.id, tetravo.id],
+  });
+
+  const semSessao = await page.context().browser()!.newContext();
+  const publica = await semSessao.newPage();
+  await publica.goto(`/n/${ninhada!.public_id}`);
+
+  const arvore = publica.locator("section", { hasText: "Pedigree" }).first();
+  await expect(arvore).toBeVisible();
+  await expect(arvore).toContainText(`Tetravô ${token}`);
+  // 6 posições conhecidas (pai, mãe e a linha paterna até o tetravô) — a
+  // árvore não vai além da 5ª geração porque foi até aí que este teste criou
+  // cão.
+  await expect(arvore).toContainText("6 de 62 ancestrais · 5 gerações");
+
+  await semSessao.close();
+});
+
+/**
+ * O atalho de saúde em lote: continua UMA linha por filhote em
+ * `dog_health_records` (nenhuma tabela nova, nenhum `litter_id` na tabela) —
+ * o formulário só evita repetir "Tipo/Data/Produto" um filhote de cada vez.
+ * Todo filhote nasce marcado; desmarcar é a exceção.
+ */
+test("saúde em lote: registra em quem está marcado, não em quem foi desmarcado", async ({
+  page,
+  criador,
+  admin,
+}) => {
+  const canil = await criarCanil(admin, criador.id);
+  const pai = await criarCao(admin, criador.id, { sex: "male", kennel_id: canil.id });
+  const mae = await criarCao(admin, criador.id, { sex: "female", kennel_id: canil.id });
+
+  const { data: ninhada } = await admin
+    .from("kennel_litters")
+    .insert({
+      kennel_id: canil.id,
+      created_by: criador.id,
+      sire_id: pai.id,
+      dam_id: mae.id,
+    })
+    .select("id")
+    .single();
+
+  const filhotes: string[] = [];
+  for (const nome of ["Um", "Dois", "Três"]) {
+    const { data } = await admin
+      .from("dogs")
+      .insert({
+        name: `Filhote ${nome}`,
+        sex: "male",
+        kennel_id: canil.id,
+        litter_id: ninhada!.id,
+        litter_status: "available",
+        sire_id: pai.id,
+        dam_id: mae.id,
+        owner_id: criador.id,
+        created_by: criador.id,
+      })
+      .select("id")
+      .single();
+    filhotes.push(data!.id);
+  }
+
+  await page.goto(`/painel/canis/${canil.id}/ninhadas/${ninhada!.id}`);
+
+  const saude = page.locator("section", { hasText: "Saúde dos filhotes" });
+  await expect(saude).toBeVisible();
+
+  // Todos nascem marcados — desmarca só "Filhote Três", a exceção.
+  await saude.getByRole("checkbox", { name: /Filhote Três/ }).uncheck();
+
+  await saude.getByLabel("Data").pressSequentially("15082026");
+  await saude.getByLabel("Tipo da vacina").fill("V10");
+  await saude.getByRole("button", { name: "Registrar para os filhotes selecionados" }).click();
+
+  await expect(saude.getByText("Registrado para 2 filhotes.")).toBeVisible();
+
+  const { data: registros } = await admin
+    .from("dog_health_records")
+    .select("dog_id")
+    .in("dog_id", filhotes)
+    .is("deleted_at", null);
+
+  const cobertos = new Set((registros ?? []).map((r) => r.dog_id));
+  expect(cobertos.has(filhotes[0])).toBe(true);
+  expect(cobertos.has(filhotes[1])).toBe(true);
+  // O desmarcado fica de fora — a essência do teste.
+  expect(cobertos.has(filhotes[2])).toBe(false);
+
+  // Cada linha continua independente: editável/removível uma a uma depois,
+  // no mesmo lugar de sempre — sem vínculo entre elas além de terem nascido
+  // do mesmo clique. Confere pela tela do próprio cão, não só pelo banco.
+  await page.goto(`/painel/caes/${filhotes[0]}`);
+  await expect(page.getByText("V10")).toBeVisible();
+  await expect(page.getByText("15/08/2026")).toBeVisible();
+});
+
+/**
  * O FILTRO DE PLANTEL — filhote é `dogs`, mas não é plantel.
  *
  * `listMyDogs` e `listPublicDogsOfKennel` filtram `litter_id is null`. É

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { BackLink } from "@/components/back-link";
 import { getAuthUser } from "@/modules/auth/queries";
+import { LitterHealthForm } from "@/modules/health/components/litter-health-form";
 import { getManageableKennelById } from "@/modules/kennels/queries";
 import { registerLitterPhoto, softDeleteLitter } from "@/modules/litters/actions";
 import { LitterForm } from "@/modules/litters/components/litter-form";
@@ -80,6 +81,26 @@ export default async function EditarNinhadaPage({
           ownerId={user.id}
         />
       </section>
+
+      {puppies.length > 0 ? (
+        <section className="border-border flex flex-col gap-4 border-t pt-6">
+          <div className="flex flex-col gap-1">
+            <h2 className="font-display text-base font-semibold">Saúde dos filhotes</h2>
+            <p className="text-fg-muted text-sm">
+              Um registro de vacina ou vermífugo por filhote — cada um continua editável
+              individualmente depois. Marque quem recebeu a mesma aplicação para lançar de uma
+              vez só.
+            </p>
+          </div>
+
+          <LitterHealthForm
+            kennelId={id}
+            litterId={litter.id}
+            litterPublicId={litter.public_id}
+            puppies={puppies}
+          />
+        </section>
+      ) : null}
 
       <section className="border-border flex flex-col gap-4 border-t pt-6">
         <div className="flex flex-col gap-1">

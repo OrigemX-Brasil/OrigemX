@@ -56,6 +56,18 @@ export type GeneticTestFormState = {
   ok?: boolean;
 };
 
+export type LitterHealthRecordFormState = {
+  errors?: HealthRecordErrors;
+  formError?: string;
+  values?: HealthRecordInput;
+  ok?: boolean;
+  /** Quantos filhotes selecionados receberam a linha. */
+  appliedCount?: number;
+  /** Quantos ficaram de fora por já estarem no teto de registros. 0 quando
+   *  todos entraram — o form só mostra o aviso se for maior que zero. */
+  skippedCount?: number;
+};
+
 /**
  * Revalida as telas que exibem o dado do cão.
  *
@@ -154,6 +166,103 @@ export async function addHealthRecord(
 
   await revalidateDogPaths(supabase, dogId);
   return { ok: true };
+}
+
+/**
+ * O MESMO registro em vários filhotes de uma vez — atalho para o painel da
+ * ninhada, não um evento novo no schema.
+ *
+ * Continua UMA LINHA POR FILHOTE em `dog_health_records` (o resto deste
+ * arquivo depende disso — ver o cabeçalho). O que muda é só a origem do
+ * `<form>`: em vez de um `dog_id` fixo, uma lista de checkboxes marcados por
+ * padrão. Cada linha inserida é depois editável e removível individualmente
+ * em `/painel/caes/[id]`, como qualquer registro — não existe vínculo entre
+ * elas além de terem nascido do mesmo clique.
+ *
+ * `litter_public_id` chega pronto do formulário (a página já carrega
+ * `litter.public_id` para o `PublishToggle`) para não repetir a consulta que
+ * `revalidateDogPaths` faria, uma vez por filhote, para descobrir a MESMA
+ * ninhada.
+ */
+export async function addHealthRecordForLitter(
+  _prev: LitterHealthRecordFormState,
+  formData: FormData,
+): Promise<LitterHealthRecordFormState> {
+  const kennelId = String(formData.get("kennel_id") ?? "");
+  const litterId = String(formData.get("litter_id") ?? "");
+  const litterPublicId = String(formData.get("litter_public_id") ?? "");
+  const dogIds = [...new Set(formData.getAll("dog_ids").map(String).filter(Boolean))];
+
+  if (!litterId || !litterPublicId) return { formError: "Ninhada não identificada." };
+  if (dogIds.length === 0) return { formError: "Selecione ao menos um filhote." };
+
+  const user = await requireUser(`/painel/canis/${kennelId}/ninhadas/${litterId}`);
+
+  const input: HealthRecordInput = {
+    kind: String(formData.get("kind") ?? ""),
+    applied_on: String(formData.get("applied_on") ?? ""),
+    product: String(formData.get("product") ?? ""),
+    notes: String(formData.get("notes") ?? ""),
+  };
+
+  const errors = validateHealthRecord(input);
+  if (Object.keys(errors).length > 0) return { errors, values: input };
+
+  const supabase = await createClient();
+
+  // Teto por filhote, igual a `addHealthRecord` — só que checado para os N de
+  // uma vez, uma consulta em lote, e quem já está no limite fica de fora do
+  // insert em vez de derrubar os demais.
+  const { data: existing } = await supabase
+    .from("dog_health_records")
+    .select("dog_id")
+    .in("dog_id", dogIds)
+    .is("deleted_at", null);
+
+  const countByDog = new Map<string, number>();
+  for (const row of existing ?? []) {
+    countByDog.set(row.dog_id, (countByDog.get(row.dog_id) ?? 0) + 1);
+  }
+
+  const eligible = dogIds.filter((id) => (countByDog.get(id) ?? 0) < MAX_HEALTH_RECORDS_PER_DOG);
+  const skippedCount = dogIds.length - eligible.length;
+
+  if (eligible.length === 0) {
+    return {
+      formError: `Todo filhote selecionado já tem ${MAX_HEALTH_RECORDS_PER_DOG} registros de saúde.`,
+      values: input,
+    };
+  }
+
+  const values = normalizeHealthRecord(input);
+  const { error } = await supabase.from("dog_health_records").insert(
+    eligible.map((dogId) => ({
+      dog_id: dogId,
+      kind: values.kind,
+      applied_on: values.applied_on,
+      product: values.product,
+      notes: values.notes,
+      created_by: user.id,
+    })),
+  );
+
+  if (error) {
+    return {
+      formError: "Não foi possível registrar. Confira se os filhotes são seus e tente de novo.",
+      values: input,
+    };
+  }
+
+  const { data: dogs } = await supabase.from("dogs").select("id, public_id").in("id", eligible);
+
+  revalidatePath(`/painel/canis/${kennelId}/ninhadas/${litterId}`);
+  for (const dog of dogs ?? []) {
+    revalidatePath(`/painel/caes/${dog.id}`);
+    revalidatePath(`/d/${dog.public_id}`);
+  }
+  revalidatePath(`/n/${litterPublicId}`);
+
+  return { ok: true, appliedCount: eligible.length, skippedCount };
 }
 
 /** Exclusão LÓGICA — nenhuma tabela do projeto concede DELETE. */

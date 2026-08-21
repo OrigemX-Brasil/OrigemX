@@ -101,11 +101,25 @@ export const PREVIEW_GENERATIONS: readonly GenerationSpec[] = buildSpecs(
  * A ninhada não tem "este cão": a árvore é dos PAIS para trás, e é o que a
  * referência visual do cliente mostra. O filhote usado na consulta é só a
  * âncora da RPC — ele nunca chega à tela.
+ *
+ * CINCO gerações de progenitores (pais → ... → tetravós), as mesmas que a
+ * página do cão mostra a partir do sujeito. As duas últimas entradas precisam
+ * existir aqui: sem elas, `specFor` cairia no fallback `specs.at(-1)!` para as
+ * gerações 4 e 5 (card/rótulo da 3ª geração reaproveitado, errado) e
+ * `treeWidth`/`treeOverflow` — que somam só até `specs.length` — subestimariam
+ * a largura real da árvore, quebrando o cálculo de rolagem horizontal.
  */
 export const LITTER_GENERATIONS: readonly GenerationSpec[] = buildSpecs(
-  [168, 168, 152, 140],
+  [168, 168, 152, 140, 116, 116],
   ELBOW,
-  ["", "PROGENITORES", "2ª GERAÇÃO · AVÓS", "3ª GERAÇÃO · BISAVÓS"],
+  [
+    "",
+    "PROGENITORES",
+    "2ª GERAÇÃO · AVÓS",
+    "3ª GERAÇÃO · BISAVÓS",
+    "4ª GERAÇÃO · TRISAVÓS",
+    "5ª GERAÇÃO · TETRAVÓS",
+  ],
 );
 
 /** Largura renderizada da árvore, da geração 0 até `depth` (inclusive). */

@@ -134,7 +134,9 @@ export default async function NinhadaPublicaPage({
   ]);
 
   /**
-   * O pedigree da ninhada: UMA árvore de 3 gerações (pais → avós → bisavós).
+   * O pedigree da ninhada: UMA árvore de 5 gerações de progenitores (pais →
+   * avós → bisavós → trisavós → tetravós) — a mesma profundidade da página do
+   * cão, só começando um passo à frente dela.
    *
    * A âncora é o primeiro filhote publicado, e não os progenitores, por uma
    * razão de estrutura: a numeração Ahnentafel da RPC precisa de UMA raiz para
@@ -143,9 +145,10 @@ export default async function NinhadaPublicaPage({
    * até agora, e é justamente a duplicação que o redesenho remove. O filhote
    * nunca é renderizado: `variant="litter"` omite a coluna do sujeito.
    *
-   * As 3 gerações são pedidas na CONSULTA, não cortadas no layout: a recursão
+   * As 5 gerações são pedidas na CONSULTA, não cortadas no layout: a recursão
    * de `Branches` para por falta de nó, então limitar aqui é o único corte que
-   * funciona de verdade.
+   * funciona de verdade. `LITTER_GENERATIONS` (`pedigree/layout.ts`) precisa
+   * ter uma entrada por geração pedida aqui — é o mesmo teto em dois lugares.
    *
    * Sem filhote publicado não há seção. O pedigree da ninhada é o dos filhotes;
    * sem nenhum, não há o que mostrar a um comprador — e os progenitores estão
@@ -153,7 +156,7 @@ export default async function NinhadaPublicaPage({
    * deles vive.
    */
   const ancora = puppies[0];
-  const litterPedigree = ancora ? await getPedigree(ancora.id, 3) : null;
+  const litterPedigree = ancora ? await getPedigree(ancora.id, 5) : null;
 
   // Miniaturas dos ancestrais, em lote — o mesmo padrão de `/d/[public_id]`.
   // Sem isto a árvore renderiza sem foto nenhuma, que é o que ela vinha
