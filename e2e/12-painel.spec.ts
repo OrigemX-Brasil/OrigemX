@@ -2,22 +2,29 @@ import { expect, test } from "./support/fixtures";
 
 /**
  * ============================================================================
- * 12. Home do painel — atalho de Ninhadas
+ * 12. Home do painel — os dois atalhos de ninhada
  * ============================================================================
  *
- * O atalho só existe quando há para onde ele levar: sem canil, não há `id`
+ * Os atalhos só existem quando há para onde levar: sem canil, não há `id`
  * para montar `/painel/canis/[id]`. "Meu canil" e "Cães" não têm essa
  * condição — sempre aparecem — e este arquivo não testa os dois, só o
- * comportamento novo.
+ * comportamento condicional.
  *
- * O link vai pra página do CANIL (`#ninhadas`), não direto pro formulário de
- * criação: a seção de lá já resolve lista OU empty-state sozinha. Pular pra
- * `/novo` jogaria quem já tem ninhada dentro do formulário de criar outra,
- * sem ver o que já cadastrou — era assim numa rodada anterior, e foi
- * reportado como bug depois de subir pra produção.
+ * SÃO DOIS ATALHOS, e a razão é histórica. Numa rodada anterior existia um
+ * só, indo direto pra `/ninhadas/novo`: foi reportado como bug depois de
+ * subir pra produção, porque jogava quem já tinha ninhada dentro de um
+ * formulário de criar outra, sem ver o que já havia cadastrado. Trocar o
+ * destino pela âncora `#ninhadas` consertou aquele caso e criou o oposto —
+ * cadastrar passou a exigir dois passos.
+ *
+ * Por isso os dois testes abaixo prendem os DOIS caminhos ao mesmo tempo:
+ * "Ver minhas ninhadas" precisa continuar pousando na seção que resolve
+ * lista/empty-state, e "Cadastrar nova ninhada" precisa abrir o formulário
+ * direto. Se um dos dois sumir, ou se um passar a fazer o trabalho do outro,
+ * este arquivo falha.
  */
 
-test("com canil, a home mostra o atalho de Ninhadas apontando pro canil certo", async ({
+test("com canil, a home mostra os dois atalhos, cada um no seu destino", async ({
   page,
   criador,
   admin,
@@ -35,22 +42,34 @@ test("com canil, a home mostra o atalho de Ninhadas apontando pro canil certo", 
 
   await page.goto("/painel");
 
-  const link = page.getByRole("link", { name: "Ninhadas" });
-  await expect(link).toBeVisible();
-  await expect(link).toHaveAttribute("href", `/painel/canis/${data!.id}#ninhadas`);
+  const verLink = page.getByRole("link", { name: "Ver minhas ninhadas" });
+  const criarLink = page.getByRole("link", { name: "Cadastrar nova ninhada" });
+
+  await expect(verLink).toBeVisible();
+  await expect(verLink).toHaveAttribute("href", `/painel/canis/${data!.id}#ninhadas`);
+  await expect(criarLink).toBeVisible();
+  await expect(criarLink).toHaveAttribute("href", `/painel/canis/${data!.id}/ninhadas/novo`);
 
   // Não só o href: a navegação real precisa pousar na seção que resolve
   // lista/empty-state, com o empty-state visível (este canil não tem
   // nenhuma ninhada).
-  await link.click();
+  await verLink.click();
   await expect(page.getByText("Nenhuma ninhada cadastrada ainda.")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Cadastrar nova ninhada" })).toBeVisible();
+
+  // E o segundo abre o FORMULÁRIO, não a listagem. Volta pra home e clica
+  // nele — clicar a partir da home é o caminho que o usuário faz, e é o que
+  // prova que a rota funciona sem depender de passar pela página do canil
+  // antes.
+  await page.goto("/painel");
+  await criarLink.click();
+  await expect(page.getByRole("heading", { name: "Nova ninhada" })).toBeVisible();
 });
 
-test("sem canil, a home não mostra o atalho de Ninhadas", async ({ page, criador }) => {
+test("sem canil, a home não mostra nenhum dos dois atalhos", async ({ page, criador }) => {
   expect(criador.id).toBeTruthy();
 
   await page.goto("/painel");
 
-  await expect(page.getByRole("link", { name: "Ninhadas" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Ver minhas ninhadas" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Cadastrar nova ninhada" })).toHaveCount(0);
 });

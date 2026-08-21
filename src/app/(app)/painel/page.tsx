@@ -14,8 +14,8 @@ export default async function PainelPage() {
   // Alertas do Anexo I.8: derivados do dado de agora, nunca armazenados. Não
   // levantam exceção — se o levantamento falhar, o painel abre sem a seção.
   //
-  // `kennel` decide se o atalho de Ninhadas aparece: sem canil não há onde
-  // ele levar.
+  // `kennel` decide se os atalhos de ninhada aparecem: sem canil não há onde
+  // eles levarem.
   const [alerts, kennel] = user
     ? await Promise.all([getAlertsForUser(user.id), getMyKennel(user.id)])
     : [null, null];
@@ -53,10 +53,12 @@ export default async function PainelPage() {
         </div>
       </dl>
 
-      {/* Os dois atalhos lado a lado no desktop. O `<div>` é só o container da
-          grade — abaixo de `xl` ele não tem classe nenhuma, então os dois
-          `<Link>` continuam sendo irmãos empilhados pelo `gap-8` do pai, como
-          antes. */}
+      {/* Os atalhos lado a lado no desktop. O `<div>` é só o container da
+          grade — abaixo de `xl` é uma pilha com o mesmo `gap-8` de antes.
+
+          Com canil são QUATRO cards, que fecham a grade de 2 colunas em 2×2
+          exatos; sem canil sobram os dois primeiros, numa linha só. Nenhuma
+          célula órfã em nenhum dos dois casos. */}
       <div className="flex flex-col gap-8 xl:grid xl:grid-cols-2 xl:gap-8">
         <Link
           href="/painel/canis"
@@ -84,29 +86,61 @@ export default async function PainelPage() {
           </span>
         </Link>
 
-        {/* Sem canil não há onde este link levar — some em vez de apontar
-            para uma rota que só rejeitaria o usuário.
+        {/* Sem canil não há onde estes links levarem — somem os dois em vez de
+            apontar para uma rota que só rejeitaria o usuário.
 
-            Vai pra página do canil, não direto pro formulário de criação: a
-            seção #ninhadas de lá já lista o que existe (ou mostra o
-            empty-state com "Cadastrar nova ninhada"). Pular pra `/novo`
-            jogaria quem já tem ninhada dentro de um formulário de criar
-            outra, sem ver o que já cadastrou. */}
+            SÃO DOIS, e é de propósito. Numa rodada anterior existia um atalho
+            só, indo direto pra `/ninhadas/novo` — e isso foi reportado como
+            bug depois de subir pra produção: quem já tinha ninhada caía num
+            formulário de criar OUTRA, sem ver o que já havia cadastrado.
+            Trocar o destino pela âncora consertou aquele caso e criou o
+            oposto: cadastrar virou dois passos.
+
+            Separar resolve os dois lados sem escolher um. "Ver minhas
+            ninhadas" leva à seção #ninhadas, que já resolve lista OU
+            empty-state sozinha; "Cadastrar nova ninhada" vai direto ao
+            formulário, para quem sabe o que quer. Nenhum dos dois some, então
+            nenhum caminho fica escondido atrás do outro. */}
         {kennel ? (
-          <Link
-            href={`/painel/canis/${kennel.id}#ninhadas`}
-            className="border-border bg-surface hover:bg-surface-hover rounded-card flex items-center justify-between gap-4 border p-5 transition-colors"
-          >
-            <span className="flex flex-col gap-1">
-              <span className="text-fg font-medium">Ninhadas</span>
-              <span className="text-fg-muted text-sm">
-                Registre uma ninhada e cadastre os filhotes.
+          <>
+            <Link
+              href={`/painel/canis/${kennel.id}#ninhadas`}
+              className="border-border bg-surface hover:bg-surface-hover rounded-card flex items-center justify-between gap-4 border p-5 transition-colors"
+            >
+              <span className="flex flex-col gap-1">
+                <span className="text-fg font-medium">Ver minhas ninhadas</span>
+                <span className="text-fg-muted text-sm">
+                  Acompanhe as ninhadas do seu canil e os filhotes de cada uma.
+                </span>
               </span>
-            </span>
-            <span className="text-fg-faint" aria-hidden="true">
-              →
-            </span>
-          </Link>
+              <span className="text-fg-faint" aria-hidden="true">
+                →
+              </span>
+            </Link>
+
+            {/* O único card de AÇÃO da home, com o mesmo par
+                `bg-accent`/`text-fg-on-accent` dos botões primários do resto do
+                painel. Sobre o azul, `text-fg-muted`/`text-fg-faint` (feitos
+                para fundo escuro) sumiriam — daí a hierarquia sair de opacidade
+                sobre a cor de cima, não de outro token.
+
+                O rótulo repete literalmente o botão que já existe na seção do
+                canil: mesma ação, mesmo nome. */}
+            <Link
+              href={`/painel/canis/${kennel.id}/ninhadas/novo`}
+              className="bg-accent text-fg-on-accent hover:bg-accent-hover rounded-card flex items-center justify-between gap-4 p-5 transition-colors"
+            >
+              <span className="flex flex-col gap-1">
+                <span className="font-medium">Cadastrar nova ninhada</span>
+                <span className="text-fg-on-accent/85 text-sm">
+                  Registre uma ninhada e cadastre os filhotes.
+                </span>
+              </span>
+              <span className="text-fg-on-accent/70" aria-hidden="true">
+                →
+              </span>
+            </Link>
+          </>
         ) : null}
       </div>
     </div>
