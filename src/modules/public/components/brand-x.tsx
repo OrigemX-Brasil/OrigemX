@@ -7,16 +7,12 @@
  * Os dois glifos são o mesmo — então, entre os progenitores de uma ninhada, o
  * símbolo do cruzamento É a marca.
  *
- * MESMA GEOMETRIA DO FAVICON (`src/app/icon.svg`): o mesmo `path`, a mesma
- * espessura proporcional, o mesmo `stroke-linecap`. Duas diferenças, as duas
- * deliberadas:
- *
- *   1. SEM o `<rect>` de fundo. Aquele quadrado arredondado é o LADRILHO do
- *      ícone de aba, não a marca — aqui o X vive sobre a superfície da página.
- *   2. As cores vêm dos TOKENS, não literais. O favicon hardcoda `#0066FF`/
- *      `#7B3DFF` porque um SVG servido como arquivo estático não enxerga as
- *      CSS variables da aplicação; um componente React enxerga, então aqui não
- *      há motivo para manter uma segunda cópia dos valores.
+ * O favicon (`src/app/icon.png`) é hoje um ASSET raster à parte, com seu
+ * próprio acabamento — não compartilha `path`/geometria com este componente.
+ * Este SVG é a versão vetorial, simples, do mesmo conceito de X, para viver
+ * sobre a superfície da página (sem o quadrado de fundo do ladrilho de aba) e
+ * usando as cores dos TOKENS — um componente React enxerga CSS variables, e
+ * não há motivo para depender de um arquivo de imagem para isto.
  *
  * `aria-hidden` por padrão: onde ele é usado hoje, quem usa leitor de tela já
  * ouve os dois cards ("Mãe · nome", "Pai · nome") e um "X" solto no meio não
