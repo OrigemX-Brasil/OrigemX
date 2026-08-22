@@ -3,7 +3,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/types/database";
 
-import { BUCKET_PRIVATE, isPubliclyServable, MAX_GALLERY_ITEMS, type MediaRole } from "./constraints";
+import {
+  BUCKET_PRIVATE,
+  isPubliclyServable,
+  MAX_GALLERY_ITEMS,
+  type MediaRole,
+} from "./constraints";
 
 /**
  * As consultas aceitam um client externo para que a página pública possa passar
@@ -14,7 +19,7 @@ export type SupabaseClientLike = SupabaseClient<Database>;
 /** Acesso a dados de mídia. Todo `.from("media")` do app passa por aqui. */
 
 const COLUMNS =
-  "id, bucket_id, storage_path, thumb_path, kennel_id, dog_id, litter_id, testimonial_id, role, mime, size_bytes, width, height, thumb_bytes, alt, caption, position, owner_id, created_at";
+  "id, bucket_id, storage_path, thumb_path, kennel_id, dog_id, litter_id, testimonial_id, measurement_id, role, mime, size_bytes, width, height, thumb_bytes, alt, caption, position, owner_id, created_at";
 
 export type MediaItem = {
   id: string;
@@ -25,6 +30,7 @@ export type MediaItem = {
   dog_id: string | null;
   litter_id: string | null;
   testimonial_id: string | null;
+  measurement_id: string | null;
   role: string;
   mime: string;
   size_bytes: number;
@@ -172,6 +178,34 @@ export async function getTestimonialAvatars(
   );
 }
 
+/**
+ * A foto de cada medição em `measurementIds`, em UMA consulta — mesmo molde de
+ * `getTestimonialAvatars`: 1:1, então cada medição aparece no máximo uma vez.
+ *
+ * Aceita client externo pelo mesmo motivo do resto do arquivo: a página
+ * pública passa o anônimo, e é assim que a Story Timeline busca as fotos sem
+ * sair do ISR.
+ */
+export async function getMeasurementPhotos(
+  measurementIds: readonly string[],
+  client?: SupabaseClientLike,
+): Promise<Map<string, ResolvedMedia>> {
+  if (measurementIds.length === 0) return new Map();
+
+  const supabase = client ?? (await createClient());
+  const { data } = await supabase
+    .from("media")
+    .select(COLUMNS)
+    .in("measurement_id", measurementIds)
+    .eq("role", "measurement_photo")
+    .is("deleted_at", null);
+
+  const resolved = await resolveMediaUrls((data ?? []) as MediaItem[], client);
+  return new Map(
+    resolved.filter((m) => m.measurement_id).map((m) => [m.measurement_id as string, m]),
+  );
+}
+
 export async function getDogGallery(dogId: string): Promise<ResolvedMedia[]> {
   const supabase = await createClient();
   const { data } = await supabase
@@ -247,7 +281,9 @@ export async function countDogGallery(dogId: string): Promise<number> {
  * nenhuma foto simplesmente não entra no Map; quem chama trata ausência
  * como zero, mesmo padrão de `getDogCovers`.
  */
-export function groupCountsByDogId(rows: readonly { dog_id: string | null }[]): Map<string, number> {
+export function groupCountsByDogId(
+  rows: readonly { dog_id: string | null }[],
+): Map<string, number> {
   const counts = new Map<string, number>();
   for (const row of rows) {
     if (!row.dog_id) continue;
@@ -265,9 +301,7 @@ export function groupCountsByDogId(rows: readonly { dog_id: string | null }[]): 
  * módulo evita em toda outra função batched (`getDogCovers`,
  * `getLitterCovers`).
  */
-export async function countDogGalleries(
-  dogIds: readonly string[],
-): Promise<Map<string, number>> {
+export async function countDogGalleries(dogIds: readonly string[]): Promise<Map<string, number>> {
   if (dogIds.length === 0) return new Map();
 
   const supabase = await createClient();

@@ -183,6 +183,7 @@ function TestimonialRow({
   dogName,
   avatar,
   ownerId,
+  initialEditing = false,
 }: {
   testimonial: Testimonial;
   kennelId: string;
@@ -190,8 +191,16 @@ function TestimonialRow({
   dogName: string | null;
   avatar: ResolvedMedia | null;
   ownerId: string;
+  /**
+   * Nasce em modo editar — só o card RECÉM-CRIADO usa isto (ver
+   * `TestimonialSection`), para o uploader de avatar já estar visível sem
+   * exigir um segundo clique em "Editar". Lido só na primeira renderização —
+   * `useState` ignora mudanças depois disso, o que é o comportamento certo:
+   * não é para fechar sozinho nem reabrir um card que o dono já mexeu.
+   */
+  initialEditing?: boolean;
 }) {
-  const [editando, setEditando] = useState(false);
+  const [editando, setEditando] = useState(initialEditing);
   const [state, formAction] = useActionState<TestimonialFormState, FormData>(updateTestimonial, {});
 
   // Ajuste DURANTE O RENDER, mesmo padrão de `HealthSection`: `useActionState`
@@ -248,7 +257,9 @@ function TestimonialRow({
           <div className="flex flex-col gap-1.5">
             {avatar ? (
               <>
-                <span className="text-fg-faint font-mono text-xs">{formatBytes(avatar.size_bytes)}</span>
+                <span className="text-fg-faint font-mono text-xs">
+                  {formatBytes(avatar.size_bytes)}
+                </span>
                 <form action={deleteMedia}>
                   <input type="hidden" name="id" value={avatar.id} />
                   <button
@@ -265,6 +276,11 @@ function TestimonialRow({
               entityId={testimonial.id}
               ownerId={ownerId}
               label={avatar ? "Trocar avatar" : "Adicionar avatar (opcional)"}
+              consent={{
+                label:
+                  "Confirmo que tenho autorização desta pessoa para publicar a foto dela nesta página.",
+                fieldName: "lgpd_consent",
+              }}
             />
           </div>
         </div>
@@ -309,7 +325,10 @@ function TestimonialRow({
         >
           Editar
         </button>
-        <PublishSwitch testimonialId={testimonial.id} isPublished={Boolean(testimonial.published_at)} />
+        <PublishSwitch
+          testimonialId={testimonial.id}
+          isPublished={Boolean(testimonial.published_at)}
+        />
         <form action={softDeleteTestimonial}>
           <input type="hidden" name="id" value={testimonial.id} />
           <input type="hidden" name="kennel_id" value={kennelId} />
@@ -341,6 +360,18 @@ export function TestimonialSection({
   const [state, formAction] = useActionState<TestimonialFormState, FormData>(addTestimonial, {});
   const dogsById = new Map(dogs.map((d) => [d.id, d.name]));
 
+  // O id do depoimento que ACABOU de ser criado nesta sessão de tela — é o
+  // que faz a linha nova já nascer em modo editar, com o uploader de avatar à
+  // vista, sem exigir um segundo clique. Comparação de OBJETO (não só
+  // `state.ok`) porque `useActionState` devolve um objeto novo a cada
+  // submissão, mesmo padrão já usado em `TestimonialRow`.
+  const [recemCriadoId, setRecemCriadoId] = useState<string | null>(null);
+  const [ultimoState, setUltimoState] = useState(state);
+  if (state !== ultimoState) {
+    setUltimoState(state);
+    if (state.ok && state.id) setRecemCriadoId(state.id);
+  }
+
   return (
     <div className="flex flex-col gap-4">
       {testimonials.length > 0 ? (
@@ -354,6 +385,7 @@ export function TestimonialSection({
               dogName={testimonial.dog_id ? (dogsById.get(testimonial.dog_id) ?? null) : null}
               avatar={avatars.get(testimonial.id) ?? null}
               ownerId={ownerId}
+              initialEditing={testimonial.id === recemCriadoId}
             />
           ))}
         </ul>

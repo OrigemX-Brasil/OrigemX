@@ -37,6 +37,7 @@ export function ImageUploader({
   label,
   helpText,
   onUploaded,
+  consent,
 }: {
   role: MediaRole;
   entityId: string;
@@ -44,11 +45,25 @@ export function ImageUploader({
   label: string;
   helpText?: string;
   onUploaded?: () => void;
+  /**
+   * Gate de consentimento por ENVIO — hoje só `testimonial_avatar` usa. Sem
+   * esta prop, o componente nasce exatamente como sempre foi: campo de
+   * arquivo habilitado direto, nenhum comportamento novo para `kennel_logo`
+   * nem `dog_gallery`.
+   *
+   * Com ela, o campo de arquivo nasce DESABILITADO até o checkbox ser
+   * marcado, e o estado do checkbox viaja junto no FormData que chega ao
+   * servidor (`fieldName`) — `registerMedia` é quem de fato recusa o envio
+   * sem ele. O checkbox em si não é reforço algum sozinho: sem a checagem no
+   * servidor, um POST forjado contornaria o campo desabilitado.
+   */
+  consent?: { label: string; fieldName: string };
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [consented, setConsented] = useState(false);
 
   const handleFile = async (file: File) => {
     setError(null);
@@ -121,6 +136,7 @@ export function ImageUploader({
       fd.set("thumb_path", thumbPath);
       fd.set("width", String(full.width));
       fd.set("height", String(full.height));
+      if (consent) fd.set(consent.fieldName, consented ? "on" : "off");
 
       const result = await registerMedia({}, fd);
       setStatus(null);
@@ -136,6 +152,7 @@ export function ImageUploader({
   };
 
   const busy = pending || status !== null;
+  const fileDisabled = busy || (consent ? !consented : false);
 
   return (
     <div className="flex flex-col gap-2">
@@ -143,12 +160,24 @@ export function ImageUploader({
         {label}
       </label>
 
+      {consent ? (
+        <label className="text-fg-faint flex items-start gap-2 text-xs">
+          <input
+            type="checkbox"
+            checked={consented}
+            onChange={(e) => setConsented(e.target.checked)}
+            className="mt-0.5"
+          />
+          {consent.label}
+        </label>
+      ) : null}
+
       <input
         ref={inputRef}
         id={`upload-${role}-${entityId}`}
         type="file"
         accept={ACCEPTED_INPUT_MIMES.join(",")}
-        disabled={busy}
+        disabled={fileDisabled}
         onChange={(e) => {
           const file = e.target.files?.[0];
           if (file) void handleFile(file);

@@ -745,6 +745,7 @@ export type Database = {
           id: string
           kennel_id: string | null
           litter_id: string | null
+          measurement_id: string | null
           mime: string
           owner_id: string
           position: number
@@ -769,6 +770,7 @@ export type Database = {
           id?: string
           kennel_id?: string | null
           litter_id?: string | null
+          measurement_id?: string | null
           mime: string
           owner_id: string
           position?: number
@@ -793,6 +795,7 @@ export type Database = {
           id?: string
           kennel_id?: string | null
           litter_id?: string | null
+          measurement_id?: string | null
           mime?: string
           owner_id?: string
           position?: number
@@ -832,6 +835,13 @@ export type Database = {
             columns: ["litter_id"]
             isOneToOne: false
             referencedRelation: "kennel_litters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_measurement_id_fkey"
+            columns: ["measurement_id"]
+            isOneToOne: false
+            referencedRelation: "dog_measurements"
             referencedColumns: ["id"]
           },
           {

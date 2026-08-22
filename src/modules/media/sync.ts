@@ -139,14 +139,39 @@ export async function kennelMediaRows(client: Client, kennelId: string) {
   return (data ?? []) as MediaLocationRow[];
 }
 
-/** Mídia de um cão (a galeria). */
+/**
+ * Mídia de um cão — a galeria E a foto de cada medição dele.
+ *
+ * DUAS consultas, não uma: a foto de medição não carrega `dog_id` na própria
+ * linha de `media` (ela é 1:1 com `measurement_id`, mesmo desenho do avatar de
+ * depoimento) — precisa do pulo por `dog_measurements` primeiro. É por isso
+ * que `publishDog`/`unpublishDog` (que só chamam esta função) carregam a foto
+ * de medição junto com a galeria sem precisar saber que ela existe.
+ */
 export async function dogMediaRows(client: Client, dogId: string) {
-  const { data } = await client
-    .from("media")
-    .select("id, bucket_id, storage_path, thumb_path")
+  const { data: measurements } = await client
+    .from("dog_measurements")
+    .select("id")
     .eq("dog_id", dogId)
     .is("deleted_at", null);
-  return (data ?? []) as MediaLocationRow[];
+  const measurementIds = (measurements ?? []).map((m) => m.id);
+
+  const [gallery, photos] = await Promise.all([
+    client
+      .from("media")
+      .select("id, bucket_id, storage_path, thumb_path")
+      .eq("dog_id", dogId)
+      .is("deleted_at", null),
+    measurementIds.length > 0
+      ? client
+          .from("media")
+          .select("id, bucket_id, storage_path, thumb_path")
+          .in("measurement_id", measurementIds)
+          .is("deleted_at", null)
+      : Promise.resolve({ data: [] as MediaLocationRow[] }),
+  ]);
+
+  return [...(gallery.data ?? []), ...(photos.data ?? [])] as MediaLocationRow[];
 }
 
 /** Mídia de UMA ninhada. Usada por `publishLitter`/`unpublishLitter`. */
@@ -208,7 +233,11 @@ export async function litterMediaRowsForKennel(
   kennelId: string,
   options?: { onlyPublished?: boolean },
 ) {
-  let littersQuery = client.from("kennel_litters").select("id").eq("kennel_id", kennelId).is("deleted_at", null);
+  let littersQuery = client
+    .from("kennel_litters")
+    .select("id")
+    .eq("kennel_id", kennelId)
+    .is("deleted_at", null);
   if (options?.onlyPublished) littersQuery = littersQuery.not("published_at", "is", null);
 
   const { data: litters } = await littersQuery;

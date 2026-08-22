@@ -19,6 +19,7 @@ import { latestByKind } from "@/modules/health/summary";
 import { getMeasurementsByDog } from "@/modules/measurements/queries";
 import { latestMeasurement } from "@/modules/measurements/summary";
 import { aspectOf } from "@/modules/media/constraints";
+import { getMeasurementPhotos } from "@/modules/media/queries";
 import { PedigreeTree } from "@/modules/pedigree/components/pedigree-tree";
 import { MAX_PHOTO_GENERATION } from "@/modules/pedigree/layout";
 import { getPedigree } from "@/modules/pedigree/queries";
@@ -207,14 +208,6 @@ export default async function CaoPublicoPage({
     dog.kennel_id ? getPublicFaqs(dog.kennel_id) : Promise.resolve([]),
   ]);
 
-  // Segunda onda, e é inerente: não dá para saber os `dog_id` dos ancestrais
-  // antes da RPC do pedigree voltar. Uma consulta a mais, não N+1 — e roda
-  // uma vez por regeneração de ISR (300s), não por acesso. Ver o comentário
-  // completo em `getPublicDogThumbs`.
-  const thumbs = await getPublicDogThumbs(
-    pedigree ? thumbnailTargets(pedigree, MAX_PHOTO_GENERATION) : [],
-  );
-
   const [principal, ...restante] = media;
 
   const sire = dog.sire_id ? (progenitores.get(dog.sire_id) ?? null) : null;
@@ -233,20 +226,34 @@ export default async function CaoPublicoPage({
   const pesoAtual = latestMeasurement(medicoes, "weight");
   const cernelhaAtual = latestMeasurement(medicoes, "withers_height");
 
+  // Segunda onda, e é inerente: não dá para saber os `dog_id` dos ancestrais
+  // (para as miniaturas do pedigree) nem os ids das medições (para a foto de
+  // cada uma) antes do primeiro `Promise.all` voltar. Uma consulta a mais
+  // cada, não N+1 — rodam uma vez por regeneração de ISR (300s), não por
+  // acesso. Ver o comentário completo em `getPublicDogThumbs`.
+  const [thumbs, fotosDeMedicao] = await Promise.all([
+    getPublicDogThumbs(pedigree ? thumbnailTargets(pedigree, MAX_PHOTO_GENERATION) : []),
+    getMeasurementPhotos(
+      medicoes.map((m) => m.id),
+      anon,
+    ),
+  ]);
+
   // A HISTÓRIA — eventos com data REAL, não fotos com data de upload. Ver o
   // cabeçalho de `dogs/timeline.ts`: `media` não guarda quando a foto foi
   // tirada, e datar a linha pelo upload seria uma mentira com aparência de
   // precisão. Um evento só não é linha do tempo, então a seção exige dois.
   //
-  // É POR ISSO que a Story Timeline do mockup aparece aqui SEM as fotos por
-  // marcador: a coluna de data da foto não existe no banco. Decidido com o
-  // dono do produto em 21/08/2026 — a alternativa era inventar a
-  // correspondência entre a enésima foto e o enésimo evento.
+  // A foto por marcador do mockup ENTRA aqui, mas só para medição: é a única
+  // origem com uma foto presa a UM registro datado (`measured_on`, digitado
+  // pelo criador sabendo a data) — nascimento/vacina/exame continuam sem
+  // foto, pela mesma razão de sempre.
   const historia = buildDogTimeline({
     bornOn: dog.born_on,
     health: health.get(dog.id) ?? [],
     genetics: exames,
     measurements: medicoes,
+    measurementPhotos: fotosDeMedicao,
   });
 
   // "Restam 2 machos e 1 fêmea" — CONTADO dos irmãos publicados, nunca

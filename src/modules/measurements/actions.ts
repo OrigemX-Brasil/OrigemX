@@ -31,6 +31,12 @@ export type MeasurementFormState = {
   formError?: string;
   values?: MeasurementInput;
   ok?: boolean;
+  /**
+   * Só em `addMeasurement`: o id da medição recém-criada. Mesmo mecanismo de
+   * `TestimonialFormState.id` — é o que permite a linha nascer já em modo
+   * editar, com o uploader de foto visível sem um segundo clique.
+   */
+  id?: string;
 };
 
 /**
@@ -115,16 +121,20 @@ export async function addMeasurement(
     return { formError: "Informe um número maior que zero.", values: input };
   }
 
-  const { error } = await supabase.from("dog_measurements").insert({
-    dog_id: dogId,
-    kind: values.kind,
-    value: values.value,
-    measured_on: values.measured_on,
-    notes: values.notes,
-    created_by: user.id,
-  });
+  const { data, error } = await supabase
+    .from("dog_measurements")
+    .insert({
+      dog_id: dogId,
+      kind: values.kind,
+      value: values.value,
+      measured_on: values.measured_on,
+      notes: values.notes,
+      created_by: user.id,
+    })
+    .select("id")
+    .single();
 
-  if (error) {
+  if (error || !data) {
     return {
       formError: "Não foi possível registrar. Confira se o cão é seu e tente de novo.",
       values: input,
@@ -132,7 +142,7 @@ export async function addMeasurement(
   }
 
   await revalidateDogPaths(supabase, dogId);
-  return { ok: true };
+  return { ok: true, id: data.id };
 }
 
 /** Exclusão LÓGICA — nenhuma tabela do projeto concede DELETE. */

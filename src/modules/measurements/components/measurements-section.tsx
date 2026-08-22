@@ -1,9 +1,13 @@
 "use client";
 
+import Image from "next/image";
 import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 
 import { isoToBr } from "@/modules/dogs/br-date";
+import { deleteMedia } from "@/modules/media/actions";
+import { ImageUploader } from "@/modules/media/components/image-uploader";
+import type { ResolvedMedia } from "@/modules/media/queries";
 
 import {
   addMeasurement,
@@ -43,16 +47,22 @@ function MeasurementRow({
   measurement,
   dogId,
   readOnly,
+  photo,
+  ownerId,
+  initialEditing = false,
 }: {
   measurement: Measurement;
   dogId: string;
   readOnly?: boolean;
+  photo: ResolvedMedia | null;
+  ownerId: string;
+  /** Nasce em modo editar — mesmo mecanismo de `TestimonialRow`, só a linha
+   *  RECÉM-CRIADA usa isto, para o uploader já estar visível sem um segundo
+   *  clique em "Editar". */
+  initialEditing?: boolean;
 }) {
-  const [editando, setEditando] = useState(false);
-  const [state, formAction] = useActionState<MeasurementFormState, FormData>(
-    updateMeasurement,
-    {},
-  );
+  const [editando, setEditando] = useState(initialEditing);
+  const [state, formAction] = useActionState<MeasurementFormState, FormData>(updateMeasurement, {});
 
   // Ajuste DURANTE O RENDER — mesmo padrão de `health-section.tsx`: reagir a
   // uma mudança de valor sem `useEffect`, proibido pelo lint do projeto.
@@ -91,12 +101,57 @@ function MeasurementRow({
             ) : null}
           </div>
         </form>
+
+        {/* A foto DESTE momento — alimenta a Story Timeline do perfil público.
+            Sem gate de LGPD: não é foto de terceiro, é o próprio filhote. */}
+        <div className="border-border flex items-center gap-4 border-t pt-3">
+          {photo?.thumbUrl ? (
+            <Image
+              src={photo.thumbUrl}
+              alt=""
+              width={56}
+              height={56}
+              className="border-border rounded-card border object-cover"
+              unoptimized
+            />
+          ) : null}
+          <div className="flex flex-col gap-1.5">
+            {photo ? (
+              <form action={deleteMedia}>
+                <input type="hidden" name="id" value={photo.id} />
+                <button
+                  type="submit"
+                  className="text-fg-muted hover:text-danger self-start text-xs transition-colors"
+                >
+                  Remover foto
+                </button>
+              </form>
+            ) : null}
+            <ImageUploader
+              role="measurement_photo"
+              entityId={measurement.id}
+              ownerId={ownerId}
+              label={photo ? "Trocar foto" : "Adicionar foto (opcional)"}
+              helpText="Aparece na história do perfil público, ao lado desta medição."
+            />
+          </div>
+        </div>
       </li>
     );
   }
 
   return (
     <li className="border-border bg-surface rounded-control flex flex-wrap items-center gap-x-3 gap-y-1 border px-3 py-2.5">
+      {photo?.thumbUrl ? (
+        <Image
+          src={photo.thumbUrl}
+          alt=""
+          width={40}
+          height={40}
+          className="border-border rounded-card border object-cover"
+          unoptimized
+        />
+      ) : null}
       <span className="text-fg text-sm font-medium">{measurementKindName(measurement.kind)}</span>
       <span className="text-data font-mono text-sm">
         {measurement.value} {measurementUnit(measurement.kind)}
@@ -137,13 +192,27 @@ export function MeasurementsSection({
   dogId,
   measurements,
   readOnly,
+  photos,
+  ownerId,
 }: {
   dogId: string;
   measurements: Measurement[];
   /** Cão de terceiro: mostra o histórico, não oferece formulário que a RLS recusaria. */
   readOnly?: boolean;
+  photos: Map<string, ResolvedMedia>;
+  ownerId: string;
 }) {
   const [state, formAction] = useActionState<MeasurementFormState, FormData>(addMeasurement, {});
+
+  // O id da medição RECÉM-CRIADA nesta sessão de tela — mesmo mecanismo de
+  // `TestimonialSection`: a linha nova nasce já em modo editar, com o
+  // uploader de foto à vista, sem exigir um segundo clique.
+  const [recemCriadaId, setRecemCriadaId] = useState<string | null>(null);
+  const [ultimoStateAdd, setUltimoStateAdd] = useState(state);
+  if (state !== ultimoStateAdd) {
+    setUltimoStateAdd(state);
+    if (state.ok && state.id) setRecemCriadaId(state.id);
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -155,6 +224,9 @@ export function MeasurementsSection({
               measurement={measurement}
               dogId={dogId}
               readOnly={readOnly}
+              photo={photos.get(measurement.id) ?? null}
+              ownerId={ownerId}
+              initialEditing={measurement.id === recemCriadaId}
             />
           ))}
         </ul>

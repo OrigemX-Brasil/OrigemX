@@ -19,7 +19,7 @@ import { GalleryUploader } from "@/modules/media/components/gallery-uploader";
 import { MediaGallery } from "@/modules/media/components/media-gallery";
 import { PublishToggle } from "@/modules/media/components/publish-toggle";
 import { MAX_GALLERY_ITEMS } from "@/modules/media/constraints";
-import { getDogGallery, getUsedBytes } from "@/modules/media/queries";
+import { getDogGallery, getMeasurementPhotos, getUsedBytes } from "@/modules/media/queries";
 import { QrCard } from "@/modules/qr/components/qr-card";
 import { VideoUploader } from "@/modules/video/components/video-uploader";
 import { getDogVideo } from "@/modules/video/queries";
@@ -61,6 +61,12 @@ export default async function EditarCaoPage({ params }: { params: Promise<{ id: 
     getDogGeneticTests(dog.id),
     getDogMeasurements(dog.id),
   ]);
+
+  // Segunda onda: precisa dos ids das medições, que só existem depois do
+  // `Promise.all` acima resolver. Mesmo raciocínio de `getPublicDogThumbs` na
+  // página pública do cão — não dá para saber os ids antes da consulta que os
+  // gera.
+  const measurementPhotos = await getMeasurementPhotos(measurements.map((m) => m.id));
 
   // Rede de segurança para quem fechou a aba no meio da transcodificação: o
   // polling do navegador morreu junto com a aba, então quem põe o status em dia
@@ -142,8 +148,8 @@ export default async function EditarCaoPage({ params }: { params: Promise<{ id: 
             <div className="flex flex-col gap-1">
               <h2 className="font-display text-base font-semibold">Saúde</h2>
               <p className="text-fg-muted text-sm">
-                Vermífugo e vacina, com histórico — não é um campo só, porque o filhote toma
-                várias doses. Aparece no perfil público quando o cão estiver publicado.
+                Vermífugo e vacina, com histórico — não é um campo só, porque o filhote toma várias
+                doses. Aparece no perfil público quando o cão estiver publicado.
               </p>
             </div>
 
@@ -154,20 +160,25 @@ export default async function EditarCaoPage({ params }: { params: Promise<{ id: 
             <div className="flex flex-col gap-1">
               <h2 className="font-display text-base font-semibold">Peso e cernelha</h2>
               <p className="text-fg-muted text-sm">
-                Cada medição fica registrada com data — não é um valor só, porque o filhote
-                cresce. Aparece na história do perfil público quando o cão estiver publicado.
+                Cada medição fica registrada com data — não é um valor só, porque o filhote cresce.
+                Aparece na história do perfil público quando o cão estiver publicado.
               </p>
             </div>
 
-            <MeasurementsSection dogId={dog.id} measurements={measurements} />
+            <MeasurementsSection
+              dogId={dog.id}
+              measurements={measurements}
+              photos={measurementPhotos}
+              ownerId={user.id}
+            />
           </section>
 
           <section className="border-border flex flex-col gap-4 border-t pt-6">
             <div className="flex flex-col gap-1">
               <h2 className="font-display text-base font-semibold">Exames genéticos</h2>
               <p className="text-fg-muted text-sm">
-                Displasia, L2HGA, HC — o que a raça exigir. Cadastre uma vez aqui e o laudo
-                aparece sozinho em toda ninhada em que este cão for pai ou mãe.
+                Displasia, L2HGA, HC — o que a raça exigir. Cadastre uma vez aqui e o laudo aparece
+                sozinho em toda ninhada em que este cão for pai ou mãe.
               </p>
             </div>
 

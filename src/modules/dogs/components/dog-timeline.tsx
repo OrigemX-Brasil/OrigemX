@@ -1,4 +1,5 @@
 import { isoToBr } from "@/modules/dogs/br-date";
+import { PublicImage } from "@/modules/public/components/public-image";
 
 import type { TimelineEvent } from "../timeline";
 
@@ -44,10 +45,27 @@ export function DogTimeline({ events }: { events: readonly TimelineEvent[] }) {
             />
           </div>
 
-          <div className="flex flex-col gap-0.5 px-2 text-center">
+          <div className="flex flex-col items-center gap-1.5 px-2 text-center">
             <span className="text-fg-faint font-mono text-[0.6875rem] tabular-nums">
               {isoToBr(event.date)}
             </span>
+
+            {/* Só medição pode ter foto — data em cima, foto no meio, legenda
+                embaixo, na mesma ordem do mockup. Evento sem foto (todo o
+                resto, e a maioria das medições) fica exatamente como sempre
+                foi: sem esta caixa. */}
+            {event.photo ? (
+              <PublicImage
+                src={event.photo.thumbUrl ?? event.photo.url}
+                alt=""
+                fallbackText={event.label}
+                width={event.photo.width ?? 1}
+                height={event.photo.height ?? 1}
+                sizes="128px"
+                className="border-border rounded-card size-24 border object-cover sm:size-28"
+              />
+            ) : null}
+
             <span className="text-fg text-xs font-medium text-balance">{event.label}</span>
             {event.detail ? (
               <span className="text-fg-muted text-[0.6875rem] text-balance">{event.detail}</span>

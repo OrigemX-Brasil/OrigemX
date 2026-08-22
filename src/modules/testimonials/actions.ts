@@ -32,6 +32,12 @@ export type TestimonialFormState = {
   formError?: string;
   values?: TestimonialInput;
   ok?: boolean;
+  /**
+   * Só em `addTestimonial`: o id do depoimento recém-criado. É o que permite
+   * a linha nascer já em modo editar — sem ele o componente não saberia QUAL
+   * card acabou de aparecer na lista devolvida pelo servidor.
+   */
+  id?: string;
 };
 
 /**
@@ -120,19 +126,23 @@ export async function addTestimonial(
   }
 
   const values = normalizeTestimonial(input);
-  const { error } = await supabase.from("testimonials").insert({
-    kennel_id: kennelId,
-    dog_id: values.dog_id,
-    author_name: values.author_name,
-    text: values.text,
-    rating: values.rating,
-    created_by: user.id,
-  });
+  const { data, error } = await supabase
+    .from("testimonials")
+    .insert({
+      kennel_id: kennelId,
+      dog_id: values.dog_id,
+      author_name: values.author_name,
+      text: values.text,
+      rating: values.rating,
+      created_by: user.id,
+    })
+    .select("id")
+    .single();
 
-  if (error) return { ...translateTestimonialError(error), values: input };
+  if (error || !data) return { ...translateTestimonialError(error), values: input };
 
   await revalidateTestimonialPaths(supabase, kennelId, values.dog_id);
-  return { ok: true };
+  return { ok: true, id: data.id };
 }
 
 /**

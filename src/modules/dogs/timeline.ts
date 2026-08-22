@@ -2,6 +2,7 @@ import { healthKindLabel } from "@/modules/health/constraints";
 import type { GeneticTest, HealthRecord } from "@/modules/health/queries";
 import { measurementKindName, measurementUnit } from "@/modules/measurements/constraints";
 import type { Measurement } from "@/modules/measurements/queries";
+import type { ResolvedMedia } from "@/modules/media/queries";
 
 /**
  * ============================================================================
@@ -42,7 +43,30 @@ export type TimelineEvent = {
    *  da medição. */
   detail: string | null;
   kind: "birth" | "health" | "genetic" | "measurement";
+  /** Só medição pode ter — é a única origem com uma foto vinculada a UM
+   *  registro datado (`media.measurement_id`). `null` no resto, e também numa
+   *  medição sem foto. */
+  photo: ResolvedMedia | null;
 };
+
+/**
+ * "1ª Semana", "3ª Semana" — a legenda do mockup, calculada a partir da data
+ * de nascimento. SÓ existe quando há FOTO: sem ela a linha continua com o
+ * rótulo de tipo ("Peso"/"Cernelha"), que já diz o que o número significa.
+ *
+ * Arredonda para a semana mais próxima, não trunca: uma pesagem no dia 7
+ * exato precisa cair em "1ª Semana", não em "0ª" (truncar dividiria por 7 e
+ * pegaria o piso) nem esperar o dia 14 para virar "2ª" (grandeza de calendário
+ * corrido, não semana cheia). Piso de 1: uma medição no mesmo dia do
+ * nascimento ainda é vida na "1ª Semana", não uma "0ª Semana" sem sentido.
+ */
+function weekLabel(bornOn: string, measuredOn: string): string {
+  const born = Date.parse(`${bornOn}T00:00:00Z`);
+  const measured = Date.parse(`${measuredOn}T00:00:00Z`);
+  const diffDays = Math.round((measured - born) / 86_400_000);
+  const week = Math.max(1, Math.round(diffDays / 7));
+  return `${week}ª Semana`;
+}
 
 /**
  * `tested_on` é NULLABLE em `dog_genetic_tests` — laudo sem data cadastrada
@@ -54,16 +78,29 @@ export function buildDogTimeline({
   health,
   genetics,
   measurements,
+  measurementPhotos = new Map(),
 }: {
   bornOn: string | null;
   health: readonly HealthRecord[];
   genetics: readonly GeneticTest[];
   measurements: readonly Measurement[];
+  /** Foto de CADA medição, por `measurement.id` — o que `getMeasurementPhotos`
+   *  devolve. Opcional e com padrão vazio: todo chamador que ainda não busca
+   *  foto continua funcionando exatamente como antes, sem foto em nenhum
+   *  evento. */
+  measurementPhotos?: Map<string, ResolvedMedia>;
 }): TimelineEvent[] {
   const events: TimelineEvent[] = [];
 
   if (bornOn) {
-    events.push({ id: "birth", date: bornOn, label: "Nascimento", detail: null, kind: "birth" });
+    events.push({
+      id: "birth",
+      date: bornOn,
+      label: "Nascimento",
+      detail: null,
+      kind: "birth",
+      photo: null,
+    });
   }
 
   for (const record of health) {
@@ -73,6 +110,7 @@ export function buildDogTimeline({
       label: healthKindLabel(record.kind),
       detail: record.product,
       kind: "health",
+      photo: null,
     });
   }
 
@@ -84,16 +122,24 @@ export function buildDogTimeline({
       label: test.name,
       detail: test.result,
       kind: "genetic",
+      photo: null,
     });
   }
 
   for (const measurement of measurements) {
+    const photo = measurementPhotos.get(measurement.id) ?? null;
     events.push({
       id: `measurement-${measurement.id}`,
       date: measurement.measured_on,
-      label: measurementKindName(measurement.kind),
+      // Só COM foto a legenda vira semana — sem ela, o rótulo de tipo
+      // continua dizendo o que o número significa.
+      label:
+        photo && bornOn
+          ? weekLabel(bornOn, measurement.measured_on)
+          : measurementKindName(measurement.kind),
       detail: `${measurement.value} ${measurementUnit(measurement.kind)}`,
       kind: "measurement",
+      photo,
     });
   }
 
@@ -104,5 +150,7 @@ export function buildDogTimeline({
   // Empate de data desempata por `id`: dois eventos no mesmo dia (V10 +
   // antirrábica) são plausíveis, e sem o desempate a ordem viria do Postgres
   // e a página "piscaria" entre deploys.
-  return events.sort((a, b) => (a.date === b.date ? (a.id < b.id ? -1 : 1) : a.date < b.date ? -1 : 1));
+  return events.sort((a, b) =>
+    a.date === b.date ? (a.id < b.id ? -1 : 1) : a.date < b.date ? -1 : 1,
+  );
 }

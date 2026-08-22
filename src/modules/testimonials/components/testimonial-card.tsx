@@ -9,7 +9,10 @@ import { StarRating } from "./star-rating";
 export function TestimonialCard({ testimonial }: { testimonial: PublicTestimonial }) {
   return (
     <li className="border-border bg-surface rounded-card flex gap-4 border p-4">
-      <div className="bg-surface-hover rounded-card text-fg-faint flex size-14 shrink-0 items-center justify-center overflow-hidden">
+      {/* Circular, como no mockup — diferente do quadrado `rounded-card` que
+          a foto de capa de cão/ninhada usa. Aqui é retrato de uma PESSOA, não
+          registro de um animal, e é a leitura visual que distingue os dois. */}
+      <div className="bg-surface-hover rounded-full text-fg-faint flex size-14 shrink-0 items-center justify-center overflow-hidden">
         {testimonial.avatar?.thumbUrl ? (
           <Image
             src={testimonial.avatar.thumbUrl}

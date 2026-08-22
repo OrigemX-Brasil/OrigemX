@@ -100,6 +100,29 @@ export async function parentPublishState(
     };
   }
 
+  if (role === "measurement_photo") {
+    // `entityId` aqui é o id da MEDIÇÃO, não do cão — precisa de um pulo a
+    // mais antes de reaplicar a MESMA regra do braço de `dog_gallery` abaixo
+    // (publicado, OU ancestral fantasma sem dono/canil).
+    const { data: measurement } = await supabase
+      .from("dog_measurements")
+      .select("dog_id")
+      .eq("id", entityId)
+      .maybeSingle();
+    if (!measurement) return { isPublished: false, publicPath: null };
+
+    const { data: dog } = await supabase
+      .from("dogs")
+      .select("published_at, public_id, owner_id, kennel_id")
+      .eq("id", measurement.dog_id)
+      .maybeSingle();
+    if (!dog) return { isPublished: false, publicPath: null };
+    return {
+      isPublished: Boolean(dog.published_at) || (dog.owner_id === null && dog.kennel_id === null),
+      publicPath: dog.public_id ? `/d/${dog.public_id}` : null,
+    };
+  }
+
   const { data } = await supabase
     .from("dogs")
     .select("published_at, public_id, owner_id, kennel_id")
@@ -138,7 +161,10 @@ async function revalidateDescendantPedigrees(
   const ids = await getDescendantIds(dogId);
   if (ids.size === 0) return;
 
-  const { data } = await supabase.from("dogs").select("public_id").in("id", [...ids]);
+  const { data } = await supabase
+    .from("dogs")
+    .select("public_id")
+    .in("id", [...ids]);
   for (const row of data ?? []) {
     if (row.public_id) revalidatePath(`/d/${row.public_id}`);
   }
@@ -146,7 +172,11 @@ async function revalidateDescendantPedigrees(
 
 /** O join do PostgREST vem como objeto ou array conforme a cardinalidade. */
 function kennelJoinOf(
-  k: { published_at: string | null; slug: string } | { published_at: string | null; slug: string }[] | null | undefined,
+  k:
+    | { published_at: string | null; slug: string }
+    | { published_at: string | null; slug: string }[]
+    | null
+    | undefined,
 ) {
   if (!k) return null;
   return Array.isArray(k) ? (k[0] ?? null) : k;
@@ -182,10 +212,23 @@ export async function registerMedia(
   const height = Number(formData.get("height") ?? 0) || null;
   const alt = String(formData.get("alt") ?? "").trim() || null;
 
-  if (role !== "kennel_logo" && role !== "dog_gallery" && role !== "testimonial_avatar") {
+  if (
+    role !== "kennel_logo" &&
+    role !== "dog_gallery" &&
+    role !== "testimonial_avatar" &&
+    role !== "measurement_photo"
+  ) {
     return { error: "Tipo de mídia inválido." };
   }
   if (!entityId || !storagePath) return { error: "Envio incompleto." };
+
+  // Avatar de depoimento é foto de TERCEIRO — o checkbox do `ImageUploader`
+  // (prop `consent`) é só UI; esta é a checagem que de fato recusa. Sem ela,
+  // um POST forjado contornaria o campo desabilitado no client. Mesma frase
+  // de recusa que `addTestimonial` já usa para o texto, por consistência.
+  if (role === "testimonial_avatar" && formData.get("lgpd_consent") !== "on") {
+    return { error: "Confirme que você tem autorização desta pessoa para publicar a foto dela." };
+  }
 
   const supabase = await createClient();
   const cleanup = async () => {
@@ -228,10 +271,15 @@ export async function registerMedia(
     }
   }
 
-  // Logo e avatar são 1:1. O antigo sai antes do novo entrar, senão o índice
-  // único parcial recusa a inserção.
-  if (role === "kennel_logo" || role === "testimonial_avatar") {
-    const ownerColumn = role === "kennel_logo" ? "kennel_id" : "testimonial_id";
+  // Logo, avatar e foto de medição são 1:1. O antigo sai antes do novo
+  // entrar, senão o índice único parcial recusa a inserção.
+  if (role === "kennel_logo" || role === "testimonial_avatar" || role === "measurement_photo") {
+    const ownerColumn =
+      role === "kennel_logo"
+        ? "kennel_id"
+        : role === "testimonial_avatar"
+          ? "testimonial_id"
+          : "measurement_id";
     await supabase
       .from("media")
       .update({ deleted_at: new Date().toISOString() })
@@ -249,6 +297,7 @@ export async function registerMedia(
       kennel_id: role === "kennel_logo" ? entityId : null,
       dog_id: role === "dog_gallery" ? entityId : null,
       testimonial_id: role === "testimonial_avatar" ? entityId : null,
+      measurement_id: role === "measurement_photo" ? entityId : null,
       role,
       mime: full.mime,
       size_bytes: full.size,
@@ -321,6 +370,14 @@ export async function registerMedia(
       .eq("id", entityId)
       .maybeSingle();
     if (testimonial?.kennel_id) revalidatePath(`/painel/canis/${testimonial.kennel_id}`);
+  } else if (role === "measurement_photo") {
+    // `entityId` aqui é o id da MEDIÇÃO, não do cão — mesma pegadinha.
+    const { data: measurement } = await supabase
+      .from("dog_measurements")
+      .select("dog_id")
+      .eq("id", entityId)
+      .maybeSingle();
+    if (measurement?.dog_id) revalidatePath(`/painel/caes/${measurement.dog_id}`);
   } else {
     revalidatePath(`/painel/caes/${entityId}`);
   }
@@ -344,7 +401,9 @@ export async function deleteMedia(formData: FormData): Promise<void> {
 
   const { data } = await supabase
     .from("media")
-    .select("id, bucket_id, storage_path, thumb_path, kennel_id, dog_id, litter_id, testimonial_id")
+    .select(
+      "id, bucket_id, storage_path, thumb_path, kennel_id, dog_id, litter_id, testimonial_id, measurement_id",
+    )
     .eq("id", id)
     .eq("owner_id", user.id)
     .is("deleted_at", null)
@@ -410,6 +469,18 @@ export async function deleteMedia(formData: FormData): Promise<void> {
     if (testimonial?.kennel_id) revalidatePath(`/painel/canis/${testimonial.kennel_id}`);
   }
 
+  // Mesma pegadinha, um pulo mais curto: a foto de medição não carrega
+  // `dog_id` na própria linha de `media`.
+  if (data.measurement_id) {
+    const { data: measurement } = await supabase
+      .from("dog_measurements")
+      .select("dog_id")
+      .eq("id", data.measurement_id)
+      .maybeSingle();
+
+    if (measurement?.dog_id) revalidatePath(`/painel/caes/${measurement.dog_id}`);
+  }
+
   // Sem isto, remover o logo/foto de uma entidade JÁ PUBLICADA some no painel
   // mas o perfil público continua com a versão antiga até o ISR de 300s vencer
   // sozinho — a mesma classe de bug que `registerMedia` já trata do lado do
@@ -424,8 +495,11 @@ export async function deleteMedia(formData: FormData): Promise<void> {
         ? "litter_gallery"
         : data.testimonial_id
           ? "testimonial_avatar"
-          : null;
-  const entityId = data.kennel_id ?? data.dog_id ?? data.litter_id ?? data.testimonial_id;
+          : data.measurement_id
+            ? "measurement_photo"
+            : null;
+  const entityId =
+    data.kennel_id ?? data.dog_id ?? data.litter_id ?? data.testimonial_id ?? data.measurement_id;
   if (role && entityId) {
     const parent = await parentPublishState(supabase, role, entityId);
     if (parent.isPublished && parent.publicPath) {

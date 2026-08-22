@@ -76,7 +76,8 @@ export const MAX_GALLERY_ITEMS = 30;
  */
 export const GALLERY_UPLOAD_CONCURRENCY = 3;
 
-export type MediaRole = "kennel_logo" | "dog_gallery" | "litter_gallery" | "testimonial_avatar";
+export type MediaRole =
+  "kennel_logo" | "dog_gallery" | "litter_gallery" | "testimonial_avatar" | "measurement_photo";
 
 /** Teto da legenda. Espelha o CHECK `media_caption_len`. */
 export const MAX_CAPTION_LENGTH = 140;
@@ -205,6 +206,7 @@ const STORAGE_SCOPE: Record<MediaRole, string> = {
   dog_gallery: "caes",
   litter_gallery: "ninhadas",
   testimonial_avatar: "depoimentos",
+  measurement_photo: "medidas",
 };
 
 export function buildStoragePath(params: {
