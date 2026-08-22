@@ -60,12 +60,12 @@ test("cadastra ninhada, sobe 4 fotos, e a 5ª não tem onde entrar", async ({
   // `registerLitterPhoto` precisar entrar em ação.
   await page.goto(`/painel/canis/${canil.id}/ninhadas/${ninhada!.id}`);
 
-  const fotos = await Promise.all(
-    [1, 2, 3, 4].map((n) => pngDeTeste(`ninhada foto ${n}`, 500)),
-  );
-  await page.getByLabel("Adicionar fotos").setInputFiles(
-    fotos.map((buffer, i) => ({ name: `foto-${i + 1}.png`, mimeType: MIME, buffer })),
-  );
+  const fotos = await Promise.all([1, 2, 3, 4].map((n) => pngDeTeste(`ninhada foto ${n}`, 500)));
+  await page
+    .getByLabel("Adicionar fotos")
+    .setInputFiles(
+      fotos.map((buffer, i) => ({ name: `foto-${i + 1}.png`, mimeType: MIME, buffer })),
+    );
 
   const grade = page.getByTestId("litter-photo-grid");
   await expect(grade.locator("img")).toHaveCount(4, { timeout: 30_000 });
@@ -96,7 +96,11 @@ test("a regra dupla: ninhada publicada só aparece quando o canil também public
   const canil = await criarCanil(admin, criador.id);
   const { data: ninhada } = await admin
     .from("kennel_litters")
-    .insert({ kennel_id: canil.id, description: "Ninhada de teste — regra dupla.", created_by: criador.id })
+    .insert({
+      kennel_id: canil.id,
+      description: "Ninhada de teste — regra dupla.",
+      created_by: criador.id,
+    })
     .select("id")
     .single();
 
@@ -115,7 +119,10 @@ test("a regra dupla: ninhada publicada só aparece quando o canil também public
     .select("published_at")
     .eq("id", ninhada!.id)
     .single();
-  expect(aindaRascunho?.published_at, "a ninhada grava a própria intenção mesmo assim").not.toBeNull();
+  expect(
+    aindaRascunho?.published_at,
+    "a ninhada grava a própria intenção mesmo assim",
+  ).not.toBeNull();
 
   // O CANIL ainda é rascunho (a fixture nasce assim) — a página inteira nem
   // abre para o público, então a ninhada publicada não vaza por nenhum
@@ -182,7 +189,9 @@ test("o card da ninhada leva à página própria (/n/[public_id]), com a descri�
   const fotos = await Promise.all([1, 2].map((n) => pngDeTeste(`pagina foto ${n}`, 400)));
   await page
     .getByLabel("Adicionar fotos")
-    .setInputFiles(fotos.map((buffer, i) => ({ name: `pagina-${i + 1}.png`, mimeType: MIME, buffer })));
+    .setInputFiles(
+      fotos.map((buffer, i) => ({ name: `pagina-${i + 1}.png`, mimeType: MIME, buffer })),
+    );
   await expect(page.getByTestId("litter-photo-grid").locator("img")).toHaveCount(2, {
     timeout: 30_000,
   });
@@ -206,7 +215,9 @@ test("o card da ninhada leva à página própria (/n/[public_id]), com a descri�
   // O card inteiro é um `<Link>` (não mais um botão de lightbox) — clicar no
   // texto da descrição navega para a página própria da ninhada, mesmo
   // caminho que um visitante de verdade usaria.
-  await publica.getByText("Ninhada com duas fotos, para testar a navegação da página própria.").click();
+  await publica
+    .getByText("Ninhada com duas fotos, para testar a navegação da página própria.")
+    .click();
   await publica.waitForURL(/\/n\/[2-9a-hjkmnp-z]{12}$/);
 
   await expect(
@@ -617,7 +628,7 @@ test("filhote fica fora do plantel e da lista pública do canil, mas tem página
  * preço: o teste marca o checkbox SEM preencher preço nenhum, de propósito —
  * é o caso "só sob consulta" que a decisão do dono do produto cobre.
  */
-test("marcar \"Aceita proposta\" no filhote mostra o badge no público; desmarcar remove", async ({
+test('marcar "Aceita proposta" no filhote mostra o badge no público; desmarcar remove', async ({
   page,
   criador,
   admin,
@@ -734,9 +745,12 @@ test("layout da ninhada não transborda a 360px", async ({ page, criador, admin 
   await admin.from("kennels").update({ whatsapp: "5511987654321" }).eq("id", canil.id);
   await publicar(admin, { kennelId: canil.id, dogIds: [pai.id, mae.id] });
 
-  const semSessao = await page.context().browser()!.newContext({
-    viewport: { width: 360, height: 740 },
-  });
+  const semSessao = await page
+    .context()
+    .browser()!
+    .newContext({
+      viewport: { width: 360, height: 740 },
+    });
   const estreita = await semSessao.newPage();
   await estreita.goto(`/n/${ninhada!.public_id}`);
 
@@ -1073,34 +1087,63 @@ test("página da ninhada: X centrado nas fotos, CTA explicado, disponíveis cont
 
 /**
  * ============================================================================
- * A prévia de compartilhamento (og:image) da ninhada.
+ * A prévia de compartilhamento (og:image) da ninhada — a foto é do PAI ou da
+ * MÃE, nunca da própria ninhada.
  * ============================================================================
  *
- * Todo link de ninhada mostrava o MESMO card fixo de marca no WhatsApp,
- * tivesse foto ou não. Agora a capa vira o card.
+ * Decisão de produto: a foto de um progenitor com pedigree vende mais que um
+ * mosaico de filhotes recém-nascidos, e mantém o card consistente com o que
+ * a seção "Progenitores" da própria página já mostra. Isto SUBSTITUIU o
+ * comportamento antigo (capa da própria ninhada) por inteiro — o teste antigo
+ * media exatamente o que este teste agora prova que NÃO acontece mais.
  *
  * NÃO PRECISA DE UPLOAD REAL: `getPublicUrl` do Supabase só concatena string
  * (bucket + caminho), sem ida à rede. Inserir a linha de `media` com o bucket
  * público e um caminho conhecido exercita exatamente o mesmo caminho de
  * código que uma foto de verdade, e a suíte não paga um upload.
- *
- * As três metades da regra, num teste só porque a fixture de usuário é cara:
- * capa presente, ninhada sem foto, e dimensão desconhecida.
  */
-test("og:image da ninhada é a foto de capa, com as dimensões reais", async ({
+test("og:image da ninhada é a foto do pai ou da mãe, nunca a da própria ninhada", async ({
   page,
   criador,
   admin,
 }) => {
   const canil = await criarCanil(admin, criador.id);
 
-  async function criarNinhada(descricao: string) {
+  const pai = await criarCao(admin, criador.id, {
+    name: "Pai Com Foto",
+    sex: "male",
+    kennel_id: canil.id,
+  });
+  const mae = await criarCao(admin, criador.id, {
+    name: "Mãe Com Foto",
+    sex: "female",
+    kennel_id: canil.id,
+  });
+  const paiSemFoto = await criarCao(admin, criador.id, {
+    name: "Pai Sem Foto",
+    sex: "male",
+    kennel_id: canil.id,
+  });
+  const maeSemDimensao = await criarCao(admin, criador.id, {
+    name: "Mãe Com Foto Antiga",
+    sex: "female",
+    kennel_id: canil.id,
+  });
+  const maeSemFotoNenhuma = await criarCao(admin, criador.id, {
+    name: "Mãe Sem Foto",
+    sex: "female",
+    kennel_id: canil.id,
+  });
+
+  async function criarNinhada(sireId: string, damId: string, descricao: string) {
     const { data } = await admin
       .from("kennel_litters")
       .insert({
         kennel_id: canil.id,
         created_by: criador.id,
         description: descricao,
+        sire_id: sireId,
+        dam_id: damId,
         born_on: "2026-08-15",
         published_at: new Date().toISOString(),
       })
@@ -1109,12 +1152,25 @@ test("og:image da ninhada é a foto de capa, com as dimensões reais", async ({
     return data!;
   }
 
-  const comFoto = await criarNinhada("Ninhada com capa.");
-  const semFoto = await criarNinhada("Ninhada sem foto nenhuma.");
-  const semDimensao = await criarNinhada("Ninhada com foto de dimensão desconhecida.");
+  // Os dois progenitores têm foto: o PAI vence (ordem pai → mãe).
+  const paiEMaeComFoto = await criarNinhada(pai.id, mae.id, "Pai e mãe com foto.");
+  // Só a mãe tem foto (dimensão desconhecida, linha antiga): a mãe aparece.
+  const soAMaeTemFoto = await criarNinhada(
+    paiSemFoto.id,
+    maeSemDimensao.id,
+    "Só a mãe tem foto, sem dimensão registrada.",
+  );
+  // NENHUM progenitor tem foto — mesmo a ninhada tendo foto PRÓPRIA, ela não
+  // pode aparecer: é exatamente o comportamento antigo que foi substituído.
+  const semProgenitorComFoto = await criarNinhada(
+    paiSemFoto.id,
+    maeSemFotoNenhuma.id,
+    "Nenhum progenitor tem foto, mas a ninhada tem foto própria.",
+  );
 
-  const caminhoCapa = `${criador.id}/litter/${comFoto.id}/capa.webp`;
-  const caminhoSemDim = `${criador.id}/litter/${semDimensao.id}/antiga.webp`;
+  const caminhoPai = `${criador.id}/caes/${pai.id}/foto.webp`;
+  const caminhoMae = `${criador.id}/caes/${maeSemDimensao.id}/foto-antiga.webp`;
+  const caminhoNinhadaPropria = `${criador.id}/litter/${semProgenitorComFoto.id}/capa.webp`;
 
   const { error: erroMidia } = await admin.from("media").insert([
     {
@@ -1122,16 +1178,14 @@ test("og:image da ninhada é a foto de capa, com as dimensões reais", async ({
       // `getPublicUrl` em vez de uma URL assinada que expira — é a diferença
       // que decide se o crawler do WhatsApp consegue baixar a imagem.
       bucket_id: "kennel-media-public",
-      storage_path: caminhoCapa,
-      litter_id: comFoto.id,
-      role: "litter_gallery",
+      storage_path: caminhoPai,
+      dog_id: pai.id,
+      role: "dog_gallery",
       mime: "image/webp",
       size_bytes: 120_000,
       width: 1600,
       height: 1200,
-      // Foto de ninhada ocupa um slot 1..4 (`media_litter_position_valid`),
-      // não a posição 0 da galeria de cão. `position` 1 é a capa.
-      position: 1,
+      position: 0,
       owner_id: criador.id,
       created_by: criador.id,
     },
@@ -1139,13 +1193,29 @@ test("og:image da ninhada é a foto de capa, com as dimensões reais", async ({
       // Linha ANTIGA: as colunas de dimensão nasceram depois de já haver
       // mídia gravada, então nulo aqui é o estado real de parte do banco.
       bucket_id: "kennel-media-public",
-      storage_path: caminhoSemDim,
-      litter_id: semDimensao.id,
-      role: "litter_gallery",
+      storage_path: caminhoMae,
+      dog_id: maeSemDimensao.id,
+      role: "dog_gallery",
       mime: "image/webp",
       size_bytes: 90_000,
       width: null,
       height: null,
+      position: 0,
+      owner_id: criador.id,
+      created_by: criador.id,
+    },
+    {
+      // A foto DA NINHADA — precisa existir para provar que o og:image a
+      // ignora quando nenhum progenitor tem foto própria.
+      bucket_id: "kennel-media-public",
+      storage_path: caminhoNinhadaPropria,
+      litter_id: semProgenitorComFoto.id,
+      role: "litter_gallery",
+      mime: "image/webp",
+      size_bytes: 100_000,
+      width: 1600,
+      height: 1200,
+      // Foto de ninhada ocupa um slot 1..4 (`media_litter_position_valid`).
       position: 1,
       owner_id: criador.id,
       created_by: criador.id,
@@ -1154,18 +1224,22 @@ test("og:image da ninhada é a foto de capa, com as dimensões reais", async ({
   expect(erroMidia, `falhou ao inserir mídia: ${erroMidia?.message}`).toBeNull();
 
   await publicar(admin, { kennelId: canil.id });
+  await publicar(admin, {
+    dogIds: [pai.id, mae.id, paiSemFoto.id, maeSemDimensao.id, maeSemFotoNenhuma.id],
+  });
 
   const semSessao = await page.context().browser()!.newContext();
   const publica = await semSessao.newPage();
 
-  const conteudo = (seletor: string) =>
-    publica.locator(seletor).first().getAttribute("content");
+  const conteudo = (seletor: string) => publica.locator(seletor).first().getAttribute("content");
 
-  // --- com capa: a foto, absoluta, com as dimensões reais ---
-  await publica.goto(`/n/${comFoto.public_id}`);
+  // --- pai e mãe com foto: o PAI vence ---
+  await publica.goto(`/n/${paiEMaeComFoto.public_id}`);
 
   const ogImage = await conteudo('meta[property="og:image"]');
-  expect(ogImage, "og:image deve ser a capa, não a imagem de marca").toContain(caminhoCapa);
+  expect(ogImage, "og:image deve ser a foto do PAI, não a da mãe nem a de marca").toContain(
+    caminhoPai,
+  );
   expect(ogImage, "crawler não resolve URL relativa").toMatch(/^https?:\/\//);
   expect(ogImage).not.toContain("preview-wpp");
   // Sem token de expiração: URL assinada morreria antes do crawler voltar.
@@ -1175,23 +1249,28 @@ test("og:image da ninhada é a foto de capa, com as dimensões reais", async ({
   expect(await conteudo('meta[property="og:image:height"]')).toBe("1200");
 
   // O Twitter recebe a mesma URL.
-  expect(await conteudo('meta[name="twitter:image"]')).toContain(caminhoCapa);
+  expect(await conteudo('meta[name="twitter:image"]')).toContain(caminhoPai);
 
-  // --- sem foto: cai na imagem de marca, nunca sem og:image ---
-  await publica.goto(`/n/${semFoto.public_id}`);
-  const ogFallback = await conteudo('meta[property="og:image"]');
-  expect(ogFallback, "sem foto, a marca — nunca ausente").toContain("preview-wpp");
-  expect(await conteudo('meta[property="og:image:width"]')).toBe("1536");
-  expect(await conteudo('meta[property="og:image:height"]')).toBe("864");
-
-  // --- foto sem dimensão: usa a foto, mas NÃO inventa width/height ---
-  await publica.goto(`/n/${semDimensao.public_id}`);
-  expect(await conteudo('meta[property="og:image"]')).toContain(caminhoSemDim);
+  // --- só a mãe tem foto: a mãe aparece, sem dimensão inventada ---
+  await publica.goto(`/n/${soAMaeTemFoto.public_id}`);
+  expect(await conteudo('meta[property="og:image"]')).toContain(caminhoMae);
   await expect(
     publica.locator('meta[property="og:image:width"]'),
     "dimensão desconhecida não pode virar número inventado",
   ).toHaveCount(0);
   await expect(publica.locator('meta[property="og:image:height"]')).toHaveCount(0);
+
+  // --- nenhum progenitor com foto: cai na marca, MESMO a ninhada tendo foto
+  // própria — é o comportamento antigo, e ele não pode voltar. ---
+  await publica.goto(`/n/${semProgenitorComFoto.public_id}`);
+  const ogFallback = await conteudo('meta[property="og:image"]');
+  expect(
+    ogFallback,
+    "sem progenitor com foto, a marca — nunca a foto da própria ninhada",
+  ).toContain("preview-wpp");
+  expect(ogFallback).not.toContain(caminhoNinhadaPropria);
+  expect(await conteudo('meta[property="og:image:width"]')).toBe("1536");
+  expect(await conteudo('meta[property="og:image:height"]')).toBe("864");
 
   await semSessao.close();
 });
@@ -1312,8 +1391,11 @@ test("lightbox: legenda colada à foto, sem distorcer proporção retrato", asyn
   }
 
   // --- ninhada ---
-  const { pagina: ninhadaAberta, contexto: ctxNinhada, img: imgNinhada } =
-    await abrirEExpandirPrimeiraFoto(`/n/${ninhada!.public_id}`);
+  const {
+    pagina: ninhadaAberta,
+    contexto: ctxNinhada,
+    img: imgNinhada,
+  } = await abrirEExpandirPrimeiraFoto(`/n/${ninhada!.public_id}`);
 
   // A proporção NÃO pode distorcer: 600×1000 é 0,6 de razão largura/altura.
   const caixaFoto = (await imgNinhada.boundingBox())!;
@@ -1334,10 +1416,9 @@ test("lightbox: legenda colada à foto, sem distorcer proporção retrato", asyn
     .locator("dialog")
     .getByText("Descrição da ninhada, contexto de todas as fotos.");
   const caixaDescricao = (await descricao.boundingBox())!;
-  expect(
-    caixaDescricao.y,
-    "a descrição não pode aparecer acima da foto",
-  ).toBeGreaterThanOrEqual(caixaFoto.y + caixaFoto.height);
+  expect(caixaDescricao.y, "a descrição não pode aparecer acima da foto").toBeGreaterThanOrEqual(
+    caixaFoto.y + caixaFoto.height,
+  );
 
   // E colada — não presa lá embaixo com um vão vazio no meio. `< 80` cobre a
   // legenda mais a descrição mais o espaçamento entre elas; o defeito
@@ -1358,9 +1439,11 @@ test("lightbox: legenda colada à foto, sem distorcer proporção retrato", asyn
 
   // --- filhote: mesmo componente, sem descrição — só a legenda precisa
   // colar na foto. ---
-  const { pagina: caoAberta, contexto: ctxCao, img: imgCao } = await abrirEExpandirPrimeiraFoto(
-    `/d/${cao.public_id}`,
-  );
+  const {
+    pagina: caoAberta,
+    contexto: ctxCao,
+    img: imgCao,
+  } = await abrirEExpandirPrimeiraFoto(`/d/${cao.public_id}`);
   const caixaFotoCao = (await imgCao.boundingBox())!;
   const legendaCao = caoAberta.getByText("Legenda desta foto do filhote.");
   const caixaLegendaCao = (await legendaCao.boundingBox())!;

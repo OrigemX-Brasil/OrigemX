@@ -43,6 +43,7 @@ import {
 } from "@/modules/public/queries";
 import { KennelSearch } from "@/modules/search/components/kennel-search";
 import { createPublicClient } from "@/lib/supabase/public";
+import type { ResolvedMedia } from "@/modules/media/queries";
 
 /**
  * ============================================================================
@@ -97,34 +98,47 @@ export async function generateMetadata({
   const fallback = [quando, `Ninhada do ${litter.kennel.name}.`].filter(Boolean).join(" · ");
 
   /**
-   * A CAPA vira o card de compartilhamento.
+   * O card de compartilhamento usa a foto do PAI ou da MÃE — nunca a foto da
+   * própria ninhada. Decisão de produto: a foto de um progenitor com pedigree
+   * vende mais que um mosaico de filhotes recém-nascidos, e mantém o card
+   * consistente com o que a seção "Progenitores" desta mesma página já
+   * mostra (mesma função, mesma capa).
    *
-   * `photos[0]` é a capa por construção — `getPublicLitterByPublicId` ordena
-   * por `position`, mesmo conceito de `media[0]` em `/d/` e `/c/`. Nenhuma
-   * consulta a mais: aquele objeto já foi buscado acima, e a função é
-   * `cache()`, então a chamada do corpo da página deduplica com esta.
+   * `getPublicLitterParents` é `cache()`, mas o array `[sire_id, dam_id]`
+   * nasce de novo aqui e de novo no corpo da página — react `cache()`
+   * dedupliza por IDENTIDADE do argumento, não por igualdade de conteúdo, e
+   * dois arrays literais nunca são o mesmo objeto. Uma consulta indexada a
+   * mais (`limit 2`) é o preço de reusar a função em vez de inventar um
+   * canal entre `generateMetadata` e a página só para isto.
    *
-   * `url` e não `thumbUrl`: a miniatura tem 320px no lado maior, abaixo do
-   * mínimo prático do WhatsApp para card grande. A imagem cheia tem até
-   * 1600px e no máximo 600 KB.
+   * ORDEM PAI → MÃE: quando os dois têm foto, o pai vence. Sem nenhum dos
+   * dois, `capa` fica `null` e `publicMetadata` cai sozinho na imagem de
+   * marca — não há mais fallback intermediário na foto da própria ninhada.
    *
-   * A URL é PERMANENTE, não assinada: ninhada visível ao anônimo passou pela
-   * REGRA DUPLA, e `publishLitter` só publica depois de mover a mídia para
-   * `kennel-media-public`, de onde `resolveMediaUrls` devolve `getPublicUrl`
-   * — sem token e sem expiração, que é o que um crawler exige.
-   *
-   * `url` nulo cai no fallback de marca junto com o caso "sem foto": acontece
-   * se a mudança de bucket falhou e a linha ficou no bucket privado, onde o
-   * anônimo não tem grant. Melhor a imagem de marca que um link morto.
+   * `cover.url` é a mesma URL PERMANENTE de sempre (bucket público, sem
+   * token) — `getDogCovers`, por trás de `getPublicLitterParents`, resolve
+   * do mesmo jeito que `resolveMediaUrls` resolve em toda página pública.
    */
-  const capa = litter.photos[0];
+  const parents = await getPublicLitterParents([litter.sire_id, litter.dam_id]);
+  const sire = litter.sire_id ? (parents.get(litter.sire_id) ?? null) : null;
+  const dam = litter.dam_id ? (parents.get(litter.dam_id) ?? null) : null;
+
+  let capa: ResolvedMedia | null = null;
+  let imageAlt: string | undefined;
+  if (sire?.cover) {
+    capa = sire.cover;
+    imageAlt = `${sire.name}, pai da ninhada do ${litter.kennel.name}`;
+  } else if (dam?.cover) {
+    capa = dam.cover;
+    imageAlt = `${dam.name}, mãe da ninhada do ${litter.kennel.name}`;
+  }
 
   return publicMetadata({
     title: `Ninhada — ${litter.kennel.name}`,
     description: excerpt(litter.description) ?? fallback,
     path: `/n/${litter.public_id}`,
     imageUrl: capa?.url ?? null,
-    imageAlt: `Ninhada do ${litter.kennel.name}`,
+    imageAlt,
     imageWidth: capa?.width ?? null,
     imageHeight: capa?.height ?? null,
   });
