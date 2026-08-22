@@ -72,6 +72,27 @@ async function tallyPuppies(litterIds: readonly string[]): Promise<Map<string, P
   return tallies;
 }
 
+/**
+ * Id da ninhada mais recente do canil, ou `null` sem nenhuma.
+ *
+ * Deliberadamente mais barata que `getKennelLitters`: o atalho "Ver minhas
+ * ninhadas" do painel só precisa decidir ENTRE editar a ninhada existente ou
+ * cair na lista — não precisa de capa nem de contagem de filhotes, que
+ * `getKennelLitters` paga e aqui não serviriam pra nada.
+ */
+export async function getLatestLitterId(kennelId: string): Promise<string | null> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("kennel_litters")
+    .select("id")
+    .eq("kennel_id", kennelId)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data?.id ?? null;
+}
+
 /** Ninhadas do canil, mais recente primeiro, com a capa (posição 1) já resolvida. */
 export async function getKennelLitters(kennelId: string): Promise<LitterListItem[]> {
   const supabase = await createClient();

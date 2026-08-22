@@ -5,6 +5,7 @@ import { AlertPanel } from "@/modules/alerts/components/alert-panel";
 import { getAlertsForUser } from "@/modules/alerts/queries";
 import { getAuthUser, getCurrentProfile } from "@/modules/auth/queries";
 import { getMyKennel } from "@/modules/kennels/queries";
+import { getLatestLitterId } from "@/modules/litters/queries";
 
 export const metadata: Metadata = { title: "Painel" };
 
@@ -19,6 +20,10 @@ export default async function PainelPage() {
   const [alerts, kennel] = user
     ? await Promise.all([getAlertsForUser(user.id), getMyKennel(user.id)])
     : [null, null];
+
+  // Segunda onda: não dá para saber o `kennel.id` antes do `Promise.all`
+  // acima resolver. Decide o destino de "Ver minhas ninhadas" logo abaixo.
+  const latestLitterId = kennel ? await getLatestLitterId(kennel.id) : null;
 
   return (
     <div className="flex flex-col gap-8">
@@ -100,17 +105,31 @@ export default async function PainelPage() {
             ninhadas" leva à seção #ninhadas, que já resolve lista OU
             empty-state sozinha; "Cadastrar nova ninhada" vai direto ao
             formulário, para quem sabe o que quer. Nenhum dos dois some, então
-            nenhum caminho fica escondido atrás do outro. */}
+            nenhum caminho fica escondido atrás do outro.
+
+            "VER MINHAS NINHADAS" TEM UM SEGUNDO DESVIO, e não é o mesmo erro
+            do parágrafo acima: quando já existe ninhada, ele pula a lista e
+            vai direto para EDITAR a mais recente (`latestLitterId`) — a tela
+            de editar já chega com os dados dela carregados no formulário, ao
+            contrário da de criar, que era o problema original (formulário
+            vazio escondendo o que já existia). Sem ninhada nenhuma, cai de
+            volta na âncora, como sempre foi. Com duas ou mais, vai para a
+            mais recente — as outras continuam na lista, só não são o destino
+            direto do atalho. */}
         {kennel ? (
           <>
             <Link
-              href={`/painel/canis/${kennel.id}#ninhadas`}
+              href={
+                latestLitterId
+                  ? `/painel/canis/${kennel.id}/ninhadas/${latestLitterId}`
+                  : `/painel/canis/${kennel.id}#ninhadas`
+              }
               className="border-border bg-surface hover:bg-surface-hover rounded-card flex items-center justify-between gap-4 border p-5 transition-colors"
             >
               <span className="flex flex-col gap-1">
                 <span className="text-fg font-medium">Ver minhas ninhadas</span>
                 <span className="text-fg-muted text-sm">
-                  Acompanhe as ninhadas do seu canil e os filhotes de cada uma.
+                  Edite sua ninhada mais recente, ou veja todas as cadastradas.
                 </span>
               </span>
               <span className="text-fg-faint" aria-hidden="true">
