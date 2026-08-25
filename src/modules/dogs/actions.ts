@@ -111,7 +111,11 @@ export async function createDog(_prev: DogFormState, formData: FormData): Promis
   if (error || !data) return toFormState(error, input);
 
   revalidatePath("/painel/caes");
-  redirect(`/painel/caes/${data.id}`);
+  // Para a TELA DE SUCESSO, não para o formulário de edição. Cair de volta no
+  // mesmo formulário que acabou de ser preenchido — sem confirmação, e com o
+  // cão em rascunho, portanto sem link público nenhum na tela — era a maior
+  // fricção do cadastro: o criador salvava e não via nada pronto.
+  redirect(`/painel/caes/${data.id}/pronto`);
 }
 
 export async function updateDog(_prev: DogFormState, formData: FormData): Promise<DogFormState> {
