@@ -1,4 +1,4 @@
-import { expect, test } from "./support/fixtures";
+import { criarCao, expect, test } from "./support/fixtures";
 
 /**
  * ============================================================================
@@ -30,6 +30,13 @@ import { expect, test } from "./support/fixtures";
  * escondendo o que já existia); este vai direto para EDITAR o que já existe
  * (formulário preenchido, nada escondido). Sem ninhada, cai de volta na
  * âncora; com duas ou mais, vai para a mais recente.
+ *
+ * TODO CENÁRIO AQUI CRIA UM CÃO, e não é enfeite de fixture: o painel só
+ * mostra atalho para quem já tem cão. Sem nenhum, a home devolve a tela de
+ * BOAS-VINDAS do primeiro acesso (`modules/onboarding`), e nada disto
+ * estaria na tela. Estes testes são sobre o painel de quem já usa o produto,
+ * então o cão é o que os coloca nesse estado — usar `?explorar=1` para
+ * contornar mediria uma tela que o usuário real não vê nesse momento.
  */
 
 test("com canil, a home mostra os dois atalhos, cada um no seu destino", async ({
@@ -47,6 +54,9 @@ test("com canil, a home mostra os dois atalhos, cada um no seu destino", async (
     })
     .select("id")
     .single();
+
+  // Sem nenhum cão a home devolve as BOAS-VINDAS, e nenhum atalho existe.
+  await criarCao(admin, criador.id, { kennel_id: data!.id });
 
   await page.goto("/painel");
 
@@ -99,6 +109,8 @@ test("com UMA ninhada cadastrada, 'Ver minhas ninhadas' vai direto para editá-l
     .select("id")
     .single();
 
+  await criarCao(admin, criador.id, { kennel_id: kennel!.id });
+
   await page.goto("/painel");
   const verLink = page.getByRole("link", { name: "Ver minhas ninhadas" });
   await expect(verLink).toHaveAttribute(
@@ -147,6 +159,8 @@ test("com DUAS ninhadas, 'Ver minhas ninhadas' vai para a MAIS RECENTE, não a m
     .select("id")
     .single();
 
+  await criarCao(admin, criador.id, { kennel_id: kennel!.id });
+
   await page.goto("/painel");
   const verLink = page.getByRole("link", { name: "Ver minhas ninhadas" });
   const href = await verLink.getAttribute("href");
@@ -155,8 +169,12 @@ test("com DUAS ninhadas, 'Ver minhas ninhadas' vai para a MAIS RECENTE, não a m
   expect(href).not.toContain(antiga!.id);
 });
 
-test("sem canil, a home não mostra nenhum dos dois atalhos", async ({ page, criador }) => {
-  expect(criador.id).toBeTruthy();
+test("sem canil, a home não mostra nenhum dos dois atalhos", async ({ page, criador, admin }) => {
+  // O cão é o que faz a home ser o PAINEL, e não as boas-vindas. Sem ele o
+  // teste passaria por VACUIDADE: as boas-vindas não têm atalho nenhum, então
+  // a asserção abaixo seria verdadeira pelo motivo errado. Cão sem canil é
+  // estado legítimo — `dogs.kennel_id` é nullable.
+  await criarCao(admin, criador.id, { kennel_id: null });
 
   await page.goto("/painel");
 

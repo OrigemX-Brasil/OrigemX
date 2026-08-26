@@ -67,6 +67,36 @@ export type DogListFilters = {
  *
  * Usa o índice parcial `dogs_litter_id_idx`.
  */
+/**
+ * Quantos cães o usuário tem. Decide se as boas-vindas do primeiro acesso
+ * aparecem no lugar do painel.
+ *
+ * DUAS DIFERENÇAS DELIBERADAS em relação a `listMyDogs`, e as duas mudam a
+ * resposta:
+ *
+ *   `owner_id` SOZINHO, sem o `or created_by`. Ancestral fantasma nasce com
+ *   `owner_id` nulo e `created_by` de quem o cadastrou — e dá para ficar com um
+ *   fantasma e nenhum cão, abandonando o formulário depois de criar o pai pelo
+ *   `ParentPicker`. Quem está nesse estado não cadastrou cão nenhum e precisa
+ *   ver as boas-vindas.
+ *
+ *   FILHOTE DE NINHADA CONTA (sem `litter_id is null`). Lá a exclusão existe
+ *   porque a lista é o plantel; aqui a pergunta é "esta conta já tem algum
+ *   cão?", e quem tem ninhada passou do primeiro acesso faz tempo.
+ *
+ * `head: true`: só o número atravessa a rede.
+ */
+export async function countMyDogs(userId: string): Promise<number> {
+  const supabase = await createClient();
+  const { count } = await supabase
+    .from("dogs")
+    .select("id", { count: "exact", head: true })
+    .eq("owner_id", userId)
+    .is("deleted_at", null);
+
+  return count ?? 0;
+}
+
 export async function listMyDogs(
   userId: string,
   filters: DogListFilters = {},

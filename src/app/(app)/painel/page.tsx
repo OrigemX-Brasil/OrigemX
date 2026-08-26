@@ -4,12 +4,18 @@ import Link from "next/link";
 import { AlertPanel } from "@/modules/alerts/components/alert-panel";
 import { getAlertsForUser } from "@/modules/alerts/queries";
 import { getAuthUser, getCurrentProfile } from "@/modules/auth/queries";
+import { countMyDogs } from "@/modules/dogs/queries";
 import { getMyKennel } from "@/modules/kennels/queries";
 import { getLatestLitterId } from "@/modules/litters/queries";
+import { EXPLORAR_PARAM, WelcomePanel } from "@/modules/onboarding/components/welcome-panel";
 
 export const metadata: Metadata = { title: "Painel" };
 
-export default async function PainelPage() {
+export default async function PainelPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const [user, profile] = await Promise.all([getAuthUser(), getCurrentProfile()]);
 
   // Alertas do Anexo I.8: derivados do dado de agora, nunca armazenados. Não
@@ -20,6 +26,37 @@ export default async function PainelPage() {
   const [alerts, kennel] = user
     ? await Promise.all([getAlertsForUser(user.id), getMyKennel(user.id)])
     : [null, null];
+
+  /**
+   * BOAS-VINDAS NO LUGAR DO PAINEL, no primeiro acesso.
+   *
+   * A condição é o DADO, não um sinalizador: sem nenhum cão, o painel não tem o
+   * que mostrar — alertas sobre logo e foto de cães que não existem, atalhos que
+   * levam a listas vazias. Cadastrar o primeiro cão faz esta tela desaparecer
+   * para sempre, sem "marcar como visto" e sem coluna nova. É o mesmo princípio
+   * dos alertas: derivado, nunca armazenado.
+   *
+   * `?explorar=1` é a saída de quem quer olhar antes de cadastrar. NÃO persiste,
+   * de propósito — enquanto não houver um cão, as boas-vindas continuam sendo a
+   * resposta certa para quem abre o painel do zero, e guardar a dispensa exigiria
+   * uma coluna para um estado que o próprio dado já responde.
+   */
+  const explorar = (await searchParams)[EXPLORAR_PARAM] !== undefined;
+  const dogCount = user ? await countMyDogs(user.id) : 0;
+
+  if (user && dogCount === 0 && !explorar) {
+    return (
+      <WelcomePanel
+        // Com canil, o formulário combinado não tem o que fazer — manda direto
+        // ao cadastro de cão que já existe.
+        href={kennel ? "/painel/caes/novo" : "/painel/comecar"}
+        nome={profile?.full_name}
+        // Anexo I.2: o painel identifica quem está logado, e isso não pode
+        // valer só depois do primeiro cão.
+        email={user.email}
+      />
+    );
+  }
 
   // Segunda onda: não dá para saber o `kennel.id` antes do `Promise.all`
   // acima resolver. Decide o destino de "Ver minhas ninhadas" logo abaixo.

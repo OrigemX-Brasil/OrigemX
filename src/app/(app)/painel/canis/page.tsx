@@ -17,9 +17,24 @@ export const metadata: Metadata = { title: "Meu canil" };
  * QR nem divulgada, e o teste de isolamento depende de `/painel/canis/[id]` de
  * terceiro dar 404.
  *
- * E não redireciona direto para `/novo` quando não há canil: isso jogaria o
- * criador dentro de um formulário sem contexto e mataria a explicação de
- * onboarding que o alerta `conta-sem-canil` aponta.
+ * E NÃO redireciona direto para `/novo` quando não há canil: isso jogaria o
+ * criador dentro de um formulário sem contexto. A decisão continua valendo, com
+ * a mesma intenção de sempre — ninguém deve encontrar campos antes de entender
+ * o que está criando.
+ *
+ * O QUE MUDOU FOI QUEM EXPLICA. Antes era o alerta `conta-sem-canil`, passivo,
+ * um cartão entre outros na lista de Pendências. Agora é a tela de boas-vindas
+ * do painel (`modules/onboarding`), que aparece para quem não tem cão nenhum e
+ * leva a `/painel/comecar` — onde o canil nasce junto com o primeiro cão, num
+ * envio só, sem o criador precisar saber que são duas entidades.
+ *
+ * O alerta continua existindo, e agora com o papel que sempre coube a ele:
+ * rede de segurança para quem JÁ tem cão e não tem canil — estado alcançável
+ * por quem dispensou as boas-vindas e cadastrou por `/painel/caes/novo`, onde
+ * o vínculo com canil é opcional.
+ *
+ * Esta página segue sendo o destino de quem chega pelo alerta ou pelo menu, e
+ * por isso mantém a explicação abaixo em vez de encurtar o caminho.
  */
 export default async function CanisPage() {
   const user = await getAuthUser();
