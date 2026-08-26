@@ -8,6 +8,7 @@ import { getAuthUser } from "@/modules/auth/queries";
 import { softDeleteDog } from "@/modules/dogs/actions";
 import { isGhostAncestor, type AncestorCandidate } from "@/modules/dogs/ancestors";
 import { calculateDogCompleteness } from "@/modules/dogs/completeness";
+import { DogSharePanel } from "@/modules/dogs/components/dog-share-panel";
 import { DogForm } from "@/modules/dogs/components/dog-form";
 import { IdentifiersForm } from "@/modules/dogs/components/identifiers-form";
 import { getDogIdentifiers, getDogsByIds, getManageableDogById } from "@/modules/dogs/queries";
@@ -23,6 +24,7 @@ import { PublishToggle } from "@/modules/media/components/publish-toggle";
 import { MAX_GALLERY_ITEMS } from "@/modules/media/constraints";
 import { getDogGallery, getMeasurementPhotos, getUsedBytes } from "@/modules/media/queries";
 import { QrCard } from "@/modules/qr/components/qr-card";
+import { qrTargetUrl } from "@/modules/qr/target";
 import { VideoUploader } from "@/modules/video/components/video-uploader";
 import { getDogVideo } from "@/modules/video/queries";
 import { videoConfigurado } from "@/modules/video/stream";
@@ -114,12 +116,19 @@ export default async function EditarCaoPage({ params }: { params: Promise<{ id: 
 
         A DIVISÃO RESPEITA A ORDEM DO MOBILE, e foi ela que ditou o corte.
         Abaixo de `xl` os dois `<div>` são `flex flex-col gap-8` e renderizam em
-        sequência, então a ordem visual continua sendo exatamente
-        `ghost → publicar → dados → identificação → galeria → vídeo → QR →
-        excluir`. Era o que impedia mover o "publicar" para a direita: ele é o
-        segundo item no celular, e empurrá-lo para o fim da pilha mudaria a
-        página aprovada. QR e excluir já eram os dois últimos, nessa ordem —
-        por isso são exatamente eles que sobem para o trilho.
+        sequência, então a ordem visual é exatamente
+        `ghost → compartilhar → publicar → completude → dados → identificação →
+        galeria → vídeo → QR → excluir`. Era o que impedia mover o "publicar"
+        para a direita: ele está no topo no celular, e empurrá-lo para o fim da
+        pilha mudaria a página aprovada. QR e excluir são os dois últimos, nessa
+        ordem — por isso são exatamente eles que sobem para o trilho.
+
+        O QR APARECE DUAS VEZES NO DESKTOP, e é decisão, não descuido: o do
+        trilho é a referência FIXA enquanto se percorre o formulário (é o que o
+        criador confere antes de mandar imprimir); o do diálogo, aberto pelo
+        bloco de compartilhar, é o acesso rápido de qualquer ponto da página —
+        que no celular é a única forma sensata, já que lá o trilho vira o
+        penúltimo bloco de uma página longa.
       */}
       <div className="flex flex-col gap-8 xl:grid xl:grid-cols-[minmax(0,1fr)_340px] xl:items-start xl:gap-10">
         <div className="flex flex-col gap-8">
@@ -132,6 +141,30 @@ export default async function EditarCaoPage({ params }: { params: Promise<{ id: 
                 nó público de árvore.
               </p>
             </div>
+          ) : null}
+
+          {/* COMPARTILHAR É A AÇÃO PRINCIPAL, e por isso abre a coluna — mas
+              só com o cão PUBLICADO. Em rascunho `/d/{public_id}` dá 404 para
+              quem abrir, então o botão entregaria link quebrado; e para um
+              rascunho a ação principal realmente é publicar, logo abaixo.
+              Ancestral fantasma cai fora pela mesma condição, sem regra
+              própria: nasce sem `published_at`.
+
+              O `QrCard` vai como FILHO, renderizado aqui no servidor — é o que
+              mantém o gerador de QR fora do bundle do cliente. Ver `QrDialog`. */}
+          {dog.published_at ? (
+            <DogSharePanel
+              name={dog.name}
+              publicUrl={qrTargetUrl("dog", dog.public_id)}
+              qr={
+                <QrCard
+                  kind="dog"
+                  entityId={dog.id}
+                  stableId={dog.public_id}
+                  label="Aponta para o perfil público do cão. Codifica o identificador permanente, não o nome — o QR impresso continua valendo depois de qualquer edição do cadastro."
+                />
+              }
+            />
           ) : null}
 
           <PublishToggle
