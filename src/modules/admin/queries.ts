@@ -6,9 +6,15 @@ import {
   type PageParams,
 } from "@/lib/pagination";
 import { createClient } from "@/lib/supabase/server";
-import { rollupBySource, totals, type CaptureTotals, type SourceRollup } from "@/modules/capture/events";
+import {
+  rollupBySource,
+  totals,
+  type CaptureTotals,
+  type SourceRollup,
+} from "@/modules/capture/events";
 
 import { endOfDaySaoPaulo, startOfDaySaoPaulo } from "./format";
+import type { FunnelCounts } from "./funnel";
 
 /**
  * Acesso a dados do painel administrativo. Todo `.from()` cross-usuário do
@@ -550,4 +556,52 @@ export async function getLandingRollup(
 
   const rollup = rollupBySource(events);
   return { rollup, totals: totals(rollup) };
+}
+
+// -----------------------------------------------------------------------------
+// Funil de ativação
+// -----------------------------------------------------------------------------
+
+/**
+ * As contagens do funil, numa chamada.
+ *
+ * VIA RPC, e não pelo PostgREST como as outras contagens deste arquivo: três
+ * dos cinco números são `count(distinct owner_id)`, que o PostgREST não
+ * expressa. A alternativa seria baixar o `owner_id` de todo cão da base e
+ * deduplicar aqui — listagem sem teto, contra a invariante de performance.
+ *
+ * NÃO USA `landing_events`. Aquela tabela é anônima por construção (sem id de
+ * usuário, sem IP, sem cookie) e não teria como responder isto; ela continua
+ * medindo acesso e conversão da página de captura, que é outra pergunta. Ver o
+ * cabeçalho da migration `funil_de_ativacao`.
+ *
+ * ZEROS EM CASO DE ERRO, nunca exceção: a Visão geral não pode cair porque uma
+ * métrica falhou — mesmo princípio de `getAlertsForUser`. A guarda de admin
+ * mora DENTRO da função (ela levanta `insufficient_privilege` para não-admin),
+ * então um erro aqui é falha de infraestrutura, não vazamento.
+ */
+export async function getUserFunnel(): Promise<FunnelCounts> {
+  const vazio: FunnelCounts = {
+    total: 0,
+    withKennel: 0,
+    withDog: 0,
+    withPublishedDog: 0,
+    withKennelNoDog: 0,
+  };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("admin_user_funnel");
+  if (error) return vazio;
+
+  // `returns table` chega como array de uma linha só.
+  const row = data?.[0];
+  if (!row) return vazio;
+
+  return {
+    total: row.total ?? 0,
+    withKennel: row.with_kennel ?? 0,
+    withDog: row.with_dog ?? 0,
+    withPublishedDog: row.with_published_dog ?? 0,
+    withKennelNoDog: row.with_kennel_no_dog ?? 0,
+  };
 }

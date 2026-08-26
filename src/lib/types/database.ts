@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.15"
+    PostgrestVersion: "14.17"
   }
   graphql_public: {
     Tables: {
@@ -993,6 +993,16 @@ export type Database = {
       admin_set_profile_suspended: {
         Args: { p_profile_id: string; p_reason: string; p_suspended: boolean }
         Returns: string
+      }
+      admin_user_funnel: {
+        Args: never
+        Returns: {
+          total: number
+          with_dog: number
+          with_kennel: number
+          with_kennel_no_dog: number
+          with_published_dog: number
+        }[]
       }
       dog_descendant_ids: { Args: { p_dog_id: string }; Returns: string[] }
       dog_is_public: {
