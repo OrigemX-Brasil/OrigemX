@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { isGhostAncestor } from "@/modules/dogs/ancestors";
+import { calculateDogCompleteness } from "@/modules/dogs/completeness";
 import { listMyDogs, type DogListItem } from "@/modules/dogs/queries";
 import { calculateCompleteness } from "@/modules/kennels/completeness";
 import { founderEligibility } from "@/modules/kennels/founder";
@@ -215,20 +216,35 @@ export async function getAlertsForUser(userId: string): Promise<AlertsResult> {
 
     const userHasKennel = kennel !== null;
 
-    const dogSubjects: AlertSubject<DogFacts>[] = dogs.map((dog) => ({
-      id: dog.id,
-      label: dog.name,
-      href: `/painel/caes/${dog.id}`,
-      facts: {
-        hasPhoto: withPhoto.has(dog.id),
-        hasSire: dog.sire_id !== null,
-        hasDam: dog.dam_id !== null,
-        hasKennel: dog.kennel_id !== null,
-        hasBreed: typeof dog.breed === "string" && dog.breed.trim().length > 0,
-        isPublished: Boolean(dog.published_at),
-        userHasKennel,
-      },
-    }));
+    const dogSubjects: AlertSubject<DogFacts>[] = dogs.map((dog) => {
+      // A completude pergunta pela MÍDIA, não por coluna — o cão não tem
+      // coluna de foto. Mesmo par que o canil monta acima com o logo, e a
+      // mesma função pura que a página de edição usa: um número só, calculado
+      // num lugar só.
+      const completeness = calculateDogCompleteness({
+        ...dog,
+        photo: withPhoto.has(dog.id) ? "1" : null,
+      });
+
+      return {
+        id: dog.id,
+        label: dog.name,
+        href: `/painel/caes/${dog.id}`,
+        facts: {
+          hasPhoto: withPhoto.has(dog.id),
+          hasSire: dog.sire_id !== null,
+          hasDam: dog.dam_id !== null,
+          hasKennel: dog.kennel_id !== null,
+          isPublished: Boolean(dog.published_at),
+          userHasKennel,
+          completenessPercent: completeness.percent,
+          missingRecommended: completeness.missingRecommended.map((f) => ({
+            name: f.name,
+            label: f.label,
+          })),
+        },
+      };
+    });
 
     return {
       alerts: mergeAlerts(

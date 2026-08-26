@@ -152,3 +152,79 @@ export const DOG_PUBLIC_FIELDS = DOG_FIELDS.filter((f) => f.publicProfile);
 export function getDogField(name: DogFieldName): DogField | undefined {
   return DOG_FIELDS.find((f) => f.name === name);
 }
+
+// -----------------------------------------------------------------------------
+// Completude — o que PONTUA, que não é a mesma coisa que o que o formulário pede
+// -----------------------------------------------------------------------------
+
+/**
+ * ============================================================================
+ * A lista pontuada do cão.
+ * ============================================================================
+ *
+ * POR QUE ELA É SEPARADA DE `DOG_FIELDS`, e não um filtro dela: a completude
+ * mede o PERFIL, e o perfil tem partes que o formulário de dados não edita.
+ * Foto, pai, mãe e canil decidem se a página pública se sustenta tanto quanto
+ * a raça — e nenhum deles é um `<input>` desta tela (foto é upload, progenitor
+ * é busca no `ParentPicker`, canil é uma caixa de seleção resolvida no
+ * servidor).
+ *
+ * É o mesmo desenho de `kennels/fields.ts`, onde `logo_url` pontua sem ser
+ * campo de formulário (`managedElsewhere`).
+ *
+ * `photo` É A ÚNICA COISA AQUI QUE NÃO É COLUNA DE `dogs`, e por isso tem tipo
+ * próprio e nomeado. O cabeçalho deste arquivo promete que "declarar um campo
+ * que não existe no banco vira erro de compilação" — alargar `DogFieldName`
+ * para caber a foto anularia essa garantia para TODOS os campos, inclusive os
+ * do formulário. Uma exceção explícita e isolada custa menos que uma garantia
+ * enfraquecida.
+ *
+ * `DOG_FIELDS`, `DOG_FORM_FIELDS`, `DogInput`, `validateDog` e
+ * `normalizeDogInput` continuam intocados: nada daqui aparece no formulário
+ * nem entra na validação de gravação.
+ */
+
+/**
+ * Colunas que pontuam sem serem campo de formulário. Continuam derivadas do
+ * schema — `Extract` mantém o erro de compilação se alguma sumir do banco.
+ */
+export type DogScoredColumnName = Extract<keyof DogRow, "sire_id" | "dam_id" | "kennel_id">;
+
+/** A única coisa pontuada que não é coluna de `dogs`. Mora em `media`. */
+export type DogVirtualFieldName = "photo";
+
+export type DogScoredName = DogFieldName | DogScoredColumnName | DogVirtualFieldName;
+
+export type DogScoredField = {
+  name: DogScoredName;
+  label: string;
+  weight: FieldWeight;
+};
+
+/**
+ * Os pontuados que NÃO são campo de formulário.
+ *
+ * Todos `recommended`: nenhum é obrigatório para o cão existir — cão sem canil
+ * é registro válido, cão sem progenitor conhecido é comum em animal adquirido,
+ * e o CHECK do banco não pede foto. Marcá-los `required` faria o medidor
+ * afirmar que o cadastro está quebrado quando ele só está incompleto.
+ */
+const DOG_EXTRA_SCORED: readonly DogScoredField[] = [
+  { name: "photo", label: "Foto", weight: "recommended" },
+  { name: "sire_id", label: "Pai", weight: "recommended" },
+  { name: "dam_id", label: "Mãe", weight: "recommended" },
+  { name: "kennel_id", label: "Canil", weight: "recommended" },
+] as const;
+
+/**
+ * Tudo que entra na conta de completude (peso > 0), na ordem em que o criador
+ * naturalmente preenche: o que ele digitou primeiro, depois o que anexa.
+ */
+export const DOG_SCORED_FIELDS: readonly DogScoredField[] = [
+  ...DOG_FIELDS.filter((f) => WEIGHT_VALUE[f.weight] > 0).map(({ name, label, weight }) => ({
+    name,
+    label,
+    weight,
+  })),
+  ...DOG_EXTRA_SCORED,
+];

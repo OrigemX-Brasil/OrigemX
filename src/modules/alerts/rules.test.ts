@@ -33,9 +33,13 @@ function cao(over: Partial<DogFacts> = {}): DogFacts {
     hasSire: true,
     hasDam: true,
     hasKennel: true,
-    hasBreed: true,
     isPublished: true,
     userHasKennel: true,
+    // Cão completo: 100% e nada faltando. `missingRecommended` é o que a regra
+    // derivada lê — não há mais `hasBreed`, porque raça deixou de ter regra
+    // própria e passou a chegar por aqui, como qualquer campo pontuado.
+    completenessPercent: 100,
+    missingRecommended: [],
     ...over,
   };
 }
@@ -252,17 +256,68 @@ describe("regras do cão", () => {
     );
   });
 
-  it("raça em branco dispara; espaço em branco não conta como preenchido", () => {
-    expect(disparadas(DOG_RULES, cao({ hasBreed: false }))).toContain("cao-sem-raca");
+  /**
+   * A ANTIGA `cao-sem-raca` VIROU CASO DA REGRA DERIVADA.
+   *
+   * Antes, "falta raça" era uma regra cravada em TypeScript repetindo o que
+   * `DOG_SCORED_FIELDS` já declarava. Agora chega por `missingRecommended`,
+   * junto de qualquer outro campo pontuado — e um peso novo em `fields.ts`
+   * passa a aparecer no painel sem regra nova.
+   */
+  it("campo pontuado em falta chega pela regra derivada, não por regra própria", () => {
+    const ids = disparadas(
+      DOG_RULES,
+      cao({ completenessPercent: 90, missingRecommended: [{ name: "breed", label: "Raça" }] }),
+    );
+
+    expect(ids).toContain("cao-cadastro-incompleto");
+    expect(ids).not.toContain("cao-sem-raca");
+  });
+
+  /**
+   * Foto, pai, mãe e canil PONTUAM — então aparecem em `missingRecommended` —,
+   * mas cada um tem regra própria com texto específico. Se a regra genérica os
+   * citasse também, o criador leria duas vezes que falta a mesma coisa.
+   */
+  it("o que já tem regra própria não é repetido pela regra derivada", () => {
+    const ids = disparadas(
+      DOG_RULES,
+      cao({
+        hasPhoto: false,
+        hasKennel: false,
+        completenessPercent: 60,
+        missingRecommended: [
+          { name: "photo", label: "Foto" },
+          { name: "kennel_id", label: "Canil" },
+        ],
+      }),
+    );
+
+    expect(ids).toContain("cao-sem-foto");
+    expect(ids).toContain("cao-sem-canil");
+    // Nada sobrou para a genérica dizer: os dois já foram ditos com nome e
+    // consequência próprios.
+    expect(ids).not.toContain("cao-cadastro-incompleto");
   });
 
   it("um cão pode acumular várias pendências, na ordem do catálogo", () => {
     const ids = disparadas(
       DOG_RULES,
-      cao({ hasPhoto: false, hasSire: false, hasDam: false, hasBreed: false }),
+      cao({
+        hasPhoto: false,
+        hasSire: false,
+        hasDam: false,
+        completenessPercent: 40,
+        missingRecommended: [
+          { name: "photo", label: "Foto" },
+          { name: "sire_id", label: "Pai" },
+          { name: "dam_id", label: "Mãe" },
+          { name: "breed", label: "Raça" },
+        ],
+      }),
     );
 
-    expect(ids).toEqual(["cao-sem-foto", "cao-sem-pedigree", "cao-sem-raca"]);
+    expect(ids).toEqual(["cao-sem-foto", "cao-sem-pedigree", "cao-cadastro-incompleto"]);
   });
 });
 
@@ -287,11 +342,11 @@ describe("agrupamento entre sujeitos reais", () => {
    * um canil por criador vive no banco, e o motor não sabe nem quer saber
    * quantos sujeitos recebe.
    *
-   * Tentação errada: reescrever com cães. Não dá. As quatro DOG_RULES têm
-   * `detail` estático, então dois cães com problemas diferentes produzem REGRAS
-   * diferentes, não dois alertas da mesma regra. O caso "mesmo ruleId, detail
-   * diferente, não funde" só existe com `canil-sem-campo-obrigatorio`, que é a
-   * única com detail dinâmico.
+   * Tentação errada: reescrever com cães. Só três das quatro DOG_RULES têm
+   * `detail` estático — a quarta, `cao-cadastro-incompleto`, é dinâmica, então
+   * daria para montar o caso com ela. Mas o cenário aqui é sobre o MOTOR, e
+   * `canil-sem-campo-obrigatorio` continua sendo o exemplo mais direto: dois
+   * canis a que faltam campos diferentes, mesma regra, dois alertas.
    */
   it("dois sujeitos com pendências DIFERENTES não se fundem", () => {
     const subjects: AlertSubject<KennelFacts>[] = [

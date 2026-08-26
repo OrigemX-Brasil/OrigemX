@@ -193,11 +193,29 @@ export type DogFacts = {
   hasSire: boolean;
   hasDam: boolean;
   hasKennel: boolean;
-  hasBreed: boolean;
   isPublished: boolean;
   /** Se o dono tem algum canil. Sem canil, cobrar vínculo não faz sentido. */
   userHasKennel: boolean;
+  /** 0 a 100, calculado por `calculateDogCompleteness`. */
+  completenessPercent: number;
+  missingRecommended: readonly CampoPendente[];
 };
+
+/**
+ * O que a regra genérica de completude pode citar.
+ *
+ * Foto, pai, mãe e canil PONTUAM na completude — e por isso aparecem em
+ * `missingRecommended` —, mas cada um tem regra própria logo abaixo, com texto
+ * que explica a consequência específica. Sem este filtro o criador leria duas
+ * vezes que falta a mesma coisa, exatamente o problema que
+ * `recomendadosForaLogo` já resolve do lado do canil.
+ *
+ * O filtro é só do TEXTO do alerta: no percentual os quatro continuam contando.
+ */
+const SEM_REGRA_PROPRIA = new Set(["photo", "sire_id", "dam_id", "kennel_id"]);
+
+const recomendadosGenericos = (f: DogFacts) =>
+  f.missingRecommended.filter((campo) => !SEM_REGRA_PROPRIA.has(campo.name));
 
 export const DOG_RULES: readonly AlertRule<DogFacts>[] = [
   {
@@ -226,12 +244,33 @@ export const DOG_RULES: readonly AlertRule<DogFacts>[] = [
     actionLabel: "Vincular a um canil",
     when: (f) => !f.hasKennel && f.userHasKennel,
   },
+  /**
+   * DERIVADA DOS PESOS, não cravada à mão.
+   *
+   * Substitui a antiga `cao-sem-raca`, que repetia em TypeScript o que
+   * `DOG_SCORED_FIELDS` já declarava: `breed` é campo recomendado, então falta
+   * de raça agora chega aqui sozinha — junto com nascimento e com qualquer
+   * campo que ganhe peso no futuro, sem precisar de regra nova.
+   *
+   * AS TRÊS REGRAS ACIMA CONTINUAM CRAVADAS, e não é inconsistência — nenhuma
+   * delas é expressável como "campo com peso está vazio":
+   *
+   *   `cao-sem-foto`     — foto não é coluna de `dogs`, mora em `media`. Pontua
+   *                        como campo virtual, mas o aviso fala de uma
+   *                        consequência que só vale para ela.
+   *   `cao-sem-pedigree` — condição COMPOSTA (`!sire && !dam`). Pai ausente com
+   *                        mãe conhecida é normal em animal adquirido, e a
+   *                        árvore monta; só a ausência dos DOIS impede.
+   *   `cao-sem-canil`    — guarda por estado EXTERNO ao cão (`userHasKennel`):
+   *                        cobrar vínculo de quem não tem canil seria absurdo.
+   */
   {
-    id: "cao-sem-raca",
+    id: "cao-cadastro-incompleto",
     severity: "info",
-    title: "Cão sem raça informada",
-    detail: "A raça aparece no perfil público e é usada para localizar o registro.",
+    title: "Cadastro do cão incompleto",
+    detail: (f) =>
+      `${f.completenessPercent}% preenchido. Falta: ${rotulos(recomendadosGenericos(f))}.`,
     actionLabel: "Completar cadastro",
-    when: (f) => !f.hasBreed,
+    when: (f) => recomendadosGenericos(f).length > 0,
   },
 ];

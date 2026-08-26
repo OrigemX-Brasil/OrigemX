@@ -2,10 +2,12 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { BackLink } from "@/components/back-link";
+import { CompletenessMeter } from "@/components/completeness-meter";
 import { createClient } from "@/lib/supabase/server";
 import { getAuthUser } from "@/modules/auth/queries";
 import { softDeleteDog } from "@/modules/dogs/actions";
 import { isGhostAncestor, type AncestorCandidate } from "@/modules/dogs/ancestors";
+import { calculateDogCompleteness } from "@/modules/dogs/completeness";
 import { DogForm } from "@/modules/dogs/components/dog-form";
 import { IdentifiersForm } from "@/modules/dogs/components/identifiers-form";
 import { getDogIdentifiers, getDogsByIds, getManageableDogById } from "@/modules/dogs/queries";
@@ -90,6 +92,11 @@ export default async function EditarCaoPage({ params }: { params: Promise<{ id: 
 
   const ghost = isGhostAncestor(dog);
 
+  // A completude pergunta pela MÍDIA, não por uma coluna: o cão não tem coluna
+  // de foto, e a galeria já foi carregada acima — mesmo raciocínio que a página
+  // do canil aplica ao logo. Pai, mãe e canil saem das colunas do próprio cão.
+  const completeness = calculateDogCompleteness({ ...dog, photo: gallery[0] ?? null });
+
   return (
     <div className="flex flex-col gap-8">
       <div className="flex flex-col gap-2">
@@ -133,6 +140,21 @@ export default async function EditarCaoPage({ params }: { params: Promise<{ id: 
             publicPath={`/d/${dog.public_id}`}
             isPublished={Boolean(dog.published_at)}
           />
+
+          {/* FANTASMA NÃO TEM COMPLETUDE, e não é omissão: ele é registro
+              mínimo por definição — sem dono, sem canil —, existindo só para
+              ser nó de árvore de outro cão. Cobrar dele foto, canil e
+              progenitores seria cobrar dado que não deveria existir. É a mesma
+              exclusão que `alerts/queries.ts` já faz ao montar os sujeitos. */}
+          {/* Rótulo ESTÁTICO, sem o nome do cão. Interpolar o nome parecia mais
+              informativo e custou caro: um cão chamado "Nome Que Vai Mudar" fez
+              o `aria-label` do medidor conter "Nome", e `getByLabel("Nome")`
+              passou a casar com o medidor E com o campo do formulário. Nome
+              acessível não deve depender de dado do usuário — e aqui não
+              acrescenta nada, porque o `<h1>` da página já é o nome do cão. */}
+          {ghost ? null : (
+            <CompletenessMeter completeness={completeness} label="Completude do cadastro do cão" />
+          )}
 
           <DogForm
             dog={dog}

@@ -15,7 +15,7 @@ import { PublishToggle } from "@/modules/media/components/publish-toggle";
 import { formatBytes } from "@/modules/media/constraints";
 import { getKennelLogo } from "@/modules/media/queries";
 import { calculateCompleteness } from "@/modules/kennels/completeness";
-import { CompletenessMeter } from "@/modules/kennels/components/completeness-meter";
+import { CompletenessMeter } from "@/components/completeness-meter";
 import { FounderBadge, FounderChecklist } from "@/modules/kennels/components/founder-badge";
 import { KennelForm } from "@/modules/kennels/components/kennel-form";
 import { founderEligibility } from "@/modules/kennels/founder";
@@ -107,7 +107,7 @@ export default async function EditarCanilPage({ params }: { params: Promise<{ id
             isPublished={Boolean(kennel.published_at)}
           />
 
-          <CompletenessMeter completeness={completeness} />
+          <CompletenessMeter completeness={completeness} label="Completude do cadastro do canil" />
 
           <section className="border-border bg-surface rounded-card flex flex-col gap-4 border p-5">
             <h2 className="text-fg text-sm font-medium">Logo do canil</h2>
@@ -190,8 +190,8 @@ export default async function EditarCanilPage({ params }: { params: Promise<{ id
             <div className="flex flex-col gap-1">
               <h2 className="font-display text-base font-semibold">Depoimentos</h2>
               <p className="text-fg-muted text-sm">
-                Conteúdo que você escreve, não avaliação verificada pela OrigemX. A
-                responsabilidade pelo que é publicado aqui é sua.
+                Conteúdo que você escreve, não avaliação verificada pela OrigemX. A responsabilidade
+                pelo que é publicado aqui é sua.
               </p>
             </div>
 
