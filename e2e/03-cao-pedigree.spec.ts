@@ -571,3 +571,89 @@ test("data impossível (31/02) mostra aviso de formato e NÃO trava o cadastro",
 
   expect(salvo?.born_on).toBeNull();
 });
+
+/**
+ * ============================================================================
+ * URL do cão vem preenchida com o nome, não em branco.
+ * ============================================================================
+ *
+ * O campo é o último do formulário, opcional, e por isso o mais fácil de
+ * ignorar — se ele aparece vazio, o criador não sabe se esqueceu de algo ou se
+ * é assim mesmo. Preenchê-lo sozinho, a partir do nome, resolve a dúvida antes
+ * dela existir. `slugifyDog` já era usada aqui; o que muda é SÓ quando ela
+ * roda: no carregamento da página (quando há nome sem slug) e a cada tecla do
+ * Nome (não mais só ao sair do campo).
+ */
+
+test("cadastro novo: a URL acompanha o Nome enquanto se digita, sem precisar sair do campo", async ({
+  page,
+  criador,
+  admin,
+}) => {
+  await criarCanil(admin, criador.id);
+  const token = Date.now().toString(36);
+
+  await page.goto("/painel/caes/novo");
+  // `pressSequentially`, não `fill`: dispara um evento de tecla por
+  // caractere, que é exatamente o que prova que o gatilho é `onChange` e não
+  // `onBlur` — `fill` também dispararia change, mas só uma vez ao final.
+  await page.getByLabel("Nome", { exact: false }).first().pressSequentially(`Bento ${token}`);
+
+  // SEM clicar em outro campo: a URL já reflete o nome digitado até aqui.
+  await expect(page.getByLabel("URL")).toHaveValue(`bento-${token}`);
+});
+
+test("editar um cão com nome mas sem URL salva: o campo já chega preenchido", async ({
+  page,
+  criador,
+  admin,
+}) => {
+  // É O CASO QUE MOTIVOU O PEDIDO: um cão cadastrado antes de a URL importar,
+  // ou que o criador simplesmente nunca preencheu. Abrir para editar não devia
+  // mostrar um campo vazio quando o nome já dá para derivar um endereço.
+  const canil = await criarCanil(admin, criador.id);
+  const token = Date.now().toString(36);
+  const cao = await criarCao(admin, criador.id, {
+    name: `Sem Url Ainda ${token}`,
+    kennel_id: canil.id,
+  });
+
+  await page.goto(`/painel/caes/${cao.id}`);
+
+  // Nenhuma interação — é o estado de CARREGAMENTO da página.
+  await expect(page.getByLabel("URL")).toHaveValue(`sem-url-ainda-${token}`);
+});
+
+test("editar a URL à mão trava o valor — digitar mais no Nome não sobrescreve", async ({
+  page,
+  criador,
+  admin,
+}) => {
+  const canil = await criarCanil(admin, criador.id);
+  const token = Date.now().toString(36);
+  const cao = await criarCao(admin, criador.id, {
+    name: `Original ${token}`,
+    kennel_id: canil.id,
+  });
+
+  await page.goto(`/painel/caes/${cao.id}`);
+
+  const urlField = page.getByLabel("URL");
+  await urlField.fill(`endereco-escolhido-${token}`);
+
+  // Volta ao Nome e digita mais — a URL editada à mão não pode se mexer.
+  await page.getByLabel("Nome", { exact: false }).first().pressSequentially(" extra");
+  await expect(urlField).toHaveValue(`endereco-escolhido-${token}`);
+});
+
+test("apagar o Nome por completo esvazia a URL automática", async ({ page, criador, admin }) => {
+  await criarCanil(admin, criador.id);
+
+  await page.goto("/painel/caes/novo");
+  const nameField = page.getByLabel("Nome", { exact: false }).first();
+  await nameField.pressSequentially("Nina");
+  await expect(page.getByLabel("URL")).toHaveValue("nina");
+
+  await nameField.fill("");
+  await expect(page.getByLabel("URL")).toHaveValue("");
+});

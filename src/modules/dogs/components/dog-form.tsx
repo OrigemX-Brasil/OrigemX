@@ -25,14 +25,14 @@ function Control({
   error,
   slugValue,
   onSlugChange,
-  onNameBlur,
+  onNameChange,
 }: {
   field: DogField;
   defaultValue?: string;
   error?: string;
   slugValue?: string;
   onSlugChange?: (v: string) => void;
-  onNameBlur?: (v: string) => void;
+  onNameChange?: (v: string) => void;
 }) {
   // O erro de FORMATO da data ("não existe 31/02") divide o mesmo slot visual
   // que o erro de NEGÓCIO ("data no futuro", vindo de validateBirthDate) —
@@ -123,7 +123,11 @@ function Control({
           maxLength={field.maxLength}
           placeholder={field.placeholder}
           aria-describedby={describedBy}
-          onBlur={onNameBlur ? (e) => onNameBlur(e.target.value) : undefined}
+          // Não-controlado (o valor mora no DOM via `defaultValue`); o
+          // `onChange` aqui é só um listener a mais, não torna o campo
+          // controlado. É o que faz a URL acompanhar o Nome enquanto se
+          // digita, em vez de esperar o campo perder o foco.
+          onChange={onNameChange ? (e) => onNameChange(e.target.value) : undefined}
           className={cls}
         />
       )}
@@ -177,7 +181,17 @@ export function DogForm({
   );
 
   const [clientErrors, setClientErrors] = useState<DogFieldErrors>({});
-  const [slug, setSlug] = useState(String(dog?.slug ?? ""));
+  // Sem slug salvo, mas com nome já conhecido (edição de um cão cadastrado
+  // antes de existir este campo, ou que nunca teve URL própria): nasce
+  // derivado do nome, em vez de em branco — é o que o cliente pediu. Continua
+  // "não tocado" (`slugTouched` abaixo), então digitar mais no Nome depois
+  // ainda atualiza a URL sozinha.
+  const [slug, setSlug] = useState(() => {
+    const existente = String(dog?.slug ?? "");
+    if (existente) return existente;
+    const nome = String(dog?.name ?? "").trim();
+    return nome ? slugifyDog(nome) : "";
+  });
   const [slugTouched, setSlugTouched] = useState(Boolean(dog?.slug));
   const [selectedSire, setSelectedSire] = useState<AncestorCandidate | null>(sire ?? null);
   const [selectedDam, setSelectedDam] = useState<AncestorCandidate | null>(dam ?? null);
@@ -242,10 +256,14 @@ export function DogForm({
                   }
                 : undefined
             }
-            onNameBlur={
+            onNameChange={
               field.name === "name"
                 ? (v) => {
-                    if (!slugTouched && v.trim()) setSlug(slugifyDog(v));
+                    if (slugTouched) return;
+                    // O automático segue o Nome nos dois sentidos enquanto
+                    // não for editado à mão: apagar o Nome esvazia a URL
+                    // também, em vez de deixar um valor obsoleto para trás.
+                    setSlug(v.trim() ? slugifyDog(v) : "");
                   }
                 : undefined
             }
