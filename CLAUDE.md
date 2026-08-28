@@ -103,8 +103,33 @@ acordada com o cliente).
 Não implementar, nem "preparar tabela":
 
 IA, marketplace, financeiro, pagamentos, agenda/lembretes, rede social, notificação por
-e-mail/push/WhatsApp/SMS, multi-espécies, fusão automática de duplicados, cache
+push/WhatsApp/SMS, multi-espécies, fusão automática de duplicados, cache
 distribuído, filas.
+
+### E-mail ao usuário — DENTRO do escopo desde 27/08/2026 (aditivo contratual)
+
+E-mail transacional saiu desta lista. **Push, WhatsApp e SMS continuam fora** — a exceção é
+estreita e vale só para e-mail.
+
+O que entrou: **quatro** e-mails, todos disparados por uma AÇÃO DO USUÁRIO no nosso código —
+boas-vindas (após confirmar a conta), primeiro cão cadastrado, selo Criador Fundador
+atribuído, canil publicado. Não confundir com os e-mails de AUTH (confirmação, recuperação de
+senha), que continuam saindo do painel do Supabase e não passam pelo nosso código.
+
+Três condições fazem parte do aditivo, e não são detalhe de implementação:
+
+- **Opt-out obrigatório** (LGPD). Todo e-mail leva link de descadastro que funciona **sem
+  login** — `profiles.email_opt_out` + `profiles.unsubscribe_token`, e a rota
+  `/e/descadastro`. E-mail de auth NUNCA é bloqueado por ele: sem confirmação ou recuperação
+  de senha a pessoa não entra na conta.
+- **Teto de 2 por usuário por semana**, central em `src/lib/notify/usuario/guarda.ts`. Toda a
+  regra é pura e testada em `decisao.ts`.
+- **Envio jamais quebra o fluxo.** Toda chamada é `after()` + try/catch que loga e segue.
+  Cadastrar um cão não pode falhar porque o e-mail caiu.
+
+**O que continua fora, e é o que faltou do pedido original:** o lembrete de perfil incompleto
+7 dias após o cadastro. Ele exige execução agendada, e `agenda/lembretes` e `filas` seguem
+nesta lista — o projeto não tem `pg_cron` nem scheduler, e introduzir um é outra decisão.
 
 ### Ninhadas — DENTRO do escopo desde 18/08/2026 (aditivo contratual)
 

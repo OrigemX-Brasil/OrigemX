@@ -25,8 +25,17 @@ import type { AlertRule } from "./engine";
  *
  * 1. ALERTA NÃO BLOQUEIA. Nenhum fluxo de gravação consulta este catálogo.
  *    Regra que precise IMPEDIR algo é validação, e o lugar dela é o banco.
- * 2. IN-APP APENAS. Não existe campo de canal, e não deve existir: e-mail,
- *    push, WhatsApp e SMS são FORA DE ESCOPO por contrato (ver CLAUDE.md).
+ * 2. IN-APP APENAS. Não existe campo de canal neste catálogo, e não deve
+ *    existir. Push, WhatsApp e SMS seguem FORA DE ESCOPO por contrato.
+ *
+ *    E-MAIL passou a existir no produto (aditivo de 27/08/2026, ver
+ *    CLAUDE.md), mas NÃO por aqui: os quatro e-mails ao usuário vivem em
+ *    `src/lib/notify/usuario/` e disparam de ações do fluxo — confirmar a
+ *    conta, cadastrar o primeiro cão, ganhar o selo, publicar o canil. Este
+ *    motor continua sendo o que a TELA mostra, e uma regra daqui nunca vira
+ *    e-mail: são dois canais com gatilhos e cadências diferentes, e juntá-los
+ *    faria cada ajuste de texto de alerta virar um envio para a caixa de
+ *    entrada de alguém.
  */
 
 /** Números que o cliente costuma querer mexer, todos num lugar só. */

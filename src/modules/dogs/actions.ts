@@ -2,7 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 
+import { dispararPrimeiroCao } from "@/lib/notify/usuario/disparos";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/modules/auth/queries";
 import { getMyKennel } from "@/modules/kennels/queries";
@@ -21,7 +23,7 @@ import {
   type IdentifierErrors,
   type IdentifierInput,
 } from "./identifiers";
-import { getDescendantIds, searchAncestorCandidates } from "./queries";
+import { countMyDogs, getDescendantIds, searchAncestorCandidates } from "./queries";
 import { normalizeDogInput, validateDog, type DogFieldErrors, type DogInput } from "./validation";
 
 export type DogFormState = {
@@ -105,10 +107,12 @@ export async function createDog(_prev: DogFormState, formData: FormData): Promis
       dam_id: damId,
       created_by: user.id,
     })
-    .select("id")
+    .select("id, name, public_id")
     .single();
 
   if (error || !data) return toFormState(error, input);
+
+  await avisarPrimeiroCao(user.id, data);
 
   revalidatePath("/painel/caes");
   // Para a TELA DE SUCESSO, não para o formulário de edição. Cair de volta no
@@ -116,6 +120,35 @@ export async function createDog(_prev: DogFormState, formData: FormData): Promis
   // cão em rascunho, portanto sem link público nenhum na tela — era a maior
   // fricção do cadastro: o criador salvava e não via nada pronto.
   redirect(`/painel/caes/${data.id}/pronto`);
+}
+
+/**
+ * E-mail do PRIMEIRO cão — e só do primeiro.
+ *
+ * `countMyDogs === 1` logo depois do insert é o que decide: o cão recém-criado
+ * já está contado, então "exatamente um" significa que este foi o primeiro. Um
+ * sinalizador em `profiles` seria uma segunda fonte de verdade para algo que a
+ * própria contagem responde.
+ *
+ * NÃO LEVANTA e não bloqueia: a guarda já engole tudo, e este `try` cobre a
+ * contagem em si. Cadastrar um cão não pode falhar porque o e-mail caiu.
+ *
+ * `after()` porque `redirect()` lança por dentro e fecha a resposta — um
+ * `void` solto morreria com a função serverless antes de o envio sair.
+ */
+async function avisarPrimeiroCao(
+  userId: string,
+  dog: { id: string; name: string; public_id: string },
+): Promise<void> {
+  try {
+    if ((await countMyDogs(userId)) !== 1) return;
+    after(() => dispararPrimeiroCao(userId, dog));
+  } catch (erro) {
+    console.error(
+      "[email:primeiro-cao] contagem falhou:",
+      erro instanceof Error ? erro.message : erro,
+    );
+  }
 }
 
 export async function updateDog(_prev: DogFormState, formData: FormData): Promise<DogFormState> {

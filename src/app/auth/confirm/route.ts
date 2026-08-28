@@ -1,9 +1,10 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { after, NextResponse, type NextRequest } from "next/server";
 
 import { createClient } from "@/lib/supabase/server";
+import { dispararBoasVindas } from "@/lib/notify/usuario/disparos";
 import { destinoFinal, escolherTentativa } from "@/modules/auth/confirm";
 import { registrarAuthError } from "@/modules/auth/errors";
-import { getAuthUser } from "@/modules/auth/queries";
+import { getAuthUser, getCurrentProfile } from "@/modules/auth/queries";
 import { sanitizeNext } from "@/modules/auth/redirect";
 
 /**
@@ -57,6 +58,33 @@ export async function GET(request: NextRequest) {
   // Só consulta a sessão quando a verificação não resolveu — é a rede que o
   // caminho feliz não precisa pagar.
   const temSessao = verificou ? true : (await getAuthUser()) !== null;
+
+  /**
+   * BOAS-VINDAS, e só depois de CONFIRMAR — nunca no cadastro.
+   *
+   * No cadastro ele competiria com o próprio e-mail de confirmação, que é o
+   * que a pessoa precisa abrir naquele instante. Aqui a conta acabou de virar
+   * real e ela está com a atenção no produto.
+   *
+   * `verificou` e não `temSessao`: quem já tinha sessão e reabre um link
+   * antigo cai no segundo, não no primeiro — e não é uma conta nova. A guarda
+   * de `kind` único cobriria o reenvio de qualquer forma, mas errar o gatilho
+   * gastaria uma consulta por clique em link velho.
+   *
+   * `after()` porque o redirect fecha a resposta: um `void` solto seria
+   * congelado junto com a função serverless e o e-mail não sairia.
+   */
+  if (verificou) {
+    const usuario = await getAuthUser();
+    if (usuario) {
+      // O nome sai de `profiles`, não do JWT: `AuthUser` é deliberadamente
+      // estreito (id e e-mail), e `handle_new_user` já copiou o `full_name`
+      // do metadata para a tabela no momento do cadastro.
+      const perfil = await getCurrentProfile();
+      const primeiro = perfil?.full_name?.trim().split(/\s+/)[0] ?? null;
+      after(() => dispararBoasVindas(usuario.id, primeiro));
+    }
+  }
 
   return NextResponse.redirect(`${origin}${destinoFinal({ verificou, temSessao, next })}`);
 }

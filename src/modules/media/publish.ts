@@ -1,8 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 
 import type { SupabaseClientLike } from "@/modules/media/queries";
+import { dispararCanilPublicado, dispararSeloFundador } from "@/lib/notify/usuario/disparos";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/modules/auth/queries";
 
@@ -56,7 +58,9 @@ export async function publishKennel(formData: FormData): Promise<PublishState> {
 
   const { data: kennel } = await supabase
     .from("kennels")
-    .select("id, slug")
+    // `name`, `owner_id` e `founder_number` entram para o e-mail de canil
+    // publicado e para detectar o selo — nenhuma consulta a mais.
+    .select("id, slug, name, owner_id, founder_number")
     .eq("id", id)
     .is("deleted_at", null)
     .maybeSingle();
@@ -96,6 +100,12 @@ export async function publishKennel(formData: FormData): Promise<PublishState> {
   if (error || !updated || updated.length === 0) {
     return { error: "Não foi possível publicar o canil." };
   }
+
+  after(() => dispararCanilPublicado(kennel.owner_id, kennel));
+  // O selo pode ter sido concedido pelo PRÓPRIO publish: o trigger
+  // `trg_assign_founder_from_kennel` roda no UPDATE de `kennels`. Por isso a
+  // releitura logo abaixo — ver `avisarSeSelo`.
+  after(() => avisarSeSelo(kennel.owner_id, id, kennel.founder_number));
 
   revalidateKennel(kennel.slug, id);
   // A REGRA DUPLA depende do canil — uma ninhada JÁ publicada (`published_at`
@@ -253,6 +263,58 @@ function kennelSlugOf(dog: { kennels?: unknown }): string | null {
   const k = dog.kennels as { slug: string } | { slug: string }[] | null | undefined;
   if (!k) return null;
   return Array.isArray(k) ? (k[0]?.slug ?? null) : k.slug;
+}
+
+/**
+ * ============================================================================
+ * E-mail do selo Criador Fundador — o caso difícil, e por quê.
+ * ============================================================================
+ *
+ * O SELO NÃO É ATRIBUÍDO PELO NOSSO CÓDIGO. Quem o concede é
+ * `try_assign_founder_number`, uma função no banco, chamada por três triggers:
+ * no INSERT de cão, no INSERT do logo em `media`, e no UPDATE de `kennels` —
+ * este último é o que o `publishKennel` acima acabou de disparar.
+ *
+ * Não existe, então, um ponto no TypeScript onde "o selo foi concedido"
+ * aconteça. As opções seriam webhook do banco ou polling, e as duas são
+ * infraestrutura nova — fora do escopo, e caras demais para um e-mail.
+ *
+ * O QUE ESTA FUNÇÃO FAZ: relê `founder_number` depois da operação e compara com
+ * o valor de antes. Mudou de `null` para número? O selo saiu agora, e o e-mail
+ * vai. É uma consulta indexada por chave primária, no `after()`, fora do
+ * caminho da resposta.
+ *
+ * O QUE ELA NÃO COBRE, e é aceito conscientemente: se o selo for concedido por
+ * um caminho que não passe por aqui (o trigger do INSERT de cão, por exemplo),
+ * o e-mail não sai. A alternativa honesta seria o webhook; a desonesta seria
+ * fingir cobertura total. Fica registrado para quem for mexer nisso depois.
+ */
+async function avisarSeSelo(
+  ownerId: string,
+  kennelId: string,
+  numeroAntes: number | null,
+): Promise<void> {
+  // Já tinha selo antes: nada mudou nesta operação.
+  if (numeroAntes !== null) return;
+
+  try {
+    const supabase = await createClient();
+    const { data } = await supabase
+      .from("kennels")
+      .select("name, slug, founder_number")
+      .eq("id", kennelId)
+      .maybeSingle();
+
+    if (!data?.founder_number) return;
+
+    await dispararSeloFundador(ownerId, {
+      name: data.name,
+      slug: data.slug,
+      founder_number: data.founder_number,
+    });
+  } catch (erro) {
+    console.error("[email:selo-fundador]", erro instanceof Error ? erro.message : erro);
+  }
 }
 
 function revalidateKennel(slug: string, id: string) {

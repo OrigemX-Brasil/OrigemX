@@ -2,7 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 
+import { dispararPrimeiroCao } from "@/lib/notify/usuario/disparos";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/modules/auth/queries";
 import { translateKennelError } from "@/modules/kennels/errors";
@@ -152,7 +154,7 @@ export async function createFirstDog(
       owner_id: user.id,
       created_by: user.id,
     })
-    .select("id")
+    .select("id, name, public_id")
     .single();
 
   if (error || !dog) {
@@ -163,6 +165,14 @@ export async function createFirstDog(
       values,
     };
   }
+
+  /**
+   * Este caminho SEMPRE cria o primeiro cao -- a rota redireciona quem ja tem
+   * canil, e so chega aqui quem esta comecando. Ainda assim o disparo passa
+   * pela guarda, que confere `kind` unico: se por algum caminho isto rodar
+   * duas vezes, o segundo e-mail nao sai.
+   */
+  after(() => dispararPrimeiroCao(user.id, dog));
 
   revalidatePath("/painel");
   revalidatePath("/painel/caes");

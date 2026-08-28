@@ -867,12 +867,14 @@ export type Database = {
           city: string | null
           created_at: string
           deleted_at: string | null
+          email_opt_out: string | null
           full_name: string | null
           id: string
           phone: string | null
           role: string
           state: string | null
           suspended_at: string | null
+          unsubscribe_token: string
           updated_at: string
         }
         Insert: {
@@ -881,12 +883,14 @@ export type Database = {
           city?: string | null
           created_at?: string
           deleted_at?: string | null
+          email_opt_out?: string | null
           full_name?: string | null
           id: string
           phone?: string | null
           role?: string
           state?: string | null
           suspended_at?: string | null
+          unsubscribe_token?: string
           updated_at?: string
         }
         Update: {
@@ -895,12 +899,14 @@ export type Database = {
           city?: string | null
           created_at?: string
           deleted_at?: string | null
+          email_opt_out?: string | null
           full_name?: string | null
           id?: string
           phone?: string | null
           role?: string
           state?: string | null
           suspended_at?: string | null
+          unsubscribe_token?: string
           updated_at?: string
         }
         Relationships: []
@@ -965,6 +971,41 @@ export type Database = {
             columns: ["kennel_id"]
             isOneToOne: false
             referencedRelation: "kennels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_emails: {
+        Row: {
+          created_at: string
+          id: string
+          kind: string
+          profile_id: string
+          sent_at: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kind: string
+          profile_id: string
+          sent_at?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kind?: string
+          profile_id?: string
+          sent_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_emails_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
