@@ -2278,6 +2278,108 @@ exception when others then
 end $$;
 
 -- -----------------------------------------------------------------------------
+-- Admin SUSPENSO
+--
+-- O caso 39 já prova que `private.is_admin()` devolve false para admin
+-- suspenso. Estes dois provam a consequência que importa AQUI, e que nada mais
+-- no arquivo cobre: dentro de uma SECURITY DEFINER não sobra RLS nenhuma — a
+-- cláusula `not private.is_suspended()` que as policies carregam simplesmente
+-- não roda. O guard `is_admin()` no topo da função é a ÚNICA barreira, e é ela
+-- que está sob teste.
+--
+-- Suspende, tenta, e reativa SEMPRE — o bloco interno pega o erro para que o
+-- externo consiga desfazer a suspensão mesmo quando a chamada levanta. Mesmo
+-- vai-e-volta do caso 39.
+-- -----------------------------------------------------------------------------
+
+-- 96. Admin suspenso chamando admin_create_dog_for_kennel.
+do $$
+declare v_erro text;
+begin
+  update public.profiles set suspended_at = now()
+   where id = 'b1000000-0000-4000-8000-000000000006';
+
+  begin
+    set local role authenticated;
+    set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000006","role":"authenticated"}';
+    perform public.admin_create_dog_for_kennel(
+      p_kennel_id => 'c1000000-0000-4000-8000-000000000024',
+      p_name      => 'Battery Admin Suspenso',
+      p_sex       => 'male',
+      p_reason    => 'admin suspenso tentando cadastrar — caso de bateria'
+    );
+    reset role;
+    v_erro := null;
+  exception when others then
+    reset role;
+    v_erro := sqlstate;
+  end;
+
+  update public.profiles set suspended_at = null
+   where id = 'b1000000-0000-4000-8000-000000000006';
+
+  perform pg_temp.rec(96, 'admin SUSPENSO chama admin_create_dog_for_kennel',
+                      '42501 insufficient_privilege',
+                      coalesce(v_erro, 'ACEITOU — SUSPENSÃO NÃO BARRA O ADMIN'),
+                      v_erro = '42501');
+end $$;
+
+-- 97. O mesmo para a ninhada — as duas funções têm o guard, e provar só uma
+--     deixaria a outra livre para perdê-lo numa migration futura.
+do $$
+declare v_erro text;
+begin
+  update public.profiles set suspended_at = now()
+   where id = 'b1000000-0000-4000-8000-000000000006';
+
+  begin
+    set local role authenticated;
+    set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000006","role":"authenticated"}';
+    perform public.admin_create_litter_for_kennel(
+      p_kennel_id => 'c1000000-0000-4000-8000-000000000024',
+      p_reason    => 'admin suspenso tentando cadastrar — caso de bateria'
+    );
+    reset role;
+    v_erro := null;
+  exception when others then
+    reset role;
+    v_erro := sqlstate;
+  end;
+
+  update public.profiles set suspended_at = null
+   where id = 'b1000000-0000-4000-8000-000000000006';
+
+  perform pg_temp.rec(97, 'admin SUSPENSO chama admin_create_litter_for_kennel',
+                      '42501 insufficient_privilege',
+                      coalesce(v_erro, 'ACEITOU — SUSPENSÃO NÃO BARRA O ADMIN'),
+                      v_erro = '42501');
+end $$;
+
+-- 98. E o contraste que impede o falso positivo: reativado, o MESMO admin volta
+--     a cadastrar. Sem isto, uma função que recusasse todo mundo passaria em 96
+--     e 97 e ninguém notaria até a tela quebrar.
+do $$
+declare v_id uuid;
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000006","role":"authenticated"}';
+  select public.admin_create_dog_for_kennel(
+    p_kennel_id => 'c1000000-0000-4000-8000-000000000024',
+    p_name      => 'Battery Admin Reativado',
+    p_sex       => 'female',
+    p_reason    => 'admin reativado volta a cadastrar — caso de bateria'
+  ) into v_id;
+  reset role;
+
+  perform pg_temp.rec(98, 'admin REATIVADO volta a cadastrar', 'id devolvido',
+                      coalesce(v_id::text, 'nulo'), v_id is not null);
+exception when others then
+  reset role;
+  perform pg_temp.rec(98, 'admin REATIVADO volta a cadastrar', 'id devolvido',
+                      'ERRO: ' || sqlstate || ' ' || sqlerrm, false);
+end $$;
+
+-- -----------------------------------------------------------------------------
 -- Limpeza. Vem ANTES do relatório de propósito: a Management API devolve o
 -- resultado do último statement, então o SELECT final tem de ser o último.
 -- battery_result é temporária e independe das fixtures, então limpar aqui não
@@ -2303,14 +2405,24 @@ delete from public.dog_health_records
 delete from public.dog_genetic_tests
  where dog_id in (select id from public.dogs where name like 'Battery%');
 
--- Filhotes antes da ninhada (dogs.litter_id é FK RESTRICT) e antes dos
--- progenitores deles (sire_id/dam_id também são RESTRICT).
+-- A NINHADA FICA NO MEIO, e as duas metades da ordem são obrigatórias por FKs
+-- que apontam em sentidos opostos — as duas já quebraram a limpeza na prática:
+--
+--   dogs.litter_id            -> kennel_litters   (RESTRICT)  filhote ANTES
+--   kennel_litters.sire_id    -> dogs             (RESTRICT)  ninhada ANTES do
+--   kennel_litters.dam_id     -> dogs             (RESTRICT)  progenitor dela
+--
+-- Ou seja: filhotes, depois ninhadas, depois o resto dos cães. Inverter
+-- qualquer um dos dois lados derruba a limpeza inteira e a bateria morre sem
+-- imprimir o relatório.
 delete from public.dogs where name like 'Battery Filhote%';
-delete from public.kennel_litters where id in (
-  'e1000000-0000-4000-8000-000000000001',  -- Grupo 8
-  'e1000000-0000-4000-8000-000000000002',  -- Grupo 10, L2
-  'e1000000-0000-4000-8000-000000000003'   -- Grupo 10, L3
-);
+
+-- POR CANIL, não por lista de id: o Grupo 10 cria ninhada pela RPC, com uuid
+-- gerado na hora, e uma lista fixa deixava essa para trás — o DELETE de
+-- `kennels` então falhava com `kennel_litters_kennel_id_fkey`.
+delete from public.kennel_litters
+ where kennel_id in (select id from public.kennels where slug like 'battery-%');
+
 delete from public.dogs where name = 'Battery E';
 delete from public.dogs where name in ('Battery C', 'Battery D');
 delete from public.dogs where name like 'Battery%' or name = 'Rex do Dois';

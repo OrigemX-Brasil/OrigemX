@@ -196,10 +196,17 @@ function readDogForm(formData: FormData): DogInput {
   return input;
 }
 
-/** Campo de id vazio é ausência, não string vazia — o banco espera NULL. */
-function readId(formData: FormData, name: string): string | null {
+/**
+ * Campo de id vazio é ausência, não string vazia.
+ *
+ * Devolve `undefined`, não `null`, porque é assim que o PostgREST expressa
+ * "não mandei este argumento" — e aí o DEFAULT declarado na função SQL entra
+ * (que é `null` em todos estes). Mandar `null` explícito é erro de tipo: os
+ * parâmetros com default aparecem nos tipos gerados como `string | undefined`.
+ */
+function readId(formData: FormData, name: string): string | undefined {
   const value = formData.get(name);
-  return typeof value === "string" && value.length > 0 ? value : null;
+  return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
 /**
@@ -238,8 +245,8 @@ export async function createDogForUser(
   // Os três só existem DENTRO de ninhada — os CHECKs do banco são
   // bicondicionais e a RPC recusa a combinação. Mandar null quando não há
   // ninhada é o que mantém a chamada válida.
-  const price = litterId && priceRaw.length > 0 ? Number(priceRaw) : null;
-  if (price !== null && (!Number.isFinite(price) || price <= 0)) {
+  const price = litterId && priceRaw.length > 0 ? Number(priceRaw) : undefined;
+  if (price !== undefined && (!Number.isFinite(price) || price <= 0)) {
     return { formError: "Preço deve ser um número maior que zero.", values: input };
   }
 
@@ -249,19 +256,21 @@ export async function createDogForUser(
     p_name: name,
     p_sex: sex,
     p_reason: reason,
-    p_born_on: values.born_on ?? null,
-    p_breed: values.breed ?? null,
-    p_color: values.color ?? null,
-    p_coat: values.coat ?? null,
-    p_titles: values.titles ?? null,
-    p_slug: values.slug ?? null,
+    p_born_on: values.born_on ?? undefined,
+    p_breed: values.breed ?? undefined,
+    p_color: values.color ?? undefined,
+    p_coat: values.coat ?? undefined,
+    p_titles: values.titles ?? undefined,
+    p_slug: values.slug ?? undefined,
     // Progenitores: no caminho do filhote a RPC IGNORA estes e copia os da
     // ninhada — o trigger `dogs_check_litter_parents` recusaria qualquer outra
     // coisa. O formulário nem mostra os campos quando há ninhada escolhida.
     p_sire_id: readId(formData, "sire_id"),
     p_dam_id: readId(formData, "dam_id"),
     p_litter_id: litterId,
-    p_litter_status: litterId ? (String(formData.get("litter_status") ?? "") || null) : null,
+    p_litter_status: litterId
+      ? String(formData.get("litter_status") ?? "") || undefined
+      : undefined,
     p_price_brl: price,
     p_accepts_offer: litterId ? formData.get("accepts_offer") === "on" : false,
   });
@@ -328,9 +337,9 @@ export async function createLitterForUser(
     p_reason: reason,
     p_sire_id: readId(formData, "sire_id"),
     p_dam_id: readId(formData, "dam_id"),
-    p_mated_on: values.mated_on ?? null,
-    p_born_on: values.born_on ?? null,
-    p_description: values.description ?? null,
+    p_mated_on: values.mated_on ?? undefined,
+    p_born_on: values.born_on ?? undefined,
+    p_description: values.description ?? undefined,
   });
 
   if (error || !data) {

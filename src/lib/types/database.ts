@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.17"
+    PostgrestVersion: "14.5"
   }
   graphql_public: {
     Tables: {
@@ -1015,6 +1015,39 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_create_dog_for_kennel: {
+        Args: {
+          p_accepts_offer?: boolean
+          p_born_on?: string
+          p_breed?: string
+          p_coat?: string
+          p_color?: string
+          p_dam_id?: string
+          p_kennel_id: string
+          p_litter_id?: string
+          p_litter_status?: string
+          p_name: string
+          p_price_brl?: number
+          p_reason: string
+          p_sex: string
+          p_sire_id?: string
+          p_slug?: string
+          p_titles?: string[]
+        }
+        Returns: string
+      }
+      admin_create_litter_for_kennel: {
+        Args: {
+          p_born_on?: string
+          p_dam_id?: string
+          p_description?: string
+          p_kennel_id: string
+          p_mated_on?: string
+          p_reason: string
+          p_sire_id?: string
+        }
+        Returns: string
+      }
       admin_get_profile_email: {
         Args: { p_profile_id: string }
         Returns: string

@@ -3207,6 +3207,83 @@ async function main() {
     bPlanta.error?.code === "42501",
   );
 
+  // O que o cenário 19 já provava para NINHADA e faltava para CÃO: inserir num
+  // canil que não é seu, direto pela API. `dogs_insert` só aceita `kennel_id`
+  // de quem passa em `owns_kennel` ou é admin — B não é nenhum dos dois.
+  const bNoCanilAlheio = await B.client
+    .from("dogs")
+    .insert({
+      name: "Rls Invasor de Canil",
+      sex: "male",
+      kennel_id: kennelD.id,
+      created_by: B.id,
+      owner_id: B.id,
+    })
+    .select("id");
+  record(
+    "21. Admin cadastra para outro usuário",
+    "B cadastra cão no canil de D, direto pela API",
+    "negado (42501)",
+    describe(bNoCanilAlheio.error, bNoCanilAlheio.data ?? undefined),
+    bNoCanilAlheio.error?.code === "42501",
+  );
+
+  // --- admin SUSPENSO ---------------------------------------------------------
+  //
+  // Dentro de uma SECURITY DEFINER não sobra RLS: a cláusula
+  // `not private.is_suspended()` que as policies carregam simplesmente não roda.
+  // O guard `private.is_admin()` — que exige `suspended_at is null` — é a ÚNICA
+  // barreira, e é ela que está sob teste.
+  //
+  // A suspensão é feita pela chave secreta, como FIXTURE: mesmo mecanismo que já
+  // promove o ADMIN no cenário 14, não uma prova de acesso.
+  const { error: suspendeAdminError } = await admin
+    .from("profiles")
+    .update({ suspended_at: new Date().toISOString() })
+    .eq("id", ADMIN.id);
+  if (suspendeAdminError) {
+    throw new Error(`fixture obrigatória falhou: suspender admin: ${suspendeAdminError.message}`);
+  }
+
+  const rpcDogSuspenso = await ADMIN.client.rpc("admin_create_dog_for_kennel", {
+    p_kennel_id: kennelD.id,
+    p_name: "Rls Admin Suspenso",
+    p_sex: "male",
+    p_reason: "admin suspenso tentando cadastrar — caso de evidência",
+  });
+  record(
+    "21. Admin cadastra para outro usuário",
+    "admin SUSPENSO chama admin_create_dog_for_kennel",
+    "erro — insufficient_privilege",
+    rpcDogSuspenso.error
+      ? `erro: ${rpcDogSuspenso.error.message}`
+      : "EXECUTOU — SUSPENSÃO NÃO BARRA O ADMIN",
+    !!rpcDogSuspenso.error,
+  );
+
+  const rpcLitterSuspenso = await ADMIN.client.rpc("admin_create_litter_for_kennel", {
+    p_kennel_id: kennelD.id,
+    p_reason: "admin suspenso tentando cadastrar — caso de evidência",
+  });
+  record(
+    "21. Admin cadastra para outro usuário",
+    "admin SUSPENSO chama admin_create_litter_for_kennel",
+    "erro — insufficient_privilege",
+    rpcLitterSuspenso.error
+      ? `erro: ${rpcLitterSuspenso.error.message}`
+      : "EXECUTOU — SUSPENSÃO NÃO BARRA O ADMIN",
+    !!rpcLitterSuspenso.error,
+  );
+
+  // Reativa ANTES do resto: tudo abaixo depende de o ADMIN voltar a ser admin.
+  const { error: reativaAdminError } = await admin
+    .from("profiles")
+    .update({ suspended_at: null })
+    .eq("id", ADMIN.id);
+  if (reativaAdminError) {
+    throw new Error(`fixture obrigatória falhou: reativar admin: ${reativaAdminError.message}`);
+  }
+
   // --- ADMIN de verdade cadastra para D ---------------------------------------
 
   const adminCriaCao = await ADMIN.client.rpc("admin_create_dog_for_kennel", {
