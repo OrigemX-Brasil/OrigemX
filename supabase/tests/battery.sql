@@ -1785,6 +1785,498 @@ exception when others then
                       sqlstate || ' ' || sqlerrm, true);
 end $$;
 
+-- =============================================================================
+-- Grupo 10 — admin cadastra cão e ninhada em nome de outro usuário (casos 81 a 95)
+--
+-- O que está sob teste não é "o admin consegue inserir" — a RLS já permitia
+-- isso antes desta migration (`dogs_insert`/`kennel_litters_insert` já tinham
+-- `or private.is_admin()`). É o que só a FUNÇÃO garante:
+--
+--   * quem NÃO é admin continua recusado, tanto pela RPC quanto pelo INSERT
+--     direto — inclusive o buraco de owner_id que esta mesma migration fecha;
+--   * owner_id do registro criado é sempre o DONO DO CANIL DE DESTINO, nunca
+--     um parâmetro;
+--   * cada chamada gera EXATAMENTE 1 linha de audit_log, com o motivo;
+--   * o filhote herda o par e a publicação da NINHADA, nunca decide sozinho, e
+--     não escapa para o canil de outra pessoa;
+--   * o teto de 4 filhotes, que não existe como CHECK no banco, é respeitado
+--     pela função por `for update`;
+--   * o DONO — não o admin — continua sendo quem lê e edita o registro depois.
+--     Este último é o requisito central do pedido: sem ele, "cadastrar em nome
+--     de alguém" seria só um registro órfão que ninguém no painel do criador
+--     consegue tocar.
+--
+-- FORA DE ESCOPO DE PROPÓSITO: o canil de destino (K9) não tem cidade/estado/
+-- logo, então não é elegível ao selo Fundador — a mesma escolha que os canis
+-- de fixture do restante do arquivo já fazem, para não consumir um número real
+-- da sequence por um cadastro de teste. A captura do selo pela função (risco
+-- documentado na migration) fica coberta em outro nível: o mecanismo do
+-- trigger já é exaustivamente testado nos Grupos 5 e 7 deste arquivo, e o
+-- FORMATO da captura em `audit_log.details` é testado em
+-- `src/modules/admin/format.test.ts`. Testar as duas coisas outra vez aqui,
+-- contra um número real da sequence, só duplicaria cobertura.
+-- =============================================================================
+
+-- battery_ids guarda o id que uma criação devolveu, para casos SEGUINTES
+-- reencontrarem o mesmo registro sem depender de nome/descrição — mesma ideia
+-- de battery_result, só que para os próprios dados de fixture.
+create temp table battery_ids (
+  label text primary key,
+  id    uuid not null
+);
+
+do $$
+declare
+  u9 constant uuid := 'b1000000-0000-4000-8000-000000000009';  -- dono de destino
+begin
+  insert into auth.users (
+    id, instance_id, aud, role, email, encrypted_password,
+    email_confirmed_at, created_at, updated_at,
+    raw_app_meta_data, raw_user_meta_data
+  )
+  values
+    (u9, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+     'battery-u9@example.test', '', now(), now(), now(), '{}'::jsonb,
+     '{"full_name":"Battery Nove"}'::jsonb);
+end $$;
+
+-- K9: canil de DESTINO. Sem cidade/estado/logo — ver nota de escopo acima.
+insert into public.kennels (id, owner_id, name, slug, created_by)
+values ('c1000000-0000-4000-8000-000000000024', 'b1000000-0000-4000-8000-000000000009',
+        'Canil Battery Nove', 'battery-canil-nove', 'b1000000-0000-4000-8000-000000000009');
+
+-- L2: ninhada de K9, NÃO publicada — para o filhote 88 provar que nada herda.
+-- L3: ninhada de K9, JÁ publicada — para o filhote 89 provar que herda.
+-- Progenitores reaproveitam A/B (já usados no resto do arquivo): sire/dam não
+-- são escopados ao canil de quem cadastra, e este arquivo já prova isso em
+-- outro caso — não é o que está sob teste aqui.
+insert into public.kennel_litters (id, kennel_id, sire_id, dam_id, created_by, published_at)
+values
+  ('e1000000-0000-4000-8000-000000000002', 'c1000000-0000-4000-8000-000000000024',
+   'd1000000-0000-4000-8000-00000000000a', 'd1000000-0000-4000-8000-00000000000b',
+   'b1000000-0000-4000-8000-000000000009', null),
+  ('e1000000-0000-4000-8000-000000000003', 'c1000000-0000-4000-8000-000000000024',
+   'd1000000-0000-4000-8000-00000000000a', 'd1000000-0000-4000-8000-00000000000b',
+   'b1000000-0000-4000-8000-000000000009', now());
+
+-- -----------------------------------------------------------------------------
+-- Quem NÃO é admin continua recusado — pelas duas portas
+-- -----------------------------------------------------------------------------
+
+-- 81. Usuário comum chama admin_create_dog_for_kennel.
+do $$
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000001","role":"authenticated"}';
+  perform public.admin_create_dog_for_kennel(
+    p_kennel_id => 'c1000000-0000-4000-8000-000000000024',
+    p_name      => 'Tentativa Não-Admin',
+    p_sex       => 'male',
+    p_reason    => 'tentativa de usuário comum'
+  );
+  reset role;
+  perform pg_temp.rec(81, 'usuário comum chama admin_create_dog_for_kennel',
+                      '42501 insufficient_privilege',
+                      'ACEITOU — QUALQUER UM CADASTRA CÃO PARA QUALQUER UM', false);
+exception when others then
+  reset role;
+  perform pg_temp.rec(81, 'usuário comum chama admin_create_dog_for_kennel',
+                      '42501 insufficient_privilege', sqlstate || ' ' || sqlerrm,
+                      sqlstate = '42501');
+end $$;
+
+-- 82. Usuário comum chama admin_create_litter_for_kennel.
+do $$
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000001","role":"authenticated"}';
+  perform public.admin_create_litter_for_kennel(
+    p_kennel_id => 'c1000000-0000-4000-8000-000000000024',
+    p_reason    => 'tentativa de usuário comum'
+  );
+  reset role;
+  perform pg_temp.rec(82, 'usuário comum chama admin_create_litter_for_kennel',
+                      '42501 insufficient_privilege',
+                      'ACEITOU — QUALQUER UM CADASTRA NINHADA PARA QUALQUER UM', false);
+exception when others then
+  reset role;
+  perform pg_temp.rec(82, 'usuário comum chama admin_create_litter_for_kennel',
+                      '42501 insufficient_privilege', sqlstate || ' ' || sqlerrm,
+                      sqlstate = '42501');
+end $$;
+
+-- 83. O buraco que esta mesma migration fecha: usuário comum insere cão com
+--     owner_id de OUTRA pessoa, direto pela API, sem passar por função nenhuma.
+do $$
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000001","role":"authenticated"}';
+  insert into public.dogs (name, sex, owner_id, created_by)
+  values ('Battery Plantado', 'male', 'b1000000-0000-4000-8000-000000000002',
+          'b1000000-0000-4000-8000-000000000001');
+  reset role;
+  perform pg_temp.rec(83, 'usuário comum cadastra cão com owner_id de outra pessoa',
+                      '42501 — recusado pela RLS',
+                      'ACEITOU — CÃO PLANTADO NO PAINEL DE ESTRANHO', false);
+exception when others then
+  reset role;
+  perform pg_temp.rec(83, 'usuário comum cadastra cão com owner_id de outra pessoa',
+                      '42501 — recusado pela RLS', sqlstate || ' ' || sqlerrm,
+                      sqlstate = '42501');
+end $$;
+
+-- -----------------------------------------------------------------------------
+-- Admin cadastra cão e ninhada comuns (sem ninhada / sem filhote) para u9
+-- -----------------------------------------------------------------------------
+
+-- 84. Cão comum: owner_id vem do CANIL, created_by é o ADMIN.
+do $$
+declare
+  v_dog_id  uuid;
+  v_owner   uuid;
+  v_kennel  uuid;
+  v_creator uuid;
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000006","role":"authenticated"}';
+  select public.admin_create_dog_for_kennel(
+    p_kennel_id => 'c1000000-0000-4000-8000-000000000024',
+    p_name      => 'Battery Cadastrado Pelo Admin',
+    p_sex       => 'male',
+    p_reason    => 'cliente pediu por telefone — caso de bateria'
+  ) into v_dog_id;
+  reset role;
+
+  insert into battery_ids values ('dog_para_u9', v_dog_id);
+
+  select owner_id, kennel_id, created_by into v_owner, v_kennel, v_creator
+    from public.dogs where id = v_dog_id;
+
+  perform pg_temp.rec(84, 'admin cadastra cão comum no canil de outro usuário',
+                      'owner=u9, kennel=K9, created_by=admin',
+                      'owner=' || coalesce(v_owner::text, 'nulo') ||
+                      ' kennel=' || coalesce(v_kennel::text, 'nulo') ||
+                      ' created_by=' || coalesce(v_creator::text, 'nulo'),
+                      v_owner = 'b1000000-0000-4000-8000-000000000009'
+                      and v_kennel = 'c1000000-0000-4000-8000-000000000024'
+                      and v_creator = 'b1000000-0000-4000-8000-000000000006');
+exception when others then
+  reset role;
+  perform pg_temp.rec(84, 'admin cadastra cão comum no canil de outro usuário',
+                      'owner=u9, kennel=K9, created_by=admin',
+                      'ERRO: ' || sqlstate || ' ' || sqlerrm, false);
+end $$;
+
+-- 85. Uma chamada, uma linha de auditoria, com o motivo preservado — mesma
+--     garantia já provada para suspensão (caso 34), agora para criação.
+do $$
+declare v_n int; v_reason text; v_dog_id uuid;
+begin
+  select id into v_dog_id from battery_ids where label = 'dog_para_u9';
+  select count(*), max(reason) into v_n, v_reason from public.audit_log
+   where entity_type = 'dog' and entity_id = v_dog_id and action = 'dog.create_for_user';
+  perform pg_temp.rec(85, 'cadastro de cão para outro usuário gera exatamente 1 linha de auditoria',
+                      '1 linha, motivo preservado',
+                      v_n || ' linha(s), motivo: ' || coalesce(v_reason, 'NENHUM'),
+                      v_n = 1 and v_reason = 'cliente pediu por telefone — caso de bateria');
+end $$;
+
+-- 86. Ninhada: nasce SEMPRE rascunho — publicar continua sendo do dono.
+do $$
+declare v_litter_id uuid; v_created_by uuid; v_published timestamptz;
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000006","role":"authenticated"}';
+  select public.admin_create_litter_for_kennel(
+    p_kennel_id   => 'c1000000-0000-4000-8000-000000000024',
+    p_reason      => 'criador pediu ajuda para cadastrar — caso de bateria',
+    p_description => 'Battery ninhada cadastrada pelo admin'
+  ) into v_litter_id;
+  reset role;
+
+  insert into battery_ids values ('ninhada_para_u9', v_litter_id);
+
+  select created_by, published_at into v_created_by, v_published
+    from public.kennel_litters where id = v_litter_id;
+
+  perform pg_temp.rec(86, 'admin cadastra ninhada no canil de outro usuário — nasce rascunho',
+                      'created_by=admin, published_at nulo',
+                      'created_by=' || coalesce(v_created_by::text, 'nulo') ||
+                      ' published_at=' || coalesce(v_published::text, 'nulo'),
+                      v_created_by = 'b1000000-0000-4000-8000-000000000006'
+                      and v_published is null);
+exception when others then
+  reset role;
+  perform pg_temp.rec(86, 'admin cadastra ninhada no canil de outro usuário — nasce rascunho',
+                      'created_by=admin, published_at nulo',
+                      'ERRO: ' || sqlstate || ' ' || sqlerrm, false);
+end $$;
+
+-- 87. Mesma garantia de auditoria, agora para ninhada.
+do $$
+declare v_n int; v_litter_id uuid;
+begin
+  select id into v_litter_id from battery_ids where label = 'ninhada_para_u9';
+  select count(*) into v_n from public.audit_log
+   where entity_type = 'litter' and entity_id = v_litter_id
+     and action = 'litter.create_for_user';
+  perform pg_temp.rec(87, 'cadastro de ninhada para outro usuário gera exatamente 1 linha de auditoria',
+                      '1 linha', v_n || ' linha(s)', v_n = 1);
+end $$;
+
+-- -----------------------------------------------------------------------------
+-- Filhote: herda da ninhada, não escapa para outro canil, respeita o teto
+-- -----------------------------------------------------------------------------
+
+-- 88. Filhote em ninhada NÃO publicada: par copiado, status default, e NADA
+--     publicado — não existe decisão do dono para herdar ainda.
+do $$
+declare
+  v_puppy_id uuid;
+  v_litter   uuid;
+  v_status   text;
+  v_sire     uuid;
+  v_dam      uuid;
+  v_pub      timestamptz;
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000006","role":"authenticated"}';
+  select public.admin_create_dog_for_kennel(
+    p_kennel_id => 'c1000000-0000-4000-8000-000000000024',
+    p_name      => 'Battery Filhote Admin 1',
+    p_sex       => 'male',
+    p_reason    => 'primeiro filhote cadastrado pelo admin — caso de bateria',
+    p_litter_id => 'e1000000-0000-4000-8000-000000000002'
+  ) into v_puppy_id;
+  reset role;
+
+  insert into battery_ids values ('filhote_l2_1', v_puppy_id);
+
+  select litter_id, litter_status, sire_id, dam_id, published_at
+    into v_litter, v_status, v_sire, v_dam, v_pub
+    from public.dogs where id = v_puppy_id;
+
+  perform pg_temp.rec(88, 'filhote cadastrado pelo admin em ninhada não publicada',
+                      'par copiado da ninhada, status=available, published_at nulo',
+                      'litter=' || coalesce(v_litter::text, 'nulo') ||
+                      ' status=' || coalesce(v_status, 'nulo') ||
+                      ' par_correto=' ||
+                        (v_sire = 'd1000000-0000-4000-8000-00000000000a'
+                         and v_dam = 'd1000000-0000-4000-8000-00000000000b')::text ||
+                      ' published_at=' || coalesce(v_pub::text, 'nulo'),
+                      v_litter = 'e1000000-0000-4000-8000-000000000002'
+                      and v_status = 'available'
+                      and v_sire = 'd1000000-0000-4000-8000-00000000000a'
+                      and v_dam = 'd1000000-0000-4000-8000-00000000000b'
+                      and v_pub is null);
+exception when others then
+  reset role;
+  perform pg_temp.rec(88, 'filhote cadastrado pelo admin em ninhada não publicada',
+                      'par copiado, status=available, published_at nulo',
+                      'ERRO: ' || sqlstate || ' ' || sqlerrm, false);
+end $$;
+
+-- 89. Filhote em ninhada JÁ publicada: herda a publicação — foi decisão do
+--     dono ao publicar a ninhada, o admin só reflete o que já era público.
+do $$
+declare v_puppy_id uuid; v_pub timestamptz;
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000006","role":"authenticated"}';
+  select public.admin_create_dog_for_kennel(
+    p_kennel_id => 'c1000000-0000-4000-8000-000000000024',
+    p_name      => 'Battery Filhote Admin Publicado',
+    p_sex       => 'female',
+    p_reason    => 'ninhada já estava no ar — caso de bateria',
+    p_litter_id => 'e1000000-0000-4000-8000-000000000003'
+  ) into v_puppy_id;
+  reset role;
+
+  select published_at into v_pub from public.dogs where id = v_puppy_id;
+
+  perform pg_temp.rec(89, 'filhote cadastrado pelo admin em ninhada JÁ publicada',
+                      'published_at herdado — não nulo',
+                      coalesce(v_pub::text, 'nulo'), v_pub is not null);
+exception when others then
+  reset role;
+  perform pg_temp.rec(89, 'filhote cadastrado pelo admin em ninhada JÁ publicada',
+                      'published_at herdado — não nulo',
+                      'ERRO: ' || sqlstate || ' ' || sqlerrm, false);
+end $$;
+
+-- 90. Filhote em ninhada que NÃO pertence ao canil de destino. A policy
+--     `owns_litter` que barraria isso não roda dentro de uma SECURITY
+--     DEFINER — é a própria função que precisa recusar.
+do $$
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000006","role":"authenticated"}';
+  perform public.admin_create_dog_for_kennel(
+    p_kennel_id => 'c1000000-0000-4000-8000-000000000001',  -- canil de u1
+    p_name      => 'Battery Filhote Canil Errado',
+    p_sex       => 'male',
+    p_reason    => 'tentativa deliberada — caso de bateria',
+    p_litter_id => 'e1000000-0000-4000-8000-000000000002'  -- L2 é de K9, não de u1
+  );
+  reset role;
+  perform pg_temp.rec(90, 'filhote em ninhada de canil diferente do destino',
+                      '23514 check_violation',
+                      'ACEITOU — FILHOTE PLANTADO EM CANIL ERRADO', false);
+exception when others then
+  reset role;
+  perform pg_temp.rec(90, 'filhote em ninhada de canil diferente do destino',
+                      '23514 check_violation', sqlstate || ' ' || sqlerrm,
+                      sqlstate = '23514');
+end $$;
+
+-- Completa a fixture: mais dois filhotes em L2, para chegar a 3 antes do teto.
+-- Não numerado — mesmo papel do "caminho feliz" que prepara os casos 66/72.
+do $$
+declare v_id uuid;
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000006","role":"authenticated"}';
+  select public.admin_create_dog_for_kennel(
+    p_kennel_id => 'c1000000-0000-4000-8000-000000000024',
+    p_name      => 'Battery Filhote Admin 2',
+    p_sex       => 'female',
+    p_reason    => 'completando fixture do teto — caso de bateria',
+    p_litter_id => 'e1000000-0000-4000-8000-000000000002'
+  ) into v_id;
+  select public.admin_create_dog_for_kennel(
+    p_kennel_id => 'c1000000-0000-4000-8000-000000000024',
+    p_name      => 'Battery Filhote Admin 3',
+    p_sex       => 'male',
+    p_reason    => 'completando fixture do teto — caso de bateria',
+    p_litter_id => 'e1000000-0000-4000-8000-000000000002'
+  ) into v_id;
+  reset role;
+end $$;
+
+-- 91. Quarto filhote na mesma ninhada — ainda dentro do teto de 4.
+do $$
+declare v_id uuid; v_n int;
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000006","role":"authenticated"}';
+  select public.admin_create_dog_for_kennel(
+    p_kennel_id => 'c1000000-0000-4000-8000-000000000024',
+    p_name      => 'Battery Filhote Admin 4',
+    p_sex       => 'female',
+    p_reason    => 'quarto filhote — caso de bateria',
+    p_litter_id => 'e1000000-0000-4000-8000-000000000002'
+  ) into v_id;
+  reset role;
+
+  select count(*) into v_n from public.dogs
+   where litter_id = 'e1000000-0000-4000-8000-000000000002' and deleted_at is null;
+  perform pg_temp.rec(91, 'quarto filhote na mesma ninhada', '4 filhotes vivos',
+                      v_n || ' filhote(s)', v_n = 4);
+exception when others then
+  reset role;
+  perform pg_temp.rec(91, 'quarto filhote na mesma ninhada', '4 filhotes vivos',
+                      'ERRO: ' || sqlstate || ' ' || sqlerrm, false);
+end $$;
+
+-- 92. Quinto filhote — estoura o teto. Não há CHECK equivalente no banco para
+--     este caminho; quem garante é o `for update` + contagem dentro da função.
+do $$
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000006","role":"authenticated"}';
+  perform public.admin_create_dog_for_kennel(
+    p_kennel_id => 'c1000000-0000-4000-8000-000000000024',
+    p_name      => 'Battery Filhote Admin 5',
+    p_sex       => 'male',
+    p_reason    => 'quinto filhote — caso de bateria',
+    p_litter_id => 'e1000000-0000-4000-8000-000000000002'
+  );
+  reset role;
+  perform pg_temp.rec(92, 'quinto filhote na mesma ninhada — estoura o teto',
+                      '23514 check_violation',
+                      'ACEITOU — TETO DE 4 FILHOTES DESPROTEGIDO', false);
+exception when others then
+  reset role;
+  perform pg_temp.rec(92, 'quinto filhote na mesma ninhada — estoura o teto',
+                      '23514 check_violation', sqlstate || ' ' || sqlerrm,
+                      sqlstate = '23514');
+end $$;
+
+-- 93. Canil de destino inexistente.
+do $$
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000006","role":"authenticated"}';
+  perform public.admin_create_dog_for_kennel(
+    p_kennel_id => 'c1000000-0000-4000-8000-000000000099',
+    p_name      => 'Battery Canil Fantasma',
+    p_sex       => 'male',
+    p_reason    => 'canil não existe — caso de bateria'
+  );
+  reset role;
+  perform pg_temp.rec(93, 'admin cadastra cão em canil inexistente', 'P0002 no_data_found',
+                      'ACEITOU — INSERIU EM CANIL QUE NÃO EXISTE', false);
+exception when others then
+  reset role;
+  perform pg_temp.rec(93, 'admin cadastra cão em canil inexistente', 'P0002 no_data_found',
+                      sqlstate || ' ' || sqlerrm, sqlstate = 'P0002');
+end $$;
+
+-- -----------------------------------------------------------------------------
+-- O requisito central: o DONO, não o admin, continua sendo quem controla o
+-- registro depois. Sem isto, "cadastrar em nome de alguém" seria só um
+-- registro órfão que ninguém no painel do criador consegue tocar.
+-- -----------------------------------------------------------------------------
+
+-- 94. Dono lê e edita o cão que o admin cadastrou em nome dele.
+do $$
+declare v_dog_id uuid; v_read int; v_upd int;
+begin
+  select id into v_dog_id from battery_ids where label = 'dog_para_u9';
+
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000009","role":"authenticated"}';
+
+  select count(*) into v_read from public.dogs where id = v_dog_id;
+
+  with upd as (
+    update public.dogs set breed = 'Atualizado pelo dono' where id = v_dog_id returning 1
+  ) select count(*) into v_upd from upd;
+  reset role;
+
+  perform pg_temp.rec(94, 'dono vê e edita o cão que o admin cadastrou em nome dele',
+                      '1 leitura, 1 atualização',
+                      v_read || ' leitura(s), ' || v_upd || ' atualização(ões)',
+                      v_read = 1 and v_upd = 1);
+exception when others then
+  reset role;
+  perform pg_temp.rec(94, 'dono vê e edita o cão que o admin cadastrou em nome dele',
+                      '1 leitura, 1 atualização', 'ERRO: ' || sqlstate || ' ' || sqlerrm, false);
+end $$;
+
+-- 95. Dono edita a ninhada que o admin cadastrou em nome dele.
+do $$
+declare v_litter_id uuid; v_upd int;
+begin
+  select id into v_litter_id from battery_ids where label = 'ninhada_para_u9';
+
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000009","role":"authenticated"}';
+
+  with upd as (
+    update public.kennel_litters set description = 'Atualizado pelo dono'
+     where id = v_litter_id returning 1
+  ) select count(*) into v_upd from upd;
+  reset role;
+
+  perform pg_temp.rec(95, 'dono edita a ninhada que o admin cadastrou em nome dele',
+                      '1 atualização', v_upd || ' atualização(ões)', v_upd = 1);
+exception when others then
+  reset role;
+  perform pg_temp.rec(95, 'dono edita a ninhada que o admin cadastrou em nome dele',
+                      '1 atualização', 'ERRO: ' || sqlstate || ' ' || sqlerrm, false);
+end $$;
+
 -- -----------------------------------------------------------------------------
 -- Limpeza. Vem ANTES do relatório de propósito: a Management API devolve o
 -- resultado do último statement, então o SELECT final tem de ser o último.
@@ -1814,7 +2306,11 @@ delete from public.dog_genetic_tests
 -- Filhotes antes da ninhada (dogs.litter_id é FK RESTRICT) e antes dos
 -- progenitores deles (sire_id/dam_id também são RESTRICT).
 delete from public.dogs where name like 'Battery Filhote%';
-delete from public.kennel_litters where id = 'e1000000-0000-4000-8000-000000000001';
+delete from public.kennel_litters where id in (
+  'e1000000-0000-4000-8000-000000000001',  -- Grupo 8
+  'e1000000-0000-4000-8000-000000000002',  -- Grupo 10, L2
+  'e1000000-0000-4000-8000-000000000003'   -- Grupo 10, L3
+);
 delete from public.dogs where name = 'Battery E';
 delete from public.dogs where name in ('Battery C', 'Battery D');
 delete from public.dogs where name like 'Battery%' or name = 'Rex do Dois';

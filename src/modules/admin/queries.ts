@@ -605,3 +605,71 @@ export async function getUserFunnel(): Promise<FunnelCounts> {
     withKennelNoDog: row.with_kennel_no_dog ?? 0,
   };
 }
+
+// -----------------------------------------------------------------------------
+// Ninhadas de um canil
+//
+// NÃO REUSA `getKennelLitters` do módulo de ninhadas, e NÃO é por permissão:
+// `kennel_litters_select` tem `or private.is_admin()` sem ramo de `deleted_at`
+// nem de `published_at`, então a sessão admin já leria tudo por lá. É pela
+// FORMA. Aquela função filtra `deleted_at is null` — o oposto do que esta tela
+// precisa, pelo mesmo motivo escrito em `listKennels` — e paga capa e contagem
+// de filhotes por linha, duas viagens a mais para dados que aqui não aparecem.
+// Chamá-la daria menos dado por mais consulta.
+//
+// Paginada como toda listagem do módulo: `kennel_litters` não tem teto por
+// canil (quem tem teto é `dogs`, por ninhada), então "são poucas" não é
+// garantia de nada.
+// -----------------------------------------------------------------------------
+
+const LITTER_LIST_COLUMNS =
+  "id, kennel_id, public_id, description, mated_on, born_on, published_at, deleted_at, created_at";
+
+/** Sem `hidden_at`: a coluna não existe em `kennel_litters` — ver `litterStatus`. */
+export type LitterListItem = {
+  id: string;
+  kennel_id: string;
+  public_id: string;
+  description: string | null;
+  mated_on: string | null;
+  born_on: string | null;
+  published_at: string | null;
+  deleted_at: string | null;
+  created_at: string;
+};
+
+export async function listKennelLitters(
+  kennelId: string,
+  params: PageParams = {},
+): Promise<Page<LitterListItem>> {
+  const limit = resolveLimit(params.limit);
+  const cursor = decodeCursor(params.cursor);
+
+  const supabase = await createClient();
+  let query = supabase
+    .from("kennel_litters")
+    .select(LITTER_LIST_COLUMNS)
+    .eq("kennel_id", kennelId)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(limit + 1);
+
+  if (cursor) {
+    query = query.or(
+      `created_at.lt.${cursor.createdAt},and(created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`,
+    );
+  }
+
+  const { data, error } = await query;
+  if (error) return { items: [], nextCursor: null };
+
+  const rows = (data ?? []) as unknown as LitterListItem[];
+  const hasMore = rows.length > limit;
+  const items = hasMore ? rows.slice(0, limit) : rows;
+  const last = items.at(-1);
+
+  return {
+    items,
+    nextCursor: hasMore && last ? encodeCursor({ createdAt: last.created_at, id: last.id }) : null,
+  };
+}

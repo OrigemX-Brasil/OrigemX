@@ -25,6 +25,8 @@ export const ACTION_LABEL: Record<string, string> = {
   "dog.hide": "Ocultou cão",
   "dog.unhide": "Reativou cão",
   "kennel.founder_number.set": "Corrigiu número do selo",
+  "dog.create_for_user": "Cadastrou cão para o usuário",
+  "litter.create_for_user": "Cadastrou ninhada para o usuário",
 };
 
 export function actionLabel(action: string): string {
@@ -32,17 +34,51 @@ export function actionLabel(action: string): string {
 }
 
 /**
- * "de → para" quando o `details` tiver as duas chaves — todo `admin_*` grava
- * exatamente `{de, para}` (ver `private.audit()` nas migrations), então
- * generalizar aqui é seguro em vez de um formatador por ação.
+ * "de → para" quando o `details` tiver as duas chaves — as ações que MUDAM um
+ * valor gravam exatamente `{de, para}` (ver `private.audit()` nas migrations),
+ * então generalizar aqui é seguro em vez de um formatador por ação.
+ *
+ * As ações de CRIAÇÃO (`*.create_for_user`) não cabem nesse formato: não havia
+ * "antes". Elas caem no segundo ramo.
  */
 export function detailsSummary(details: unknown): string | null {
   if (!details || typeof details !== "object") return null;
   const d = details as Record<string, unknown>;
-  if (!("de" in d) || !("para" in d)) return null;
 
-  const format = (v: unknown) => (v === null || v === undefined ? "—" : String(v));
-  return `${format(d.de)} → ${format(d.para)}`;
+  if ("de" in d && "para" in d) {
+    const format = (v: unknown) => (v === null || v === undefined ? "—" : String(v));
+    return `${format(d.de)} → ${format(d.para)}`;
+  }
+
+  return createdSummary(d);
+}
+
+/**
+ * Resumo de `dog.create_for_user`.
+ *
+ * O selo Fundador é o item que justifica esta função existir: cadastrar o
+ * primeiro cão de um canil elegível QUEIMA um número do pool, de forma
+ * irreversível, como efeito colateral de um trigger. A RPC registra isso no
+ * `details` justamente para a decisão não ficar invisível no histórico — se não
+ * aparecesse aqui, continuaria invisível na tela.
+ *
+ * `litter.create_for_user` grava só ids (canil, dono, progenitores), que não
+ * dizem nada como texto: devolve null e a célula fica vazia, que já é o
+ * comportamento para details desconhecido.
+ */
+function createdSummary(d: Record<string, unknown>): string | null {
+  if (!("nome" in d) && !("founder_number_atribuido" in d)) return null;
+
+  const partes: string[] = [];
+
+  if (typeof d.nome === "string" && d.nome.length > 0) partes.push(d.nome);
+  if (d.litter_id) partes.push("filhote de ninhada");
+  if (d.published_at) partes.push("nasceu publicado com a ninhada");
+  if (typeof d.founder_number_atribuido === "number") {
+    partes.push(`selo Fundador nº ${d.founder_number_atribuido}`);
+  }
+
+  return partes.length > 0 ? partes.join(" · ") : null;
 }
 
 /**
@@ -95,12 +131,18 @@ export const ENTITY_LABEL: Record<string, string> = {
   profile: "Usuário",
   kennel: "Canil",
   dog: "Cão",
+  litter: "Ninhada",
 };
 
 export function entityLabel(entityType: string): string {
   return ENTITY_LABEL[entityType] ?? entityType;
 }
 
+/**
+ * `litter` fica DE FORA de propósito: não existe tela `/admin/ninhadas`, e
+ * inventar um link quebrado é pior que não linkar. `entityHref` devolve null e a
+ * célula vira texto puro — o mesmo que já acontecia com tipo desconhecido.
+ */
 const ENTITY_BASE_PATH: Record<string, string> = {
   profile: "/admin/usuarios",
   kennel: "/admin/canis",

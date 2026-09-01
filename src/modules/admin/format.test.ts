@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  actionLabel,
   DEFAULT_HIDE_REASON,
   DEFAULT_SUSPEND_REASON,
   DEFAULT_UNHIDE_REASON,
   DEFAULT_UNSUSPEND_REASON,
+  detailsSummary,
   endOfDaySaoPaulo,
   entityHref,
   entityLabel,
@@ -78,10 +80,11 @@ describe("startOfDaySaoPaulo / endOfDaySaoPaulo", () => {
 });
 
 describe("entityLabel / entityHref", () => {
-  it("traduz os três tipos de entidade conhecidos", () => {
+  it("traduz os quatro tipos de entidade conhecidos", () => {
     expect(entityLabel("profile")).toBe("Usuário");
     expect(entityLabel("kennel")).toBe("Canil");
     expect(entityLabel("dog")).toBe("Cão");
+    expect(entityLabel("litter")).toBe("Ninhada");
   });
 
   it("tipo desconhecido devolve o próprio valor, sem quebrar a tela", () => {
@@ -96,5 +99,91 @@ describe("entityLabel / entityHref", () => {
 
   it("tipo desconhecido não gera link", () => {
     expect(entityHref("outro", "abc")).toBeNull();
+  });
+
+  it("ninhada tem rótulo mas não tem link: não existe tela /admin/ninhadas", () => {
+    expect(entityLabel("litter")).toBe("Ninhada");
+    expect(entityHref("litter", "abc")).toBeNull();
+  });
+});
+
+describe("actionLabel", () => {
+  it("traduz as duas ações de cadastro em nome do usuário", () => {
+    expect(actionLabel("dog.create_for_user")).toBe("Cadastrou cão para o usuário");
+    expect(actionLabel("litter.create_for_user")).toBe("Cadastrou ninhada para o usuário");
+  });
+
+  it("ação desconhecida devolve o próprio valor, sem quebrar a tela", () => {
+    expect(actionLabel("dog.explode")).toBe("dog.explode");
+  });
+});
+
+describe("detailsSummary", () => {
+  describe("ações que mudam um valor", () => {
+    it("monta de → para", () => {
+      expect(detailsSummary({ de: null, para: "2026-08-10T12:00:00Z" })).toBe(
+        "— → 2026-08-10T12:00:00Z",
+      );
+    });
+
+    it("details sem as duas chaves e sem forma de criação não vira texto", () => {
+      expect(detailsSummary({ de: 1 })).toBeNull();
+      expect(detailsSummary({})).toBeNull();
+      expect(detailsSummary(null)).toBeNull();
+    });
+  });
+
+  describe("cadastro em nome do usuário", () => {
+    /** O `details` que `admin_create_dog_for_kennel` grava, na íntegra. */
+    function detalhesDeCao(over: Record<string, unknown> = {}) {
+      return {
+        kennel_id: "k-1",
+        owner_id: "u-1",
+        litter_id: null,
+        nome: "Rex de Aurora",
+        sexo: "male",
+        published_at: null,
+        founder_number_atribuido: null,
+        ...over,
+      };
+    }
+
+    it("cão comum mostra só o nome", () => {
+      expect(detailsSummary(detalhesDeCao())).toBe("Rex de Aurora");
+    });
+
+    it("filhote é identificado pelo litter_id, não por uma ação separada", () => {
+      expect(detailsSummary(detalhesDeCao({ litter_id: "n-1" }))).toBe(
+        "Rex de Aurora · filhote de ninhada",
+      );
+    });
+
+    it("filhote que herdou a publicação da ninhada diz isso", () => {
+      expect(
+        detailsSummary(
+          detalhesDeCao({ litter_id: "n-1", published_at: "2026-09-01T10:00:00Z" }),
+        ),
+      ).toBe("Rex de Aurora · filhote de ninhada · nasceu publicado com a ninhada");
+    });
+
+    // O selo é IRREVERSÍVEL e é efeito colateral de um trigger. Se não aparecer
+    // no histórico, a queima de um número do pool fica invisível.
+    it("selo Fundador queimado pela ação aparece no resumo", () => {
+      expect(detailsSummary(detalhesDeCao({ founder_number_atribuido: 105 }))).toBe(
+        "Rex de Aurora · selo Fundador nº 105",
+      );
+    });
+
+    it("canil que já tinha selo não repete o número: a RPC grava null", () => {
+      expect(detailsSummary(detalhesDeCao({ founder_number_atribuido: null }))).toBe(
+        "Rex de Aurora",
+      );
+    });
+
+    it("ninhada grava só ids, que não viram texto útil", () => {
+      expect(
+        detailsSummary({ kennel_id: "k-1", owner_id: "u-1", sire_id: null, dam_id: null }),
+      ).toBeNull();
+    });
   });
 });

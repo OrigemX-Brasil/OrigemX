@@ -3099,6 +3099,294 @@ async function main() {
   }
 
   // ---------------------------------------------------------------------------
+  // Cenário 21 — admin cadastra cão, ninhada e filhote em nome de outro usuário
+  //
+  // `supabase/tests/battery.sql` (Grupo 10) já prova a regra inteira — de onde
+  // vem `owner_id`, o teto de filhotes, a ninhada de canil errado, a herança de
+  // publicação — mas roda como POSTGRES na mesma sessão SQL. Este cenário prova
+  // só o que aquele NÃO alcança: a porta real. Chave publishable, sessão de B
+  // (não-admin) tentando as duas RPCs novas e o INSERT direto que o buraco de
+  // `owner_id` desta mesma migration fecha; sessão de ADMIN de verdade criando
+  // para D; e — o requisito central do pedido — a sessão de D, o DONO,
+  // funcionando normalmente depois. Sem esta última prova, "cadastrar em nome
+  // de alguém" seria só um registro que passa no INSERT e que ninguém no
+  // painel do dono consegue tocar.
+  //
+  // D é canil PRÓPRIO, sem cidade/estado/logo — mesma escolha do Grupo 10 da
+  // bateria SQL, para não consumir um número real da sequence do selo Fundador
+  // por um cadastro de teste.
+  // ---------------------------------------------------------------------------
+
+  const D = await createActor("d");
+
+  const { data: kennelD, error: kennelDError } = await D.client
+    .from("kennels")
+    .insert({
+      owner_id: D.id,
+      created_by: D.id,
+      name: "Canil Destino",
+      slug: `rls-${RUN}-canil-destino`,
+    })
+    .select("id")
+    .single();
+  if (kennelDError || !kennelD) {
+    throw new Error(`fixture obrigatória falhou: canil de destino: ${kennelDError?.message}`);
+  }
+
+  // Progenitores para a ninhada — próprios de D, sem vínculo com o canil
+  // (sire_id/dam_id não são escopados a canil, e não é isto que este cenário
+  // testa).
+  const { data: paiDestino } = await D.client
+    .from("dogs")
+    .insert({ name: "Pai Destino", sex: "male", owner_id: D.id, created_by: D.id })
+    .select("id")
+    .single();
+  const { data: maeDestino } = await D.client
+    .from("dogs")
+    .insert({ name: "Mae Destino", sex: "female", owner_id: D.id, created_by: D.id })
+    .select("id")
+    .single();
+
+  // --- quem NÃO é admin continua recusado, pelas duas portas -----------------
+
+  const bRpcDog = await B.client.rpc("admin_create_dog_for_kennel", {
+    p_kennel_id: kennelD.id,
+    p_name: "Tentativa Não-Admin",
+    p_sex: "male",
+    p_reason: "tentativa de usuário comum via RPC",
+  });
+  record(
+    "21. Admin cadastra para outro usuário",
+    "usuário comum chama admin_create_dog_for_kennel",
+    "erro — insufficient_privilege",
+    bRpcDog.error ? `erro: ${bRpcDog.error.message}` : "EXECUTOU — CÃO CADASTRADO SEM ADMIN",
+    !!bRpcDog.error,
+  );
+
+  const bRpcLitter = await B.client.rpc("admin_create_litter_for_kennel", {
+    p_kennel_id: kennelD.id,
+    p_reason: "tentativa de usuário comum via RPC",
+  });
+  record(
+    "21. Admin cadastra para outro usuário",
+    "usuário comum chama admin_create_litter_for_kennel",
+    "erro — insufficient_privilege",
+    bRpcLitter.error
+      ? `erro: ${bRpcLitter.error.message}`
+      : "EXECUTOU — NINHADA CADASTRADA SEM ADMIN",
+    !!bRpcLitter.error,
+  );
+
+  // Confirma pela chave secreta que as duas tentativas não gravaram nada —
+  // mesmo formato do cenário 14.
+  const { data: tentativaGravada } = await admin
+    .from("dogs")
+    .select("id")
+    .eq("kennel_id", kennelD.id)
+    .eq("name", "Tentativa Não-Admin");
+  record(
+    "21. Admin cadastra para outro usuário",
+    "nada foi gravado pelas duas tentativas negadas",
+    "0 linhas",
+    `${tentativaGravada?.length ?? 0} linha(s)`,
+    (tentativaGravada?.length ?? 0) === 0,
+  );
+
+  // O buraco que esta mesma migration fecha, agora pela porta real: B
+  // cadastrando um cão com `owner_id` de OUTRA pessoa, sem passar por RPC
+  // nenhuma.
+  const bPlanta = await B.client
+    .from("dogs")
+    .insert({ name: "Rls Plantado", sex: "male", owner_id: A.id, created_by: B.id })
+    .select("id");
+  record(
+    "21. Admin cadastra para outro usuário",
+    "B cadastra cão com owner_id de outra pessoa, direto pela API",
+    "negado (42501)",
+    describe(bPlanta.error, bPlanta.data ?? undefined),
+    bPlanta.error?.code === "42501",
+  );
+
+  // --- ADMIN de verdade cadastra para D ---------------------------------------
+
+  const adminCriaCao = await ADMIN.client.rpc("admin_create_dog_for_kennel", {
+    p_kennel_id: kennelD.id,
+    p_name: "Rls Cadastrado Pelo Admin",
+    p_sex: "male",
+    p_reason: "cliente pediu por telefone — caso de evidência",
+  });
+  record(
+    "21. Admin cadastra para outro usuário",
+    "admin cadastra cão comum no canil de outro usuário",
+    "sucesso — id devolvido",
+    adminCriaCao.error ? `erro: ${adminCriaCao.error.message}` : `id ${adminCriaCao.data}`,
+    !adminCriaCao.error && !!adminCriaCao.data,
+  );
+  const dogParaD = (adminCriaCao.data as string | null) ?? null;
+
+  if (dogParaD) {
+    const { data: dogGravado } = await admin
+      .from("dogs")
+      .select("owner_id, kennel_id, created_by")
+      .eq("id", dogParaD)
+      .single();
+    const owoCorreto =
+      dogGravado?.owner_id === D.id &&
+      dogGravado?.kennel_id === kennelD.id &&
+      dogGravado?.created_by === ADMIN.id;
+    record(
+      "21. Admin cadastra para outro usuário",
+      "owner_id vem do canil de destino, created_by é o admin",
+      `owner=${D.id} kennel=${kennelD.id} created_by=${ADMIN.id}`,
+      `owner=${dogGravado?.owner_id} kennel=${dogGravado?.kennel_id} created_by=${dogGravado?.created_by}`,
+      owoCorreto,
+    );
+
+    const { data: auditCao } = await admin
+      .from("audit_log")
+      .select("id, reason")
+      .eq("entity_type", "dog")
+      .eq("entity_id", dogParaD)
+      .eq("action", "dog.create_for_user");
+    record(
+      "21. Admin cadastra para outro usuário",
+      "cadastro do cão gera exatamente 1 linha de auditoria, com o motivo",
+      "1 linha, motivo preservado",
+      `${auditCao?.length ?? 0} linha(s), motivo: ${auditCao?.[0]?.reason ?? "NENHUM"}`,
+      (auditCao?.length ?? 0) === 1 &&
+        auditCao?.[0]?.reason === "cliente pediu por telefone — caso de evidência",
+    );
+  }
+
+  const adminCriaNinhada = await ADMIN.client.rpc("admin_create_litter_for_kennel", {
+    p_kennel_id: kennelD.id,
+    p_reason: "criador pediu ajuda para cadastrar — caso de evidência",
+    p_sire_id: paiDestino?.id,
+    p_dam_id: maeDestino?.id,
+  });
+  record(
+    "21. Admin cadastra para outro usuário",
+    "admin cadastra ninhada no canil de outro usuário",
+    "sucesso — id devolvido",
+    adminCriaNinhada.error
+      ? `erro: ${adminCriaNinhada.error.message}`
+      : `id ${adminCriaNinhada.data}`,
+    !adminCriaNinhada.error && !!adminCriaNinhada.data,
+  );
+  const litterParaD = (adminCriaNinhada.data as string | null) ?? null;
+
+  if (litterParaD) {
+    const { data: litterGravada } = await admin
+      .from("kennel_litters")
+      .select("created_by, published_at")
+      .eq("id", litterParaD)
+      .single();
+    record(
+      "21. Admin cadastra para outro usuário",
+      "ninhada nasce SEMPRE rascunho — publicar continua sendo do dono",
+      `created_by=${ADMIN.id} published_at=nulo`,
+      `created_by=${litterGravada?.created_by} published_at=${litterGravada?.published_at ?? "nulo"}`,
+      litterGravada?.created_by === ADMIN.id && litterGravada?.published_at === null,
+    );
+
+    const { data: auditNinhada } = await admin
+      .from("audit_log")
+      .select("id")
+      .eq("entity_type", "litter")
+      .eq("entity_id", litterParaD)
+      .eq("action", "litter.create_for_user");
+    record(
+      "21. Admin cadastra para outro usuário",
+      "cadastro da ninhada gera exatamente 1 linha de auditoria",
+      "1 linha",
+      `${auditNinhada?.length ?? 0} linha(s)`,
+      (auditNinhada?.length ?? 0) === 1,
+    );
+
+    // Filhote dentro dessa ninhada: par e status vêm da ninhada, nunca do
+    // parâmetro — `battery.sql` já prova isso exaustivamente; aqui só confirma
+    // que a mesma regra vale quando a chamada entra pela API real.
+    const adminCriaFilhote = await ADMIN.client.rpc("admin_create_dog_for_kennel", {
+      p_kennel_id: kennelD.id,
+      p_name: "Rls Filhote Pelo Admin",
+      p_sex: "female",
+      p_reason: "filhote cadastrado pelo admin — caso de evidência",
+      p_litter_id: litterParaD,
+    });
+    const filhoteParaD = (adminCriaFilhote.data as string | null) ?? null;
+    if (filhoteParaD) {
+      const { data: filhoteGravado } = await admin
+        .from("dogs")
+        .select("litter_id, litter_status, sire_id, dam_id")
+        .eq("id", filhoteParaD)
+        .single();
+      record(
+        "21. Admin cadastra para outro usuário",
+        "filhote cadastrado pelo admin herda par e status da ninhada",
+        `litter=${litterParaD} status=available par=${paiDestino?.id}/${maeDestino?.id}`,
+        `litter=${filhoteGravado?.litter_id} status=${filhoteGravado?.litter_status} ` +
+          `sire=${filhoteGravado?.sire_id} dam=${filhoteGravado?.dam_id}`,
+        filhoteGravado?.litter_id === litterParaD &&
+          filhoteGravado?.litter_status === "available" &&
+          filhoteGravado?.sire_id === paiDestino?.id &&
+          filhoteGravado?.dam_id === maeDestino?.id,
+      );
+    } else {
+      record(
+        "21. Admin cadastra para outro usuário",
+        "admin cadastra filhote na ninhada criada para D",
+        "sucesso — id devolvido",
+        adminCriaFilhote.error ? `erro: ${adminCriaFilhote.error.message}` : "sem id devolvido",
+        false,
+      );
+    }
+  }
+
+  // --- O REQUISITO CENTRAL: o DONO, não o admin, controla o registro depois ---
+  //
+  // Sessão de D de verdade — não a chave secreta. Sem isto, tudo acima provaria
+  // só que o INSERT funcionou, não que "o dono vê e edita normalmente" é
+  // verdade pela porta que o painel dele realmente usa.
+  if (dogParaD) {
+    const dVeCao = await D.client.from("dogs").select("id").eq("id", dogParaD);
+    record(
+      "21. Admin cadastra para outro usuário",
+      "D (dono) LÊ o cão que o admin cadastrou em nome dele",
+      "1 linha",
+      describe(dVeCao.error, dVeCao.data ?? undefined),
+      !dVeCao.error && (dVeCao.data ?? []).length === 1,
+    );
+
+    const dEditaCao = await D.client
+      .from("dogs")
+      .update({ breed: "Atualizado pelo dono" })
+      .eq("id", dogParaD)
+      .select("id");
+    record(
+      "21. Admin cadastra para outro usuário",
+      "D (dono) EDITA o cão que o admin cadastrou em nome dele",
+      "1 linha",
+      describe(dEditaCao.error, dEditaCao.data ?? undefined),
+      !dEditaCao.error && (dEditaCao.data ?? []).length === 1,
+    );
+  }
+
+  if (litterParaD) {
+    const dEditaNinhada = await D.client
+      .from("kennel_litters")
+      .update({ description: "Atualizado pelo dono" })
+      .eq("id", litterParaD)
+      .select("id");
+    record(
+      "21. Admin cadastra para outro usuário",
+      "D (dono) EDITA a ninhada que o admin cadastrou em nome dele",
+      "1 linha",
+      describe(dEditaNinhada.error, dEditaNinhada.data ?? undefined),
+      !dEditaNinhada.error && (dEditaNinhada.data ?? []).length === 1,
+    );
+  }
+
+  // ---------------------------------------------------------------------------
   // Limpeza
   //
   // POR POSSE, não por padrão de slug — e esta distinção não é estilo.
@@ -3115,7 +3403,7 @@ async function main() {
   // que `e2e/support/admin.ts` já documenta.
   // ---------------------------------------------------------------------------
 
-  const atores = [A, B, C, S, U, ADMIN, ...founders];
+  const atores = [A, B, C, S, U, ADMIN, D, ...founders];
   const ids = atores.map((a) => a.id);
 
   await admin.storage

@@ -36,6 +36,16 @@ export type DogFormState = {
   ok?: boolean;
 };
 
+/**
+ * A assinatura que `useActionState` exige, exportada para que uma tela de FORA
+ * deste módulo injete outra ação no `DogForm` sem que `dogs` precise conhecê-la.
+ *
+ * Existe por causa da direção da dependência: `admin/actions.ts` já importa
+ * `dogs/validation` e `dogs/fields`. Uma tabela de modos dentro do formulário
+ * obrigaria o caminho inverso e fecharia o ciclo — então quem chama traz a ação.
+ */
+export type DogFormAction = (state: DogFormState, formData: FormData) => Promise<DogFormState>;
+
 function readForm(formData: FormData, fields: readonly DogField[]): DogInput {
   const input: DogInput = {};
   for (const field of fields) {

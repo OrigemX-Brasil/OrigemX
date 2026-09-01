@@ -41,6 +41,21 @@ export function dogStatus(row: {
   return row.published_at ? "published" : "draft";
 }
 
+/**
+ * Ninhada não tem `hidden_at` — ocultar é decisão que só existe para canil e
+ * cão. Então a precedência aqui tem um degrau a menos: excluída > publicada >
+ * rascunho.
+ */
+export type LitterStatus = "deleted" | "published" | "draft";
+
+export function litterStatus(row: {
+  deleted_at: string | null;
+  published_at: string | null;
+}): LitterStatus {
+  if (row.deleted_at) return "deleted";
+  return row.published_at ? "published" : "draft";
+}
+
 export const KENNEL_STATUS_LABEL: Record<KennelStatus, string> = {
   deleted: "Excluído",
   hidden: "Oculto",
@@ -68,6 +83,18 @@ export const DOG_STATUS_TONE: Record<DogStatus, "danger" | "secondary" | "succes
   deleted: "danger",
   hidden: "secondary",
   ghost: "neutral",
+  published: "success",
+  draft: "neutral",
+};
+
+export const LITTER_STATUS_LABEL: Record<LitterStatus, string> = {
+  deleted: "Excluída",
+  published: "Publicada",
+  draft: "Rascunho",
+};
+
+export const LITTER_STATUS_TONE: Record<LitterStatus, "danger" | "success" | "neutral"> = {
+  deleted: "danger",
   published: "success",
   draft: "neutral",
 };

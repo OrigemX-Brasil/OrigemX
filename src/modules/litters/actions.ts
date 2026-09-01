@@ -42,6 +42,12 @@ export type LitterFormState = {
   ok?: boolean;
 };
 
+/** Mesmo papel de `DogFormAction` — ver o comentário lá. */
+export type LitterFormAction = (
+  state: LitterFormState,
+  formData: FormData,
+) => Promise<LitterFormState>;
+
 /**
  * Lê SÓ os campos que o formulário mandou.
  *

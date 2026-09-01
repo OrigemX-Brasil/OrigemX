@@ -1,11 +1,12 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useRef, useState, type ReactNode } from "react";
 import { useFormStatus } from "react-dom";
 
+import { ConfirmSubmitDialog, type SubmitConfirm } from "@/components/confirm-submit-dialog";
 import { FormMessage } from "@/components/form-message";
 
-import { createDog, updateDog, type DogFormState } from "../actions";
+import { createDog, updateDog, type DogFormAction, type DogFormState } from "../actions";
 import type { AncestorCandidate } from "../ancestors";
 import { DOG_FORM_FIELDS, type DogField } from "../fields";
 import { slugifyDog, validateDog, type DogFieldErrors, type DogInput } from "../validation";
@@ -165,6 +166,10 @@ export function DogForm({
   sire,
   dam,
   ownerId,
+  action,
+  kennelLocked = false,
+  header,
+  confirm,
 }: {
   dog?: (Partial<Record<string, string | number | string[] | null>> & { id?: string }) | null;
   kennel: KennelOption | null;
@@ -173,10 +178,24 @@ export function DogForm({
   /** Sessão atual — repassado ao `ParentPicker` para o upload de foto de um
    *  ancestral fantasma recém-criado (prefixo do caminho no Storage). */
   ownerId: string;
+  /**
+   * Ação alternativa, injetada por quem chama. Ausente = o fluxo do dono
+   * (`createDog`/`updateDog`). É prop, e não uma tabela de modos aqui dentro,
+   * porque a tabela obrigaria `dogs` a importar quem o chama — e a dependência
+   * hoje só anda no outro sentido.
+   */
+  action?: DogFormAction;
+  /** O canil já está decidido por quem chama — ver o bloco de vínculo abaixo. */
+  kennelLocked?: boolean;
+  /** Bloco livre no topo, DENTRO do `<form>`: o que ele renderizar entra no
+   *  `FormData`. É onde mora o aviso e o campo de motivo do admin. */
+  header?: ReactNode;
+  /** Confirmação antes de gravar. Ausente = grava no primeiro clique. */
+  confirm?: SubmitConfirm;
 }) {
   const isEdit = Boolean(dog?.id);
   const [state, formAction] = useActionState<DogFormState, FormData>(
-    isEdit ? updateDog : createDog,
+    action ?? (isEdit ? updateDog : createDog),
     {},
   );
 
@@ -195,6 +214,28 @@ export function DogForm({
   const [slugTouched, setSlugTouched] = useState(Boolean(dog?.slug));
   const [selectedSire, setSelectedSire] = useState<AncestorCandidate | null>(sire ?? null);
   const [selectedDam, setSelectedDam] = useState<AncestorCandidate | null>(dam ?? null);
+
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  /**
+   * Passe de uma viagem: o botão de dentro do diálogo marca, o `onSubmit`
+   * consome. Ref e não state — `onClick` e o evento `submit` acontecem na MESMA
+   * tarefa síncrona, e um `setState` não estaria visível a tempo.
+   */
+  const confirmedRef = useRef(false);
+  const [confirmData, setConfirmData] = useState<FormData | null>(null);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
+
+  /**
+   * Resposta do servidor com erro FECHA o diálogo: a mensagem mora no
+   * formulário — banner do topo e erro por campo —, atrás dele. Mantê-lo aberto
+   * seria um modal mudo sobre o único texto que explica o que houve.
+   *
+   * É o inverso do `useEffect(state.ok)` dos diálogos do admin, e pelo mesmo
+   * motivo: aqui o sucesso não volta como estado, ele navega.
+   */
+  useEffect(() => {
+    if (state.formError || state.errors) dialogRef.current?.close();
+  }, [state.formError, state.errors]);
 
   const errors: DogFieldErrors = { ...clientErrors, ...state.errors };
 
@@ -220,11 +261,42 @@ export function DogForm({
         }
         const found = validateDog(input);
         setClientErrors(found);
-        if (Object.keys(found).length > 0) e.preventDefault();
+
+        // `noValidate` está ligado neste formulário, então `required`/`minLength`
+        // nos campos de quem chama são decoração. A regra dele roda AQUI.
+        const extra = confirm?.validate?.(data) ?? null;
+        setConfirmError(extra);
+
+        if (Object.keys(found).length > 0 || extra) {
+          e.preventDefault();
+          confirmedRef.current = false; // erro depois de confirmar: recomeça
+          dialogRef.current?.close();
+          return;
+        }
+
+        if (confirm && !confirmedRef.current) {
+          e.preventDefault();
+          setConfirmData(data); // instantâneo do que está digitado AGORA
+          dialogRef.current?.showModal();
+          return;
+        }
+
+        confirmedRef.current = false; // passe consumido; daqui é submit de verdade
       }}
       className="flex flex-col gap-8"
     >
       {dog?.id ? <input type="hidden" name="id" value={dog.id} /> : null}
+
+      {header}
+
+      {confirmError ? (
+        <p
+          role="alert"
+          className="border-danger-subtle bg-danger-subtle text-fg rounded-control border px-3 py-2.5 text-sm"
+        >
+          {confirmError}
+        </p>
+      ) : null}
 
       {state.formError ? (
         <p
@@ -280,7 +352,23 @@ export function DogForm({
           `updateDog` não teria como distinguir "desmarcado" de "nem apareceu na
           tela", e sobrescreveria `kennel_id` em cão que não deveria tocar.
         */}
-        {kennel ? (
+        {kennel && kennelLocked ? (
+          /*
+            O canil de destino foi escolhido ANTES do formulário — é a tela em
+            que quem preenche já está. Não há decisão a oferecer, então não há
+            checkbox.
+
+            E não há `vinculo_canil_presente` de propósito: aquele campo existe
+            para `updateDog` distinguir "desmarcado" de "nem apareceu na tela",
+            e este caminho nunca chega em `updateDog`. Sem ele, um POST deste
+            formulário contra `createDog`/`updateDog` não altera vínculo nenhum.
+
+            `kennel_id` só é LIDO por `createDogForUser`. `createDog` resolve o
+            canil pelo servidor (`getMyKennel`) e ignora este campo — NÃO o faça
+            ler daqui: seria transformar um campo inerte em superfície de ataque.
+          */
+          <input type="hidden" name="kennel_id" value={kennel.id} />
+        ) : kennel ? (
           <div className="flex flex-col gap-2">
             <input type="hidden" name="vinculo_canil_presente" value="1" />
             <label htmlFor="vincular_canil" className="flex items-start gap-3 text-sm">
@@ -338,9 +426,32 @@ export function DogForm({
       </section>
 
       <div className="flex flex-wrap items-center gap-3">
-        <Submit label={isEdit ? "Salvar alterações" : "Cadastrar cão"} />
+        <Submit
+          label={confirm ? confirm.openLabel : isEdit ? "Salvar alterações" : "Cadastrar cão"}
+        />
         {state.ok ? <FormMessage message="Alterações salvas." /> : null}
       </div>
+
+      {confirm ? (
+        <ConfirmSubmitDialog
+          dialogRef={dialogRef}
+          title={confirm.title}
+          confirmLabel={confirm.confirmLabel}
+          onConfirm={() => {
+            confirmedRef.current = true;
+          }}
+          onCancel={() => {
+            confirmedRef.current = false;
+          }}
+        >
+          {confirmData
+            ? confirm.summary(confirmData, {
+                sire: selectedSire?.name ?? null,
+                dam: selectedDam?.name ?? null,
+              })
+            : null}
+        </ConfirmSubmitDialog>
+      ) : null}
     </form>
   );
 }

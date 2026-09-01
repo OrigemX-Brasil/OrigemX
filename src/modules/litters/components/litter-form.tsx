@@ -1,15 +1,21 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useRef, useState, type ReactNode } from "react";
 import { useFormStatus } from "react-dom";
 
+import { ConfirmSubmitDialog, type SubmitConfirm } from "@/components/confirm-submit-dialog";
 import { FormMessage } from "@/components/form-message";
 import type { AncestorCandidate } from "@/modules/dogs/ancestors";
 import { isoToBr } from "@/modules/dogs/br-date";
 import { DateField } from "@/modules/dogs/components/date-field";
 import { ParentPicker } from "@/modules/dogs/components/parent-picker";
 
-import { createLitter, updateLitter, type LitterFormState } from "../actions";
+import {
+  createLitter,
+  updateLitter,
+  type LitterFormAction,
+  type LitterFormState,
+} from "../actions";
 import { expectedWhelpingDate } from "../gestation";
 import { LITTER_FIELDS, type LitterField } from "../fields";
 import { validateLitter, type FieldErrors, type LitterInput } from "../validation";
@@ -109,6 +115,9 @@ export function LitterForm({
   kennelId,
   ownerId,
   litter,
+  action,
+  header,
+  confirm,
 }: {
   kennelId: string;
   /** Sessão atual — o `ParentPicker` precisa para o upload de foto de fantasma. */
@@ -121,11 +130,17 @@ export function LitterForm({
     sire: AncestorCandidate | null;
     dam: AncestorCandidate | null;
   };
+  /** Ação alternativa, injetada por quem chama — ver `DogFormAction`. */
+  action?: LitterFormAction;
+  /** Bloco livre no topo, DENTRO do `<form>`. */
+  header?: ReactNode;
+  /** Confirmação antes de gravar. Ausente = grava no primeiro clique. */
+  confirm?: SubmitConfirm;
 }) {
   const isEdit = Boolean(litter?.id);
-  const action = isEdit ? updateLitter : createLitter;
+  const resolvedAction = action ?? (isEdit ? updateLitter : createLitter);
 
-  const [state, formAction] = useActionState<LitterFormState, FormData>(action, {});
+  const [state, formAction] = useActionState<LitterFormState, FormData>(resolvedAction, {});
   const [clientErrors, setClientErrors] = useState<FieldErrors>({});
   const [dateFormatErrors, setDateFormatErrors] = useState<FieldErrors>({});
 
@@ -133,6 +148,16 @@ export function LitterForm({
   const [matedOn, setMatedOn] = useState(litter?.mated_on ?? "");
   const [sire, setSire] = useState<AncestorCandidate | null>(litter?.sire ?? null);
   const [dam, setDam] = useState<AncestorCandidate | null>(litter?.dam ?? null);
+
+  // Mesma mecânica de `DogForm` — o comentário longo está lá.
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const confirmedRef = useRef(false);
+  const [confirmData, setConfirmData] = useState<FormData | null>(null);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (state.formError || state.errors) dialogRef.current?.close();
+  }, [state.formError, state.errors]);
 
   const errors: FieldErrors = { ...clientErrors, ...state.errors, ...dateFormatErrors };
 
@@ -153,12 +178,41 @@ export function LitterForm({
         }
         const found = validateLitter(input);
         setClientErrors(found);
-        if (Object.keys(found).length > 0) e.preventDefault();
+
+        const extra = confirm?.validate?.(data) ?? null;
+        setConfirmError(extra);
+
+        if (Object.keys(found).length > 0 || extra) {
+          e.preventDefault();
+          confirmedRef.current = false;
+          dialogRef.current?.close();
+          return;
+        }
+
+        if (confirm && !confirmedRef.current) {
+          e.preventDefault();
+          setConfirmData(data);
+          dialogRef.current?.showModal();
+          return;
+        }
+
+        confirmedRef.current = false;
       }}
       className="flex flex-col gap-8"
     >
       <input type="hidden" name="kennel_id" value={kennelId} />
       {litter?.id ? <input type="hidden" name="id" value={litter.id} /> : null}
+
+      {header}
+
+      {confirmError ? (
+        <p
+          role="alert"
+          className="border-danger-subtle bg-danger-subtle text-fg rounded-control border px-3 py-2.5 text-sm"
+        >
+          {confirmError}
+        </p>
+      ) : null}
 
       {state.formError ? (
         <p
@@ -239,9 +293,29 @@ export function LitterForm({
       </section>
 
       <div className="flex flex-wrap items-center gap-3">
-        <Submit label={isEdit ? "Salvar alterações" : "Cadastrar ninhada"} />
+        <Submit
+          label={confirm ? confirm.openLabel : isEdit ? "Salvar alterações" : "Cadastrar ninhada"}
+        />
         {state.ok ? <FormMessage message="Alterações salvas." /> : null}
       </div>
+
+      {confirm ? (
+        <ConfirmSubmitDialog
+          dialogRef={dialogRef}
+          title={confirm.title}
+          confirmLabel={confirm.confirmLabel}
+          onConfirm={() => {
+            confirmedRef.current = true;
+          }}
+          onCancel={() => {
+            confirmedRef.current = false;
+          }}
+        >
+          {confirmData
+            ? confirm.summary(confirmData, { sire: sire?.name ?? null, dam: dam?.name ?? null })
+            : null}
+        </ConfirmSubmitDialog>
+      ) : null}
     </form>
   );
 }
