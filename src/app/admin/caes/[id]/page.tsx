@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { BackLink } from "@/components/back-link";
+import { AdminSharePanel } from "@/modules/admin/components/admin-share-panel";
 import { HideEntityDialog } from "@/modules/admin/components/hide-entity-dialog";
 import { PublishEntityDialog } from "@/modules/admin/components/publish-entity-dialog";
 import { StatusChip } from "@/modules/admin/components/status-chip";
@@ -30,11 +31,7 @@ const SEX_LABEL: Record<string, string> = { male: "Macho", female: "Fêmea" };
  *
  * O QUE CONTINUA FORA: editar os campos do cão. Isso é do dono, em `/painel`.
  */
-export default async function AdminDogDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function AdminDogDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
   const dog = await getAdminDogById(id);
@@ -104,8 +101,18 @@ export default async function AdminDogDetailPage({
           value={ownerName(dog.owner) ?? "—"}
           href={dog.owner_id ? `/admin/usuarios/${dog.owner_id}` : undefined}
         />
-        <Row label="Pai" value={dog.sire_id ?? "—"} href={dog.sire_id ? `/admin/caes/${dog.sire_id}` : undefined} mono />
-        <Row label="Mãe" value={dog.dam_id ?? "—"} href={dog.dam_id ? `/admin/caes/${dog.dam_id}` : undefined} mono />
+        <Row
+          label="Pai"
+          value={dog.sire_id ?? "—"}
+          href={dog.sire_id ? `/admin/caes/${dog.sire_id}` : undefined}
+          mono
+        />
+        <Row
+          label="Mãe"
+          value={dog.dam_id ?? "—"}
+          href={dog.dam_id ? `/admin/caes/${dog.dam_id}` : undefined}
+          mono
+        />
         <Row label="Cadastrado em" value={formatDateTime(dog.created_at)} mono />
       </dl>
 
@@ -129,6 +136,24 @@ export default async function AdminDogDetailPage({
             </Link>
           </div>
         </section>
+      ) : null}
+
+      {/*
+        `ghost` conta como no ar, e não é exceção inventada aqui: o ancestral
+        fantasma é público por `dogs_select` mesmo sem `published_at` — é nó de
+        árvore genealógica, e `/d/{public_id}` responde para ele. Tratá-lo como
+        rascunho mostraria um aviso falso.
+      */}
+      {status !== "deleted" ? (
+        <AdminSharePanel
+          kind="dog"
+          entityId={dog.id}
+          stableId={dog.public_id}
+          name={dog.name}
+          ownerName={ownerName(dog.owner) ?? "o dono deste cão"}
+          statusLabel={DOG_STATUS_LABEL[status]}
+          isLive={status === "published" || status === "ghost"}
+        />
       ) : null}
 
       {status === "published" ? (
@@ -160,7 +185,10 @@ function Row({
       <dt className="text-fg-muted text-sm">{label}</dt>
       <dd className={`text-fg text-sm break-all ${mono ? "font-mono" : ""}`}>
         {href ? (
-          <Link href={href} className="text-link hover:text-link-hover underline underline-offset-4">
+          <Link
+            href={href}
+            className="text-link hover:text-link-hover underline underline-offset-4"
+          >
             {value}
           </Link>
         ) : (

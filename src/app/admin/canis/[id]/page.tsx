@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { BackLink } from "@/components/back-link";
+import { AdminSharePanel } from "@/modules/admin/components/admin-share-panel";
 import { EmptyState } from "@/modules/admin/components/empty-state";
 import { FounderNumberDialog } from "@/modules/admin/components/founder-number-dialog";
 import { HideEntityDialog } from "@/modules/admin/components/hide-entity-dialog";
@@ -198,8 +199,7 @@ export default async function AdminKennelDetailPage({
 
         {recemCriada ? (
           <p className="border-accent bg-accent-subtle text-fg rounded-card border px-4 py-3 text-sm">
-            Ninhada cadastrada. Nasceu rascunho em nome de {dono}, e está destacada na lista
-            abaixo.
+            Ninhada cadastrada. Nasceu rascunho em nome de {dono}, e está destacada na lista abaixo.
           </p>
         ) : null}
 
@@ -222,6 +222,24 @@ export default async function AdminKennelDetailPage({
           </Link>
         ) : null}
       </section>
+
+      {/*
+        Compartilhar não aparece em canil EXCLUÍDO, e é a única exclusão: ali o
+        endereço continua queimado mas a página nunca mais responde, então o
+        link seria permanentemente quebrado. Rascunho e oculto entram, com
+        aviso — o QR que sai hoje vale quando o criador publicar.
+      */}
+      {status !== "deleted" ? (
+        <AdminSharePanel
+          kind="kennel"
+          entityId={kennel.id}
+          stableId={kennel.slug}
+          name={kennel.name}
+          ownerName={dono}
+          statusLabel={KENNEL_STATUS_LABEL[status]}
+          isLive={status === "published"}
+        />
+      ) : null}
 
       {status === "published" ? (
         <Link
@@ -282,7 +300,10 @@ function Row({
       <dt className="text-fg-muted text-sm">{label}</dt>
       <dd className={`text-fg text-sm break-all ${mono ? "font-mono" : ""}`}>
         {href ? (
-          <Link href={href} className="text-link hover:text-link-hover underline underline-offset-4">
+          <Link
+            href={href}
+            className="text-link hover:text-link-hover underline underline-offset-4"
+          >
             {value}
           </Link>
         ) : (

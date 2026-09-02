@@ -54,11 +54,20 @@ function useMotivo() {
     return registerMediaForUser(prev, fd);
   };
 
+  /**
+   * SEM `name`: este campo não pertence a formulário nenhum. Quem leva o motivo
+   * ao servidor é a closure `register` acima, e um `name` aqui só convidaria
+   * alguém a achar que ele viaja sozinho — foi essa confusão que produziu dois
+   * campos de motivo na mesma tela.
+   *
+   * Vai para dentro do `OnBehalfNotice` pelo slot `reasonField`, e não abaixo
+   * dele: o motivo é parte de "estou cadastrando em nome de X", não um campo
+   * solto no meio da página.
+   */
   const campo = (
     <label className="flex flex-col gap-1.5">
       <span className="text-fg-muted text-xs">Motivo (obrigatório)</span>
       <textarea
-        name="reason"
         rows={2}
         value={reason}
         onChange={(e) => setReason(e.target.value)}
@@ -73,11 +82,7 @@ function useMotivo() {
 
 /** Espera pelo motivo, com a mesma frase nos dois uploaders. */
 function AguardandoMotivo() {
-  return (
-    <p className="text-fg-faint text-sm">
-      Escreva o motivo acima para liberar o envio.
-    </p>
-  );
+  return <p className="text-fg-faint text-sm">Escreva o motivo acima para liberar o envio.</p>;
 }
 
 export function AdminLogoUploader({
@@ -103,7 +108,12 @@ export function AdminLogoUploader({
 
   return (
     <div className="flex flex-col gap-5">
-      <OnBehalfNotice kennelName={kennelName} ownerName={ownerName} ownerSuspended={ownerSuspended}>
+      <OnBehalfNotice
+        kennelName={kennelName}
+        ownerName={ownerName}
+        ownerSuspended={ownerSuspended}
+        reasonField={campo}
+      >
         A imagem passa a pertencer a {ownerName} e conta no plano de armazenamento dele.
       </OnBehalfNotice>
 
@@ -125,12 +135,10 @@ export function AdminLogoUploader({
 
       {temLogo ? (
         <p className="text-fg-muted text-sm">
-          Este canil já tem logo. Enviar outro substitui o atual — o antigo sai por exclusão
-          lógica, na mesma transação.
+          Este canil já tem logo. Enviar outro substitui o atual — o antigo sai por exclusão lógica,
+          na mesma transação.
         </p>
       ) : null}
-
-      {campo}
 
       {valido ? (
         <ImageUploader
@@ -172,12 +180,15 @@ export function AdminGalleryUploader({
 
   return (
     <div className="flex flex-col gap-5">
-      <OnBehalfNotice kennelName={kennelName} ownerName={ownerName} ownerSuspended={ownerSuspended}>
+      <OnBehalfNotice
+        kennelName={kennelName}
+        ownerName={ownerName}
+        ownerSuspended={ownerSuspended}
+        reasonField={campo}
+      >
         As fotos de {dogName} passam a pertencer a {ownerName} e contam no plano de armazenamento
         dele.
       </OnBehalfNotice>
-
-      {campo}
 
       {restantes === 0 ? (
         <p className="text-fg-muted text-sm">

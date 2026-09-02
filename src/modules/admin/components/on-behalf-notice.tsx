@@ -11,11 +11,19 @@ import type { ReactNode } from "react";
  * Renderiza DENTRO do `<form>` (chega pelo slot `header`), então o campo de
  * motivo daqui entra no `FormData` junto com o resto — é o mesmo envio, não um
  * segundo formulário.
+ *
+ * ...EXCETO nas telas de MÍDIA, e é essa exceção que a prop `reasonField`
+ * existe para resolver. Ali não há `<form>`: o envio é feito por
+ * `uploadOneImage`, que monta o próprio `FormData`. Um `<textarea name="reason">`
+ * solto naquele contexto é campo INERTE — o valor não vai a lugar nenhum. Foi
+ * assim que a tela de logo acabou pedindo o motivo duas vezes: este campo, que
+ * não fazia nada, e o controlado do uploader, que é quem de fato alimenta a RPC.
  */
 export function OnBehalfNotice({
   kennelName,
   ownerName,
   ownerSuspended,
+  reasonField,
   children,
 }: {
   /**
@@ -26,6 +34,12 @@ export function OnBehalfNotice({
   kennelName?: string;
   ownerName: string;
   ownerSuspended: boolean;
+  /**
+   * Substitui o campo de motivo padrão. Quem envia MÍDIA passa o próprio campo
+   * controlado por aqui — ver o comentário acima. Ausente, o padrão não-
+   * controlado continua valendo, e as telas de formulário não mudam em nada.
+   */
+  reasonField?: ReactNode;
   /** A frase específica do que está sendo cadastrado (canil, cão ou ninhada). */
   children: ReactNode;
 }) {
@@ -48,16 +62,18 @@ export function OnBehalfNotice({
         ) : null}
       </div>
 
-      <label className="flex flex-col gap-1.5">
-        <span className="text-fg-muted text-xs">Motivo (obrigatório)</span>
-        <textarea
-          name="reason"
-          rows={2}
-          minLength={3}
-          placeholder="Por que este cadastro está sendo feito por você."
-          className="border-border-strong bg-bg text-fg rounded-control border px-3 py-2 text-sm outline-none"
-        />
-      </label>
+      {reasonField ?? (
+        <label className="flex flex-col gap-1.5">
+          <span className="text-fg-muted text-xs">Motivo (obrigatório)</span>
+          <textarea
+            name="reason"
+            rows={2}
+            minLength={3}
+            placeholder="Por que este cadastro está sendo feito por você."
+            className="border-border-strong bg-bg text-fg rounded-control border px-3 py-2 text-sm outline-none"
+          />
+        </label>
+      )}
     </div>
   );
 }
