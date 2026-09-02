@@ -545,8 +545,16 @@ export async function registerMediaForUser(
     return { error: "Caminho de arquivo inválido." };
   }
 
+  // `statStorageObject` faz `storage.list()`, que é SELECT em `storage.objects`
+  // — e é por isso que ele precisa da policy de LEITURA alargada para admin
+  // (`admin_le_storage_do_dono`). Sem ela, este ramo disparava logo depois de um
+  // upload BEM-SUCEDIDO, e cada tentativa deixava dois arquivos órfãos: o
+  // `cleanup()` abaixo não existia. Foram 24 num único dia, em produção.
   const full = await statStorageObject(BUCKET_PRIVATE, storagePath);
-  if (!full) return { error: "Arquivo não encontrado no armazenamento. Tente enviar de novo." };
+  if (!full) {
+    await cleanup();
+    return { error: "Arquivo não encontrado no armazenamento. Tente enviar de novo." };
+  }
 
   const check = validateStoredFile({ mime: full.mime, size: full.size });
   if (!check.ok) {

@@ -3596,6 +3596,99 @@ async function main() {
     !adminNoPrefixoDoDono.error,
   );
 
+  // --- LER também é parte de escrever -----------------------------------------
+  //
+  // Estes quatro casos existem por causa de um bug que chegou em produção: a
+  // primeira versão alargou INSERT/UPDATE/DELETE para admin e deixou o SELECT
+  // intacto, "porque ler não é agir". Só que `statStorageObject` faz
+  // `storage.list()` para reler mime e tamanho do que subiu, e `list` é SELECT —
+  // então o upload passava e o registro seguinte falhava com "Arquivo não
+  // encontrado no armazenamento", logo depois de um envio bem-sucedido.
+  //
+  // O Cenário 22 não pegou aquilo porque chamava a RPC DIRETO: ela é SECURITY
+  // DEFINER e lê `storage.objects` com direitos de postgres, ignorando RLS.
+  // Testava o lado errado da porta. Os casos abaixo testam o lado certo.
+  const pastaDoLogo = logoPath.slice(0, logoPath.lastIndexOf("/"));
+
+  const adminLista = await ADMIN.client.storage.from(BUCKET).list(pastaDoLogo);
+  const achou = (adminLista.data ?? []).some((f) => logoPath.endsWith(f.name));
+  record(
+    CENARIO_22,
+    "admin LISTA o prefixo do dono (é o que statStorageObject faz)",
+    "encontra o arquivo que acabou de enviar",
+    adminLista.error
+      ? `erro: ${adminLista.error.message}`
+      : achou
+        ? "encontrou"
+        : "lista vazia — SELECT NEGADO AO ADMIN",
+    !adminLista.error && achou,
+  );
+
+  const adminBaixa = await ADMIN.client.storage.from(BUCKET).download(logoPath);
+  record(
+    CENARIO_22,
+    "admin BAIXA arquivo sob o prefixo do dono",
+    "sucesso",
+    adminBaixa.error ? `erro: ${adminBaixa.error.message}` : "sucesso",
+    !adminBaixa.error,
+  );
+
+  const comumLista = await B.client.storage.from(BUCKET).list(pastaDoLogo);
+  record(
+    CENARIO_22,
+    "usuário comum lista o prefixo de D (o alargamento é só para admin)",
+    "lista vazia ou erro",
+    comumLista.error
+      ? `erro: ${comumLista.error.message}`
+      : `${(comumLista.data ?? []).length} item(ns)` +
+        ((comumLista.data ?? []).length > 0 ? " — PREFIXO ALHEIO VISÍVEL" : ""),
+    !!comumLista.error || (comumLista.data ?? []).length === 0,
+  );
+
+  const adminListaInexistente = await ADMIN.client.storage
+    .from(BUCKET)
+    .list("00000000-0000-4000-8000-00000000dead");
+  record(
+    CENARIO_22,
+    "admin lista prefixo que não é de nenhum perfil",
+    "lista vazia ou erro",
+    adminListaInexistente.error
+      ? `erro: ${adminListaInexistente.error.message}`
+      : `${(adminListaInexistente.data ?? []).length} item(ns)` +
+        ((adminListaInexistente.data ?? []).length > 0 ? " — PREFIXO INVENTADO VISÍVEL" : ""),
+    !!adminListaInexistente.error || (adminListaInexistente.data ?? []).length === 0,
+  );
+
+  // O segundo caminho quebrado pelo mesmo bug: `reconcileMediaBucket` move o
+  // arquivo entre buckets ao publicar, e move exige enxergar a origem. Sem
+  // isto, publicar por admin QUALQUER registro com imagem falhava com "Não foi
+  // possível preparar as imagens para o acesso público".
+  const adminMove = await ADMIN.client.storage
+    .from(BUCKET)
+    .move(logoPath, logoPath, { destinationBucket: PUBLIC_BUCKET });
+  record(
+    CENARIO_22,
+    "admin move arquivo do dono para o bucket público (o que publicar faz)",
+    "sucesso",
+    adminMove.error ? `erro: ${adminMove.error.message}` : "sucesso",
+    !adminMove.error,
+  );
+
+  // De volta ao privado — é onde a RPC de mídia vai procurá-lo, e é o estado que
+  // a limpeza no fim deste arquivo espera encontrar.
+  if (!adminMove.error) {
+    const adminMoveDeVolta = await ADMIN.client.storage
+      .from(PUBLIC_BUCKET)
+      .move(logoPath, logoPath, { destinationBucket: BUCKET });
+    record(
+      CENARIO_22,
+      "admin devolve o arquivo ao privado (o que despublicar faz)",
+      "sucesso",
+      adminMoveDeVolta.error ? `erro: ${adminMoveDeVolta.error.message}` : "sucesso",
+      !adminMoveDeVolta.error,
+    );
+  }
+
   // --- canil para quem ainda não tem nenhum ----------------------------------
 
   const adminCriaCanil = await ADMIN.client.rpc("admin_create_kennel_for_user", {

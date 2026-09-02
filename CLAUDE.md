@@ -236,7 +236,8 @@ Referência rápida — o banco é quem garante, não a aplicação.
 | Aceita proposta é só rótulo, sem canal de oferta | CHECK `dogs_accepts_offer_requires_litter` + ausência de qualquer action/tabela de oferta |
 | Admin cadastra para o dono, sempre auditado | funções `admin_create_*_for_kennel` / `admin_create_kennel_for_user` (SECURITY DEFINER) — `private.audit()` não tem EXECUTE para ninguém, então a linha de trilha só nasce lá dentro |
 | Canil de terceiro só pela porta auditada | `kennels_insert_own` exige `auth.uid() = owner_id` e **não** tem ramo de admin, de propósito |
-| Admin escreve no Storage do dono, não em qualquer lugar | `private.can_write_storage_prefix` — o prefixo tem de ser um perfil VIVO; o upload não passa por Postgres, então a policy é a única defesa |
+| Admin ESCREVE no Storage do dono, não em qualquer lugar | `private.can_write_storage_prefix` — o prefixo tem de ser um perfil VIVO, senão o arquivo vira órfão que a reconciliação nunca acha |
+| Admin LÊ o Storage do dono | inline nas policies de SELECT: prefixo próprio ou `(select private.is_admin())`. Predicado separado por PERFORMANCE — função que recebe a linha roda por linha e o `list` estoura em timeout. Ver `admin_le_storage_do_dono` |
 | Publicar por admin deixa rastro | `admin_set_dog_published` / `admin_set_kennel_published`; o caminho do dono passou a recusar quem não é dono (`ehDonoDoCao`, em `media/publish.ts`) |
 
 ### Schema

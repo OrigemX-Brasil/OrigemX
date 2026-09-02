@@ -1,7 +1,7 @@
 {
-  "when": "2026-09-02T01:02:40.765Z",
+  "when": "2026-09-02T02:59:39.057Z",
   "project": "https://lcqhnfdsrioufwvnrqnt.supabase.co",
-  "run": "mtje4ywy",
+  "run": "mtjibex9",
   "fatal": null,
   "checks": [
     {
@@ -393,14 +393,14 @@
       "cenario": "11b. Selo Fundador (concorrência)",
       "verificacao": "nenhum número emitido abaixo de 100",
       "esperado": "todos >= 100",
-      "obtido": "min 555079, max 555083",
+      "obtido": "min 555094, max 555098",
       "status": "PASS"
     },
     {
       "cenario": "11b. Selo Fundador (concorrência)",
       "verificacao": "exclusão lógica não devolve o número ao pool",
       "esperado": "número permanece",
-      "obtido": "nº 555082",
+      "obtido": "nº 555094",
       "status": "PASS"
     },
     {
@@ -449,7 +449,7 @@
       "cenario": "12. Bucket público",
       "verificacao": "URL pública não carrega token nem expiração",
       "esperado": "sem ?token= e sem expires",
-      "obtido": "/storage/v1/object/public/kennel-media-public/66fe5601-371b-49de-a11e-44bedae12bcb/canis/publico-mtje4ywy.png",
+      "obtido": "/storage/v1/object/public/kennel-media-public/8032bfdf-b4f1-411c-a66a-c97be8717ce8/canis/publico-mtjibex9.png",
       "status": "PASS"
     },
     {
@@ -560,8 +560,8 @@
     {
       "cenario": "14. Superfície admin_*",
       "verificacao": "admin chama admin_get_profile_email para B",
-      "esperado": "rls-mtje4ywy-b@origemx.test",
-      "obtido": "rls-mtje4ywy-b@origemx.test",
+      "esperado": "rls-mtjibex9-b@origemx.test",
+      "obtido": "rls-mtjibex9-b@origemx.test",
       "status": "PASS"
     },
     {
@@ -701,14 +701,14 @@
       "cenario": "17. Corrigir número do selo",
       "verificacao": "admin tenta atribuir a um canil o número que já pertence a outro",
       "esperado": "erro — número já pertence a outro canil",
-      "obtido": "erro: o número 555079 já pertence a outro canil",
+      "obtido": "erro: o número 555097 já pertence a outro canil",
       "status": "PASS"
     },
     {
       "cenario": "17. Corrigir número do selo",
       "verificacao": "número do canil-alvo não mudou depois da tentativa de duplicidade",
-      "esperado": "nº 555083",
-      "obtido": "nº 555083",
+      "esperado": "nº 555096",
+      "obtido": "nº 555096",
       "status": "PASS"
     },
     {
@@ -728,15 +728,15 @@
     {
       "cenario": "17. Corrigir número do selo",
       "verificacao": "audit_log grava as duas correções, de→para corretos",
-      "esperado": "2 linhas: {de:555081,para:null} e {de:null,para:555081}",
-      "obtido": "2 linha(s): [{\"de\":555081,\"para\":null},{\"de\":null,\"para\":555081}]",
+      "esperado": "2 linhas: {de:555095,para:null} e {de:null,para:555095}",
+      "obtido": "2 linha(s): [{\"de\":555095,\"para\":null},{\"de\":null,\"para\":555095}]",
       "status": "PASS"
     },
     {
       "cenario": "17. Corrigir número do selo",
       "verificacao": "canil termina com o número original — round-trip fechado",
-      "esperado": "nº 555081",
-      "obtido": "nº 555081",
+      "esperado": "nº 555095",
+      "obtido": "nº 555095",
       "status": "PASS"
     },
     {
@@ -1142,14 +1142,14 @@
       "cenario": "21. Admin cadastra para outro usuário",
       "verificacao": "admin cadastra cão comum no canil de outro usuário",
       "esperado": "sucesso — id devolvido",
-      "obtido": "id 5b6bf693-e870-46f4-b465-16bdac8984fa",
+      "obtido": "id 14e8bc26-0f33-4e47-988c-0d10a44a80c2",
       "status": "PASS"
     },
     {
       "cenario": "21. Admin cadastra para outro usuário",
       "verificacao": "owner_id vem do canil de destino, created_by é o admin",
-      "esperado": "owner=ea876538-395c-4e21-ac7a-23954301e3ae kennel=1794588a-b678-4dd4-98ea-135d2500be79 created_by=ee5932ca-ae28-4ed8-b141-90c105a616d1",
-      "obtido": "owner=ea876538-395c-4e21-ac7a-23954301e3ae kennel=1794588a-b678-4dd4-98ea-135d2500be79 created_by=ee5932ca-ae28-4ed8-b141-90c105a616d1",
+      "esperado": "owner=aa24b0b8-319c-4f0d-bd2c-6e7e91459cc6 kennel=7db08ea9-4948-4fdf-a028-a8956b802ef3 created_by=adb26198-eb48-4a32-b72e-54584a35d177",
+      "obtido": "owner=aa24b0b8-319c-4f0d-bd2c-6e7e91459cc6 kennel=7db08ea9-4948-4fdf-a028-a8956b802ef3 created_by=adb26198-eb48-4a32-b72e-54584a35d177",
       "status": "PASS"
     },
     {
@@ -1163,14 +1163,14 @@
       "cenario": "21. Admin cadastra para outro usuário",
       "verificacao": "admin cadastra ninhada no canil de outro usuário",
       "esperado": "sucesso — id devolvido",
-      "obtido": "id 15cf456d-ccba-4b8d-9ab1-82ab28a89fd1",
+      "obtido": "id dfd239d8-a49b-44b3-81b8-666ab595aac6",
       "status": "PASS"
     },
     {
       "cenario": "21. Admin cadastra para outro usuário",
       "verificacao": "ninhada nasce SEMPRE rascunho — publicar continua sendo do dono",
-      "esperado": "created_by=ee5932ca-ae28-4ed8-b141-90c105a616d1 published_at=nulo",
-      "obtido": "created_by=ee5932ca-ae28-4ed8-b141-90c105a616d1 published_at=nulo",
+      "esperado": "created_by=adb26198-eb48-4a32-b72e-54584a35d177 published_at=nulo",
+      "obtido": "created_by=adb26198-eb48-4a32-b72e-54584a35d177 published_at=nulo",
       "status": "PASS"
     },
     {
@@ -1183,8 +1183,8 @@
     {
       "cenario": "21. Admin cadastra para outro usuário",
       "verificacao": "filhote cadastrado pelo admin herda par e status da ninhada",
-      "esperado": "litter=15cf456d-ccba-4b8d-9ab1-82ab28a89fd1 status=available par=c05ab8d0-c26d-4d59-aff3-caad6a3b933a/b8ef3595-798b-4e8e-9251-fc9ee3d30099",
-      "obtido": "litter=15cf456d-ccba-4b8d-9ab1-82ab28a89fd1 status=available sire=c05ab8d0-c26d-4d59-aff3-caad6a3b933a dam=b8ef3595-798b-4e8e-9251-fc9ee3d30099",
+      "esperado": "litter=dfd239d8-a49b-44b3-81b8-666ab595aac6 status=available par=e4888000-266a-412e-99ba-738072c73ca1/42a2f726-7d03-4b87-a5a0-a1817bf8041b",
+      "obtido": "litter=dfd239d8-a49b-44b3-81b8-666ab595aac6 status=available sire=e4888000-266a-412e-99ba-738072c73ca1 dam=42a2f726-7d03-4b87-a5a0-a1817bf8041b",
       "status": "PASS"
     },
     {
@@ -1259,9 +1259,51 @@
     },
     {
       "cenario": "22. Admin cadastra canil, mídia e publica",
+      "verificacao": "admin LISTA o prefixo do dono (é o que statStorageObject faz)",
+      "esperado": "encontra o arquivo que acabou de enviar",
+      "obtido": "encontrou",
+      "status": "PASS"
+    },
+    {
+      "cenario": "22. Admin cadastra canil, mídia e publica",
+      "verificacao": "admin BAIXA arquivo sob o prefixo do dono",
+      "esperado": "sucesso",
+      "obtido": "sucesso",
+      "status": "PASS"
+    },
+    {
+      "cenario": "22. Admin cadastra canil, mídia e publica",
+      "verificacao": "usuário comum lista o prefixo de D (o alargamento é só para admin)",
+      "esperado": "lista vazia ou erro",
+      "obtido": "0 item(ns)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "22. Admin cadastra canil, mídia e publica",
+      "verificacao": "admin lista prefixo que não é de nenhum perfil",
+      "esperado": "lista vazia ou erro",
+      "obtido": "0 item(ns)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "22. Admin cadastra canil, mídia e publica",
+      "verificacao": "admin move arquivo do dono para o bucket público (o que publicar faz)",
+      "esperado": "sucesso",
+      "obtido": "sucesso",
+      "status": "PASS"
+    },
+    {
+      "cenario": "22. Admin cadastra canil, mídia e publica",
+      "verificacao": "admin devolve o arquivo ao privado (o que despublicar faz)",
+      "esperado": "sucesso",
+      "obtido": "sucesso",
+      "status": "PASS"
+    },
+    {
+      "cenario": "22. Admin cadastra canil, mídia e publica",
       "verificacao": "canil criado pelo admin pertence a E, com autoria do admin e em rascunho",
-      "esperado": "owner=05808cfe-5b07-4259-85e2-cf904691491a created_by=ee5932ca-ae28-4ed8-b141-90c105a616d1 published_at=null",
-      "obtido": "owner=05808cfe-5b07-4259-85e2-cf904691491a created_by=ee5932ca-ae28-4ed8-b141-90c105a616d1 published_at=null",
+      "esperado": "owner=71eb1734-da18-453b-b200-320df240c2b2 created_by=adb26198-eb48-4a32-b72e-54584a35d177 published_at=null",
+      "obtido": "owner=71eb1734-da18-453b-b200-320df240c2b2 created_by=adb26198-eb48-4a32-b72e-54584a35d177 published_at=null",
       "status": "PASS"
     },
     {
@@ -1282,28 +1324,28 @@
       "cenario": "22. Admin cadastra canil, mídia e publica",
       "verificacao": "admin publica o canil de E, e a decisão fica na trilha",
       "esperado": "published_at preenchido",
-      "obtido": "published_at=2026-09-02T01:02:33.579163+00:00",
+      "obtido": "published_at=2026-09-02T02:59:32.502421+00:00",
       "status": "PASS"
     },
     {
       "cenario": "22. Admin cadastra canil, mídia e publica",
       "verificacao": "publicação por admin gera 1 linha de auditoria identificando o admin",
-      "esperado": "1 linha, ator=ee5932ca-ae28-4ed8-b141-90c105a616d1",
-      "obtido": "1 linha(s), ator=ee5932ca-ae28-4ed8-b141-90c105a616d1",
+      "esperado": "1 linha, ator=adb26198-eb48-4a32-b72e-54584a35d177",
+      "obtido": "1 linha(s), ator=adb26198-eb48-4a32-b72e-54584a35d177",
       "status": "PASS"
     },
     {
       "cenario": "22. Admin cadastra canil, mídia e publica",
       "verificacao": "mídia com caminho no prefixo do ADMIN, e não do dono",
       "esperado": "erro — check_violation",
-      "obtido": "erro: o caminho precisa começar pelo id do dono (ea876538-395c-4e21-ac7a-23954301e3ae), e começa por \"ee5932ca-ae28-4ed8-b141-90c105a616d1\"",
+      "obtido": "erro: o caminho precisa começar pelo id do dono (aa24b0b8-319c-4f0d-bd2c-6e7e91459cc6), e começa por \"adb26198-eb48-4a32-b72e-54584a35d177\"",
       "status": "PASS"
     },
     {
       "cenario": "22. Admin cadastra canil, mídia e publica",
       "verificacao": "mídia registrada pelo admin pertence ao DONO, com mime lido do Storage",
-      "esperado": "owner=ea876538-395c-4e21-ac7a-23954301e3ae created_by=ee5932ca-ae28-4ed8-b141-90c105a616d1 mime=image/png",
-      "obtido": "owner=ea876538-395c-4e21-ac7a-23954301e3ae created_by=ee5932ca-ae28-4ed8-b141-90c105a616d1 mime=image/png",
+      "esperado": "owner=aa24b0b8-319c-4f0d-bd2c-6e7e91459cc6 created_by=adb26198-eb48-4a32-b72e-54584a35d177 mime=image/png",
+      "obtido": "owner=aa24b0b8-319c-4f0d-bd2c-6e7e91459cc6 created_by=adb26198-eb48-4a32-b72e-54584a35d177 mime=image/png",
       "status": "PASS"
     }
   ]
