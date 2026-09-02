@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { resolveOwnerId } from "@/lib/assist";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/modules/auth/queries";
 import { parentPublishState, type MediaActionState } from "@/modules/media/actions";
@@ -514,7 +515,7 @@ export async function addPuppy(_prev: PuppyFormState, formData: FormData): Promi
     sire_id: litter.sire_id,
     dam_id: litter.dam_id,
     born_on: litter.born_on,
-    owner_id: user.id,
+    owner_id: await resolveOwnerId(user.id),
     created_by: user.id,
     // Ninhada já publicada recebe filhote já publicado — senão ele ficaria
     // invisível na página até alguém republicar, sem nenhum aviso.
@@ -696,7 +697,7 @@ export async function registerLitterPhoto(
         thumb_bytes: thumb?.size ?? null,
         width,
         height,
-        owner_id: user.id,
+        owner_id: await resolveOwnerId(user.id),
         created_by: user.id,
       })
       .select("id")

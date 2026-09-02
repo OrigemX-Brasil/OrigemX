@@ -1,3 +1,4 @@
+import { assistingProfileId } from "@/lib/assist";
 import {
   decodeCursor,
   encodeCursor,
@@ -325,7 +326,20 @@ export async function getManageableDogById(id: string, userId: string) {
   const dog = await getDogById(id);
   if (!dog) return null;
 
-  if (dog.owner_id === userId || dog.created_by === userId) return dog;
+  // Espelha o ramo de assistência de `private.can_manage_dog`. Se os dois lados
+  // divergirem, o banco recusa a escrita e a tela abre para não fazer nada —
+  // que é o pior dos dois mundos, e o motivo de ambos existirem.
+  const assistindo = await assistingProfileId();
+  const donos = [userId, ...(assistindo ? [assistindo] : [])];
+
+  if (dog.owner_id && donos.includes(dog.owner_id)) return dog;
+
+  // `created_by` SÓ vale para cão sem dono — o ancestral fantasma, que é
+  // definido por `owner_id` e `kennel_id` nulos e só pode ser gerenciado por
+  // quem o cadastrou. Com dono, quem manda é o dono. Sem esta restrição, um
+  // admin que cadastrou o cão pela porta auditada mantinha escrita nele para
+  // sempre, fora de qualquer sessão e sem trilha.
+  if (!dog.owner_id && dog.created_by === userId) return dog;
 
   // Dono do canil gerencia o que está nele, mesmo sem ser dono do animal.
   // Filtra por `owner_id` na consulta, e não depois: `getKennelById` também
@@ -336,7 +350,7 @@ export async function getManageableDogById(id: string, userId: string) {
       .from("kennels")
       .select("id")
       .eq("id", dog.kennel_id)
-      .eq("owner_id", userId)
+      .in("owner_id", donos)
       .is("deleted_at", null)
       .maybeSingle();
 

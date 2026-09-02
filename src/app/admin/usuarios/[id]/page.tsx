@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { BackLink } from "@/components/back-link";
+import { AssistStartDialog } from "@/modules/admin/components/assist-start-dialog";
 import { StatusChip } from "@/modules/admin/components/status-chip";
 import { SuspendUserDialog } from "@/modules/admin/components/suspend-user-dialog";
 import { formatDateTime } from "@/modules/admin/format";
@@ -112,6 +113,24 @@ export default async function AdminUserDetailPage({
                 ? " O dono está suspenso: ele não vai conseguir editar enquanto isso durar."
                 : ""}
             </p>
+          </div>
+
+          {/*
+            O cadastro assistido é o caminho para tudo que NÃO cabe numa RPC de
+            criação: cidade do canil, filhotes da ninhada, identificadores,
+            saúde, exames, medidas, vídeo, FAQ, depoimentos. Fica antes dos
+            atalhos porque é o que o PO pediu — guiar o criador do zero — e
+            porque os atalhos abaixo criam a casca que ele vai preencher aqui.
+          */}
+          <div className="flex flex-wrap items-center gap-3">
+            <AssistStartDialog
+              profileId={profile.id}
+              name={nome}
+              hasKennel={Boolean(kennel)}
+            />
+            <span className="text-fg-muted text-sm">
+              Edita canil, cães e ninhadas pelo painel dele, com trilha.
+            </span>
           </div>
 
           {kennel ? (

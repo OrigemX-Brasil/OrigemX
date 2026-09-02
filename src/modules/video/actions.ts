@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import { resolveOwnerId } from "@/lib/assist";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/modules/auth/queries";
 import { getManageableDogById } from "@/modules/dogs/queries";
@@ -97,7 +98,7 @@ export async function requestVideoUpload(dogId: string): Promise<UploadTicket> {
     dog_id: dogId,
     provider_uid: uid,
     status: "pendingupload",
-    owner_id: user.id,
+    owner_id: await resolveOwnerId(user.id),
     created_by: user.id,
   });
 

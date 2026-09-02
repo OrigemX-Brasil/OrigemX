@@ -1,3 +1,4 @@
+import { assistingProfileId } from "@/lib/assist";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -89,12 +90,18 @@ export async function getKennelById(id: string) {
  * de terceiro, achado pelo teste E2E de isolamento.
  */
 export async function getManageableKennelById(id: string, userId: string) {
+  // O alvo de um cadastro assistido é resolvido AQUI DENTRO, e não recebido por
+  // parâmetro: são doze pontos de chamada, e um parâmetro esquecido num deles
+  // seria uma tela que abre vazia sem explicar por quê. Espelha o ramo de
+  // assistência de `private.owns_kennel` no banco.
+  const assistindo = await assistingProfileId();
+
   const supabase = await createClient();
   const { data } = await supabase
     .from("kennels")
     .select(`${LIST_COLUMNS}, owner_id, deleted_at`)
     .eq("id", id)
-    .eq("owner_id", userId)
+    .in("owner_id", [userId, ...(assistindo ? [assistindo] : [])])
     .is("deleted_at", null)
     .maybeSingle();
 

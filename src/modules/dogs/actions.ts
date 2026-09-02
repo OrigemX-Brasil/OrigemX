@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { after } from "next/server";
 
 import { dispararPrimeiroCao } from "@/lib/notify/usuario/disparos";
+import { resolveOwnerId } from "@/lib/assist";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/modules/auth/queries";
 import { getMyKennel } from "@/modules/kennels/queries";
@@ -105,6 +106,10 @@ export async function createDog(_prev: DogFormState, formData: FormData): Promis
   if (!kennelId) values.slug = null;
 
   const supabase = await createClient();
+  // Sob cadastro assistido o cão nasce do CRIADOR, não do admin que digitou.
+  // `created_by` continua sendo quem digitou — autoria não se transfere.
+  const ownerId = await resolveOwnerId(user.id);
+
   const { data, error } = await supabase
     .from("dogs")
     .insert({
@@ -112,7 +117,7 @@ export async function createDog(_prev: DogFormState, formData: FormData): Promis
       name,
       sex,
       kennel_id: kennelId,
-      owner_id: user.id,
+      owner_id: ownerId,
       sire_id: sireId,
       dam_id: damId,
       created_by: user.id,

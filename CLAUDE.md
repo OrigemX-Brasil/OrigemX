@@ -95,6 +95,39 @@ Isto não move a fronteira de EDIÇÃO: alterar os campos do registro continua s
 em `/painel`. E não dispara e-mail ao criador — os quatro e-mails do aditivo são definidos
 como ação DO USUÁRIO, e um admin publicando não é ação dele.
 
+### Cadastro assistido (desde 02/09/2026)
+
+O admin pode preencher **tudo** de um criador — canil, cão, ninhada, filhotes, identificadores,
+saúde, exames, medidas, vídeo, FAQ, depoimentos — usando as MESMAS telas do painel do criador,
+servidas sob `/admin/assistir/[profileId]/...`.
+
+As rotas de `/admin/assistir` são **invólucros**, não cópias: renderizam o componente de página
+do painel. Duplicar aqueles formulários criaria uma segunda implementação para divergir na
+primeira mudança de campo. Quem mantém a URL no prefixo administrativo é o `src/proxy.ts`: com o
+cookie de sessão presente, todo `/painel/*` é desviado para `/admin/assistir/<alvo>/*` — foi o
+que evitou tornar ~40 `href`/`redirect`/`revalidatePath` cientes do caminho-base. O cookie é
+dica de UI; quem autoriza é `private.assisting_profile()`.
+
+**Não foi ampliação de poder; foi estreitamento.** Antes, `or private.is_admin()` estava solto
+em treze policies de escrita e dentro de `private.can_manage_dog`: um admin já escrevia em
+qualquer uma dessas tabelas, de qualquer criador, a qualquer momento, **sem rastro**. Faltava
+só a tela. Agora ele precisa de uma **sessão aberta**, só alcança **o criador daquela sessão**,
+e cada escrita vira linha de `audit_log`.
+
+- **Não é impersonation.** A sessão de autenticação continua sendo a do ADMIN — sem troca de
+  login. Uma faixa fica visível em todo layout enquanto a sessão estiver aberta.
+- **O motivo é declarado UMA vez**, ao abrir, e toda escrita da sessão o herda. Exigir motivo a
+  cada campo salvo tornaria impraticável justamente o caso de uso (sentar com o criador e
+  preencher o cadastro inteiro).
+- **`created_by` nunca muda de mãos**: registra quem de fato digitou. Só `owner_id` segue o
+  criador assistido.
+- **Uma sessão aberta por admin**, garantida por índice único parcial — com duas, "em nome de
+  quem ele está escrevendo agora?" não teria resposta.
+
+Exceção conhecida e anotada: `media_update` mantém `or private.is_admin()`, porque
+`reconcileMediaBucket` grava `bucket_id` durante a publicação por admin, que roda fora de
+qualquer sessão. Restringir por coluna não é expressável em policy.
+
 ---
 
 ## INVARIANTES DE PERFORMANCE
@@ -239,6 +272,9 @@ Referência rápida — o banco é quem garante, não a aplicação.
 | Admin ESCREVE no Storage do dono, não em qualquer lugar | `private.can_write_storage_prefix` — o prefixo tem de ser um perfil VIVO, senão o arquivo vira órfão que a reconciliação nunca acha |
 | Admin LÊ o Storage do dono | inline nas policies de SELECT: prefixo próprio ou `(select private.is_admin())`. Predicado separado por PERFORMANCE — função que recebe a linha roda por linha e o `list` estoura em timeout. Ver `admin_le_storage_do_dono` |
 | Publicar por admin deixa rastro | `admin_set_dog_published` / `admin_set_kennel_published`; o caminho do dono passou a recusar quem não é dono (`ehDonoDoCao`, em `media/publish.ts`) |
+| Admin só escreve em registro de terceiro sob SESSÃO | `admin_assist_sessions` + `private.assisting_profile()`. As policies comparam `owner_id in ((select auth.uid()), (select private.assisting_profile()))` — os dois lados viram InitPlan, avaliados uma vez por consulta |
+| Toda escrita assistida deixa trilha | trigger `private.trg_audit_assist()` em 11 tabelas. A trilha é do BANCO: não existe caminho de aplicação que escreva sob sessão e não apareça no Histórico |
+| Mídia pertence ao dono do REGISTRO, não a quem subiu | `ownerOfMediaEntity` em `media/queries.ts`, usada por `registerMedia`. Antes era `user.id`, e isso gravou quatro fotos de um criador no nome do admin |
 
 ### Schema
 

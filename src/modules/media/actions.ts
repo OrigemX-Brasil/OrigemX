@@ -20,6 +20,7 @@ import {
 import {
   countDogGallery,
   getUsedBytes,
+  ownerOfMediaEntity,
   statStorageObject,
   type SupabaseClientLike,
 } from "./queries";
@@ -236,10 +237,22 @@ export async function registerMedia(
     await supabase.storage.from(BUCKET_PRIVATE).remove(paths);
   };
 
-  // O caminho tem de começar pelo uid. A policy do Storage já barra o upload
-  // fora do prefixo, mas esta linha impede que a METADATA aponte para o
-  // arquivo de outra pessoa.
-  if (!pathBelongsTo(storagePath, user.id) || (thumbPath && !pathBelongsTo(thumbPath, user.id))) {
+  // O DONO SAI DA ENTIDADE, não da sessão.
+  //
+  // Antes era `user.id`, e isso produziu um defeito real: um admin com acesso
+  // ao painel do dono (por `created_by`) subiu quatro fotos no cão de um
+  // criador, e as quatro nasceram com o ADMIN como dono — arquivo no prefixo
+  // errado e quota cobrada de quem não devia. Para o próprio criador nada muda:
+  // ele É o dono da entidade, então a consulta devolve o mesmo id de sempre.
+  //
+  // Fallback para `user.id` quando a entidade não tem dono: é o ancestral
+  // fantasma, cujo `owner_id` é NULL por desenho.
+  const ownerId = (await ownerOfMediaEntity(role, entityId)) ?? user.id;
+
+  // O caminho tem de começar pelo prefixo do DONO. A policy do Storage já barra
+  // o upload fora do prefixo, mas esta linha impede que a METADATA aponte para
+  // o arquivo de outra pessoa.
+  if (!pathBelongsTo(storagePath, ownerId) || (thumbPath && !pathBelongsTo(thumbPath, ownerId))) {
     return { error: "Caminho de arquivo inválido." };
   }
 
@@ -256,7 +269,8 @@ export async function registerMedia(
 
   const thumb = thumbPath ? await statStorageObject(BUCKET_PRIVATE, thumbPath) : null;
 
-  const used = await getUsedBytes(user.id);
+  // Quota do DONO da entidade — o arquivo ocupa o plano de quem vai ficar com ele.
+  const used = await getUsedBytes(ownerId);
   const quota = validateQuota(used, full.size + (thumb?.size ?? 0));
   if (!quota.ok) {
     await cleanup();
@@ -305,7 +319,7 @@ export async function registerMedia(
       width,
       height,
       alt,
-      owner_id: user.id,
+      owner_id: ownerId,
       created_by: user.id,
     })
     .select("id")

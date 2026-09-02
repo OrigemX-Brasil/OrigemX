@@ -1,8 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { ASSIST_COOKIE } from "@/lib/assist-cookie";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/modules/auth/queries";
 import { DOG_FIELDS } from "@/modules/dogs/fields";
@@ -54,6 +56,7 @@ import {
 } from "@/modules/media/sync";
 
 import { resolveHideReason, resolveSuspendReason } from "./format";
+import { getKennelByOwner } from "./queries";
 
 /**
  * Server Actions do painel administrativo — a primeira mutação real do
@@ -818,4 +821,97 @@ export async function setKennelPublishedByAdmin(formData: FormData): Promise<Pub
   }
 
   return { ok: true };
+}
+
+/* ===========================================================================
+ * CADASTRO ASSISTIDO — abrir e encerrar
+ * ===========================================================================
+ *
+ * A REGRA está no banco. `admin_start_assist_session` valida o alvo, recusa
+ * sessão dupla e grava a linha de `assist.start`; a partir daí
+ * `private.assisting_profile()` é o que as policies consultam. Estas duas
+ * funções só chamam as RPCs e mandam a tela para o lugar certo.
+ */
+
+export type AssistState = { error?: string; ok?: boolean };
+
+/**
+ * Abre a sessão e leva o admin direto para onde o trabalho acontece: o painel
+ * do canil, se já existir, ou a raiz do painel quando o criador ainda não tem
+ * um — e aí o caminho é cadastrar o canil primeiro, pela porta auditada.
+ */
+export async function startAssistSession(formData: FormData): Promise<AssistState> {
+  await requireAdmin();
+
+  const targetId = readId(formData, "target_profile_id");
+  const reason = String(formData.get("reason") ?? "").trim();
+
+  if (!targetId) return { error: "Usuário não identificado." };
+  if (reason.length < 3) {
+    return { error: "Descreva o motivo do cadastro assistido (mínimo 3 caracteres)." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("admin_start_assist_session", {
+    p_target_profile_id: targetId,
+    p_reason: reason,
+  });
+  // A RPC levanta em português — mensagem vai direto para a tela.
+  if (error) return { error: error.message };
+
+  const kennel = await getKennelByOwner(targetId);
+
+  // O cookie é o que faz o proxy servir as telas do criador sob `/admin`. É
+  // dica de UI, nunca autorização — ver `lib/assist-cookie.ts`. `httpOnly`
+  // porque nenhum código de client precisa lê-lo, e `sameSite: lax` para
+  // sobreviver à navegação normal.
+  const jar = await cookies();
+  jar.set(ASSIST_COOKIE, targetId, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+  });
+
+  revalidatePath("/admin/historico");
+  revalidatePath(`/admin/usuarios/${targetId}`);
+  // `layout` e não `page`: a faixa de "assistindo" mora no layout, e sem isto
+  // ela só apareceria na navegação seguinte.
+  revalidatePath("/painel", "layout");
+  revalidatePath("/admin", "layout");
+
+  // Direto no prefixo novo. Mandar para `/painel` funcionaria — o proxy
+  // desviaria — mas custaria um salto a mais logo na entrada.
+  const base = `/admin/assistir/${targetId}`;
+  redirect(kennel ? `${base}/canis/${kennel.id}` : base);
+}
+
+/**
+ * Encerra a sessão. Devolve `void` para poder ser usada direto num
+ * `<form action={...}>` — a faixa fica em todo layout, e uma ilha cliente só
+ * para exibir um erro que praticamente não acontece (a RPC é idempotente e
+ * não falha para admin) sairia mais caro do que vale.
+ */
+export async function endAssistSession(): Promise<void> {
+  await requireAdmin();
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("admin_end_assist_session");
+  if (error) {
+    // Não trava a navegação: a sessão continua aberta e a faixa continua na
+    // tela, que é o estado honesto.
+    console.error("[admin:endAssistSession]", error.message);
+    return;
+  }
+
+  // O cookie sai DEPOIS da RPC, nunca antes: se a chamada falhasse, apagá-lo
+  // deixaria o admin sem o desvio de rota e sem a faixa, mas com a sessão ainda
+  // aberta no banco — autorizado a escrever e sem nada na tela dizendo isso.
+  (await cookies()).delete(ASSIST_COOKIE);
+
+  revalidatePath("/admin/historico");
+  revalidatePath("/painel", "layout");
+  revalidatePath("/admin", "layout");
+
+  redirect("/admin/usuarios");
 }

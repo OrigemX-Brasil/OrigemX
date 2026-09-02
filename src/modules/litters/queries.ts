@@ -1,3 +1,4 @@
+import { assistingProfileId } from "@/lib/assist";
 import { createClient } from "@/lib/supabase/server";
 import type { AncestorCandidate } from "@/modules/dogs/ancestors";
 import { countDogGalleries, getDogCovers, getLitterCovers } from "@/modules/media/queries";
@@ -188,6 +189,9 @@ export async function getManageableLitterById(
   id: string,
   userId: string,
 ): Promise<ManageableLitter | null> {
+  // Ver `getManageableKennelById`: o alvo do cadastro assistido é resolvido
+  // aqui dentro para não depender de doze pontos de chamada lembrarem dele.
+  const assistindo = await assistingProfileId();
   const supabase = await createClient();
   const { data } = await supabase
     .from("kennel_litters")
@@ -199,7 +203,7 @@ export async function getManageableLitterById(
        dam:dogs!kennel_litters_dam_id_fkey(id, name, sex, public_id, breed, born_on, kennel_id, owner_id)`,
     )
     .eq("id", id)
-    .eq("kennels.owner_id", userId)
+    .in("kennels.owner_id", [userId, ...(assistindo ? [assistindo] : [])])
     .is("deleted_at", null)
     .maybeSingle();
 

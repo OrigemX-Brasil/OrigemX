@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+import { ASSIST_COOKIE } from "@/lib/assist-cookie";
 import type { Database } from "@/lib/types/database";
 import { isGuestOnlyRoute, isProtectedRoute } from "@/modules/auth/routes";
 
@@ -70,6 +71,36 @@ export async function updateSession(request: NextRequest) {
 
   if (hasSession && isGuestOnlyRoute(pathname)) {
     return redirectTo("/painel");
+  }
+
+  /**
+   * CADASTRO ASSISTIDO — as telas do criador passam a morar sob `/admin`.
+   *
+   * Durante uma sessão, o admin trabalha nos MESMOS componentes do painel do
+   * criador (ver `app/admin/assistir/[profileId]`). Sem este desvio, o primeiro
+   * `redirect()` de qualquer Server Action — que aponta para `/painel/...`,
+   * como sempre apontou — jogaria o admin para fora do prefixo administrativo,
+   * e a fronteira visual se romperia no primeiro "salvar".
+   *
+   * Resolver isso nos links custaria tornar ~40 `href`, `redirect` e
+   * `revalidatePath` cientes do caminho-base, espalhados por todo o painel — o
+   * arquivo de maior tráfego do produto. Aqui é uma regra só.
+   *
+   * O COOKIE É DICA DE UI, NUNCA AUTORIZAÇÃO. Quem decide o que este admin
+   * escreve é `private.assisting_profile()`, no banco. Adulterar o cookie muda
+   * o PREFIXO da URL e mais nada: sem sessão aberta, o layout de
+   * `/admin/assistir` devolve 404 e a RLS recusa toda escrita. É a mesma
+   * natureza otimista do desvio de rota logo acima.
+   */
+  const assistindo = request.cookies.get(ASSIST_COOKIE)?.value;
+  if (hasSession && assistindo && pathname.startsWith("/painel")) {
+    const url = request.nextUrl.clone();
+    url.pathname = `/admin/assistir/${assistindo}${pathname.slice("/painel".length)}`;
+    // Mantém a query: é ela que carrega busca, cursor de paginação e as
+    // confirmações de "recém-criado" que as telas leem.
+    const response = NextResponse.redirect(url);
+    supabaseResponse.cookies.getAll().forEach((cookie) => response.cookies.set(cookie));
+    return response;
   }
 
   // Devolver ESTE objeto. Criar um NextResponse novo sem copiar os cookies

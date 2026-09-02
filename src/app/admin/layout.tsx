@@ -1,4 +1,5 @@
 import { AdminNav } from "@/modules/admin/components/admin-nav";
+import { AssistBanner } from "@/modules/admin/components/assist-banner";
 import { requireAdmin } from "@/modules/auth/queries";
 
 /**
@@ -21,9 +22,17 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   await requireAdmin();
 
   return (
-    <div className="flex min-h-dvh flex-col sm:flex-row">
-      <AdminNav />
-      <main className="min-w-0 flex-1 overflow-x-hidden px-5 py-8 lg:px-8">{children}</main>
+    <div className="flex min-h-dvh flex-col">
+      {/*
+        A faixa também aqui: a sessão continua aberta quando o admin volta ao
+        painel administrativo, e é neste momento que ele mais corre o risco de
+        esquecê-la. Encerrar precisa estar a um clique de qualquer tela.
+      */}
+      <AssistBanner />
+      <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
+        <AdminNav />
+        <main className="min-w-0 flex-1 overflow-x-hidden px-5 py-8 lg:px-8">{children}</main>
+      </div>
     </div>
   );
 }

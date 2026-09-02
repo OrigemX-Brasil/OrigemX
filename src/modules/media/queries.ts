@@ -370,6 +370,76 @@ export async function litterPhotoPositions(litterId: string): Promise<number[]> 
   return (data ?? []).map((row) => row.position);
 }
 
+/**
+ * De quem é a ENTIDADE que vai receber a imagem.
+ *
+ * Existe por causa de um defeito real: `registerMedia` estampava
+ * `owner_id: user.id`, e quando um admin subiu fotos no cão de um criador —
+ * pelo painel do dono, ao qual ele tinha acesso por `created_by` — quatro
+ * linhas nasceram com o admin como dono. Arquivo no prefixo errado, quota
+ * cobrada da pessoa errada, e nada disso visível em tela.
+ *
+ * A mídia pertence a quem é dono do REGISTRO, não a quem apertou o botão. Para
+ * o próprio criador os dois são a mesma pessoa, então o caminho dele não muda
+ * em nada — é a mesma consulta devolvendo o mesmo id.
+ *
+ * Devolve `null` quando a entidade não tem dono: é o ancestral fantasma
+ * (`dogs.owner_id` é NULLABLE por desenho). Quem chama decide o fallback.
+ */
+export async function ownerOfMediaEntity(
+  role: MediaRole,
+  entityId: string,
+): Promise<string | null> {
+  const supabase = await createClient();
+
+  if (role === "kennel_logo") {
+    const { data } = await supabase
+      .from("kennels")
+      .select("owner_id")
+      .eq("id", entityId)
+      .maybeSingle();
+    return data?.owner_id ?? null;
+  }
+
+  if (role === "dog_gallery") {
+    const { data } = await supabase
+      .from("dogs")
+      .select("owner_id")
+      .eq("id", entityId)
+      .maybeSingle();
+    return data?.owner_id ?? null;
+  }
+
+  if (role === "litter_gallery") {
+    const { data } = await supabase
+      .from("kennel_litters")
+      .select("kennels(owner_id)")
+      .eq("id", entityId)
+      .maybeSingle();
+    const k = data?.kennels as { owner_id: string } | { owner_id: string }[] | null | undefined;
+    return (Array.isArray(k) ? k[0]?.owner_id : k?.owner_id) ?? null;
+  }
+
+  if (role === "testimonial_avatar") {
+    const { data } = await supabase
+      .from("testimonials")
+      .select("kennels(owner_id)")
+      .eq("id", entityId)
+      .maybeSingle();
+    const k = data?.kennels as { owner_id: string } | { owner_id: string }[] | null | undefined;
+    return (Array.isArray(k) ? k[0]?.owner_id : k?.owner_id) ?? null;
+  }
+
+  // measurement_photo: a medição pende do cão, e o dono é o do cão.
+  const { data } = await supabase
+    .from("dog_measurements")
+    .select("dogs(owner_id)")
+    .eq("id", entityId)
+    .maybeSingle();
+  const d = data?.dogs as { owner_id: string | null } | { owner_id: string | null }[] | null | undefined;
+  return (Array.isArray(d) ? d[0]?.owner_id : d?.owner_id) ?? null;
+}
+
 /** Bytes já ocupados pelo usuário. Alimenta a checagem de quota. */
 export async function getUsedBytes(ownerId: string): Promise<number> {
   const supabase = await createClient();

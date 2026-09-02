@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 
+import { AssistBanner } from "@/modules/admin/components/assist-banner";
 import { signOut } from "@/modules/auth/actions";
 import { requireUser } from "@/modules/auth/queries";
 import { KennelSearch } from "@/modules/search/components/kennel-search";
@@ -18,6 +19,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex min-h-dvh flex-col">
+      {/*
+        ACIMA do cabeçalho, de propósito: durante um cadastro assistido estas
+        são as telas do CRIADOR, e o admin precisa esbarrar no aviso antes de
+        qualquer outra coisa da página. Para quem não está assistindo — que é
+        quase todo mundo aqui — o componente devolve `null` e não custa nada.
+      */}
+      <AssistBanner />
       {/*
         A borda inferior fica no `<header>` e continua atravessando a tela
         inteira; o teto de largura fica no CONTEÚDO. Sem essa separação, no

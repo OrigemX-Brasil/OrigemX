@@ -39,6 +39,48 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_assist_sessions: {
+        Row: {
+          admin_id: string
+          ended_at: string | null
+          id: string
+          reason: string
+          started_at: string
+          target_profile_id: string
+        }
+        Insert: {
+          admin_id: string
+          ended_at?: string | null
+          id?: string
+          reason: string
+          started_at?: string
+          target_profile_id: string
+        }
+        Update: {
+          admin_id?: string
+          ended_at?: string | null
+          id?: string
+          reason?: string
+          started_at?: string
+          target_profile_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_assist_sessions_admin_id_fkey"
+            columns: ["admin_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admin_assist_sessions_target_profile_id_fkey"
+            columns: ["target_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_log: {
         Row: {
           action: string
@@ -1064,6 +1106,7 @@ export type Database = {
         }
         Returns: string
       }
+      admin_end_assist_session: { Args: never; Returns: undefined }
       admin_get_profile_email: {
         Args: { p_profile_id: string }
         Returns: string
@@ -1103,6 +1146,10 @@ export type Database = {
       }
       admin_set_profile_suspended: {
         Args: { p_profile_id: string; p_reason: string; p_suspended: boolean }
+        Returns: string
+      }
+      admin_start_assist_session: {
+        Args: { p_reason: string; p_target_profile_id: string }
         Returns: string
       }
       admin_user_funnel: {

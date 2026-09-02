@@ -2910,6 +2910,292 @@ begin
                       v_erro = '42501');
 end $$;
 
+
+-- =============================================================================
+-- Grupo 12 — cadastro assistido (casos 117 a 128)
+--
+-- O admin passa a escrever pela SESSÃO, não por ser admin. Isto ESTREITA o que
+-- existia: `or private.is_admin()` estava solto em treze policies e dentro de
+-- `private.can_manage_dog`, então um admin escrevia em vacina, exame genético,
+-- microchip, vídeo, depoimento, FAQ e ninhada de qualquer criador, a qualquer
+-- momento, sem rastro.
+--
+-- O caso 117 é o que prova o estreitamento, e o 128 é o que impede a correção
+-- de virar bloqueio: o DONO continua escrevendo sem sessão nenhuma. Sem os dois
+-- juntos, um `false` constante passaria em metade do grupo.
+--
+-- u6 = admin, u9 = dono de K9, u1 = criador comum (fixtures dos grupos 7 e 10).
+-- =============================================================================
+
+-- 117. SEM sessão, o admin não edita o canil de terceiro. Era permitido até
+--      esta migration — é o buraco que ela fecha.
+do $$
+declare v_n int;
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000006","role":"authenticated"}';
+  with alterado as (
+    update public.kennels set city = 'Tentativa Sem Sessao'
+     where id = 'c1000000-0000-4000-8000-000000000024'
+    returning 1
+  )
+  select count(*) into v_n from alterado;
+  reset role;
+
+  perform pg_temp.rec(117, 'admin SEM sessão edita canil de terceiro',
+                      '0 linhas — policy nega',
+                      v_n || ' linha(s)' || case when v_n > 0 then ' — ESCRITA SILENCIOSA CONTINUA' else '' end,
+                      v_n = 0);
+exception when others then
+  reset role;
+  perform pg_temp.rec(117, 'admin SEM sessão edita canil de terceiro',
+                      '0 linhas — policy nega', sqlstate || ' ' || sqlerrm, sqlstate = '42501');
+end $$;
+
+-- 118. E também não escreve na saúde de um cão de terceiro — o ramo que vinha
+--      de `can_manage_dog`, e que nenhuma tela jamais ofereceu.
+do $$
+declare v_dog_id uuid; v_erro text;
+begin
+  select id into v_dog_id from battery_ids where label = 'dog_para_u9';
+
+  begin
+    set local role authenticated;
+    set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000006","role":"authenticated"}';
+    insert into public.dog_health_records (dog_id, kind, product, applied_on, created_by)
+    values (v_dog_id, 'vaccine', 'V10 Battery', current_date, 'b1000000-0000-4000-8000-000000000006');
+    reset role;
+    v_erro := null;
+  exception when others then
+    reset role;
+    v_erro := sqlstate;
+  end;
+
+  perform pg_temp.rec(118, 'admin SEM sessão grava saúde em cão de terceiro',
+                      '42501 insufficient_privilege',
+                      coalesce(v_erro, 'ACEITOU — ESCRITA SILENCIOSA EM PRONTUÁRIO'),
+                      v_erro = '42501');
+end $$;
+
+-- 119. Usuário comum não abre sessão de cadastro assistido.
+do $$
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000001","role":"authenticated"}';
+  perform public.admin_start_assist_session(
+    'b1000000-0000-4000-8000-000000000009', 'tentativa de usuário comum');
+  reset role;
+  perform pg_temp.rec(119, 'usuário comum abre cadastro assistido',
+                      '42501 insufficient_privilege',
+                      'ACEITOU — QUALQUER UM ASSISTE QUALQUER UM', false);
+exception when others then
+  reset role;
+  perform pg_temp.rec(119, 'usuário comum abre cadastro assistido',
+                      '42501 insufficient_privilege', sqlstate || ' ' || sqlerrm,
+                      sqlstate = '42501');
+end $$;
+
+-- 120. Admin não assiste a si mesmo — seria só uma forma de escapar do rastro
+--      nas próprias telas.
+do $$
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000006","role":"authenticated"}';
+  perform public.admin_start_assist_session(
+    'b1000000-0000-4000-8000-000000000006', 'tentativa de assistir a si mesmo');
+  reset role;
+  perform pg_temp.rec(120, 'admin abre cadastro assistido para si mesmo',
+                      '23514 check_violation', 'ACEITOU', false);
+exception when others then
+  reset role;
+  perform pg_temp.rec(120, 'admin abre cadastro assistido para si mesmo',
+                      '23514 check_violation', sqlstate || ' ' || sqlerrm,
+                      sqlstate = '23514');
+end $$;
+
+-- 121. Abre a sessão de verdade.
+do $$
+declare v_id uuid;
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000006","role":"authenticated"}';
+  select public.admin_start_assist_session(
+    'b1000000-0000-4000-8000-000000000009',
+    'criador pediu ajuda por telefone — caso de bateria') into v_id;
+  reset role;
+
+  insert into battery_ids values ('sessao_u9', v_id);
+
+  perform pg_temp.rec(121, 'admin abre cadastro assistido para u9', 'id devolvido',
+                      coalesce(v_id::text, 'nulo'), v_id is not null);
+exception when others then
+  reset role;
+  perform pg_temp.rec(121, 'admin abre cadastro assistido para u9', 'id devolvido',
+                      'ERRO: ' || sqlstate || ' ' || sqlerrm, false);
+end $$;
+
+-- 122. Segunda sessão, alvo diferente, é recusada: com duas abertas não há
+--      resposta para "em nome de quem ele está escrevendo agora?".
+do $$
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000006","role":"authenticated"}';
+  perform public.admin_start_assist_session(
+    'b1000000-0000-4000-8000-000000000001', 'segunda sessão — caso de bateria');
+  reset role;
+  perform pg_temp.rec(122, 'segunda sessão aberta para outro alvo',
+                      '23505 unique_violation', 'ACEITOU — DUAS SESSÕES ABERTAS', false);
+exception when others then
+  reset role;
+  perform pg_temp.rec(122, 'segunda sessão aberta para outro alvo',
+                      '23505 unique_violation', sqlstate || ' ' || sqlerrm,
+                      sqlstate = '23505');
+end $$;
+
+-- 123. AGORA a mesma escrita do caso 117 passa.
+do $$
+declare v_n int;
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000006","role":"authenticated"}';
+  with alterado as (
+    update public.kennels set city = 'Cidade Pelo Assistido'
+     where id = 'c1000000-0000-4000-8000-000000000024'
+    returning 1
+  )
+  select count(*) into v_n from alterado;
+  reset role;
+
+  perform pg_temp.rec(123, 'admin COM sessão edita o canil do alvo', '1 linha',
+                      v_n || ' linha(s)', v_n = 1);
+exception when others then
+  reset role;
+  perform pg_temp.rec(123, 'admin COM sessão edita o canil do alvo', '1 linha',
+                      'ERRO: ' || sqlstate || ' ' || sqlerrm, false);
+end $$;
+
+-- 124. E a escrita gerou trilha, com o motivo DA SESSÃO — ninguém digitou
+--      motivo nesta operação.
+do $$
+declare v_n int; v_motivo text; v_tabela text;
+begin
+  select count(*), max(a.reason), max(a.details->>'tabela')
+    into v_n, v_motivo, v_tabela
+    from public.audit_log a
+   where a.action = 'kennel.assist_write'
+     and a.entity_id = 'c1000000-0000-4000-8000-000000000024';
+
+  perform pg_temp.rec(124, 'escrita sob sessão vira linha de auditoria com o motivo da sessão',
+                      '>=1 linha, motivo da sessão, tabela=kennels',
+                      v_n || ' linha(s), tabela=' || coalesce(v_tabela, 'nulo')
+                        || ', motivo=' || coalesce(left(v_motivo, 20), 'nulo'),
+                      v_n >= 1 and v_tabela = 'kennels' and v_motivo like 'criador pediu ajuda%');
+end $$;
+
+-- 125. A saúde do cão do alvo, que o caso 118 recusou, agora entra.
+do $$
+declare v_dog_id uuid; v_erro text; v_n int;
+begin
+  select id into v_dog_id from battery_ids where label = 'dog_para_u9';
+
+  begin
+    set local role authenticated;
+    set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000006","role":"authenticated"}';
+    insert into public.dog_health_records (dog_id, kind, product, applied_on, created_by)
+    values (v_dog_id, 'vaccine', 'V10 Battery', current_date, 'b1000000-0000-4000-8000-000000000006');
+    reset role;
+    v_erro := null;
+  exception when others then
+    reset role;
+    v_erro := sqlstate || ' ' || sqlerrm;
+  end;
+
+  select count(*) into v_n from public.audit_log a
+   where a.action = 'dog.assist_write' and a.entity_id = v_dog_id
+     and a.details->>'tabela' = 'dog_health_records';
+
+  perform pg_temp.rec(125, 'admin COM sessão grava saúde no cão do alvo, e isso deixa trilha',
+                      'sucesso e 1 linha de trilha',
+                      coalesce(v_erro, 'gravou') || ', trilha=' || v_n,
+                      v_erro is null and v_n = 1);
+end $$;
+
+-- 126. A sessão é de u9, então o canil de u1 continua fora de alcance. É o que
+--      separa "assistir alguém" de "poder tudo".
+do $$
+declare v_n int;
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000006","role":"authenticated"}';
+  with alterado as (
+    update public.kennels set city = 'Fora do Alvo'
+     where id = 'c1000000-0000-4000-8000-000000000001'
+    returning 1
+  )
+  select count(*) into v_n from alterado;
+  reset role;
+
+  perform pg_temp.rec(126, 'sessão de u9 NÃO alcança o canil de outro criador',
+                      '0 linhas',
+                      v_n || ' linha(s)' || case when v_n > 0 then ' — SESSÃO VIROU PODER GERAL' else '' end,
+                      v_n = 0);
+exception when others then
+  reset role;
+  perform pg_temp.rec(126, 'sessão de u9 NÃO alcança o canil de outro criador',
+                      '0 linhas', sqlstate || ' ' || sqlerrm, sqlstate = '42501');
+end $$;
+
+-- 127. Encerrada, o acesso fecha na hora.
+do $$
+declare v_n int;
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000006","role":"authenticated"}';
+  perform public.admin_end_assist_session();
+
+  with alterado as (
+    update public.kennels set city = 'Depois de Encerrar'
+     where id = 'c1000000-0000-4000-8000-000000000024'
+    returning 1
+  )
+  select count(*) into v_n from alterado;
+  reset role;
+
+  perform pg_temp.rec(127, 'encerrada a sessão, a escrita volta a ser negada',
+                      '0 linhas',
+                      v_n || ' linha(s)' || case when v_n > 0 then ' — SESSÃO NÃO FECHOU' else '' end,
+                      v_n = 0);
+exception when others then
+  reset role;
+  perform pg_temp.rec(127, 'encerrada a sessão, a escrita volta a ser negada',
+                      '0 linhas', sqlstate || ' ' || sqlerrm, sqlstate = '42501');
+end $$;
+
+-- 128. O CONTRASTE que impede o falso positivo: o DONO edita o próprio canil
+--      sem sessão nenhuma. Sem este caso, uma policy que negasse todo mundo
+--      passaria em 117, 126 e 127 e ninguém notaria até o painel do criador
+--      parar de salvar.
+do $$
+declare v_n int;
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000009","role":"authenticated"}';
+  with alterado as (
+    update public.kennels set city = 'Editado Pelo Dono'
+     where id = 'c1000000-0000-4000-8000-000000000024'
+    returning 1
+  )
+  select count(*) into v_n from alterado;
+  reset role;
+
+  perform pg_temp.rec(128, 'o DONO edita o próprio canil sem sessão nenhuma (controle)',
+                      '1 linha', v_n || ' linha(s)', v_n = 1);
+exception when others then
+  reset role;
+  perform pg_temp.rec(128, 'o DONO edita o próprio canil sem sessão nenhuma (controle)',
+                      '1 linha', 'ERRO: ' || sqlstate || ' ' || sqlerrm, false);
+end $$;
+
 -- -----------------------------------------------------------------------------
 -- Limpeza. Vem ANTES do relatório de propósito: a Management API devolve o
 -- resultado do último statement, então o SELECT final tem de ser o último.
@@ -2969,6 +3255,12 @@ delete from public.dogs where name = 'Battery E';
 delete from public.dogs where name in ('Battery C', 'Battery D');
 delete from public.dogs where name like 'Battery%' or name = 'Rex do Dois';
 delete from public.kennels where slug like 'battery-%';
+
+-- Sessões de cadastro assistido: `admin_id` e `target_profile_id` são ON DELETE
+-- RESTRICT, então elas saem antes dos perfis — mesma razão do audit_log abaixo.
+delete from public.admin_assist_sessions
+ where admin_id in (select id from auth.users where email like 'battery-%@example.test')
+    or target_profile_id in (select id from auth.users where email like 'battery-%@example.test');
 
 -- audit_log ANTES de auth.users: `actor_id` é ON DELETE RESTRICT de propósito
 -- (trilha com ator apagado não é trilha), então apagar o admin de fixture sem

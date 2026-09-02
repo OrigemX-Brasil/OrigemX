@@ -3841,6 +3841,203 @@ async function main() {
   }
 
   // ---------------------------------------------------------------------------
+  // Cenário 23 — cadastro assistido
+  //
+  // A bateria SQL (Grupo 12) prova a regra inteira, mas roda como POSTGRES, que
+  // ignora RLS. Aqui é a porta real: chave publishable, sessão de verdade.
+  //
+  // O caso que justifica este cenário existir é o do `owner_id` da mídia. Quatro
+  // fotos chegaram a produção gravadas no nome do ADMIN em vez do criador,
+  // porque `registerMedia` estampava `user.id`. Nenhum teste pegou — a bateria
+  // não passa pela Server Action, e o Cenário 22 chamava a RPC direto.
+  // ---------------------------------------------------------------------------
+
+  const CENARIO_23 = "23. Cadastro assistido";
+
+  const comumAbreSessao = await B.client.rpc("admin_start_assist_session", {
+    p_target_profile_id: A.id,
+    p_reason: "tentativa de usuário comum",
+  });
+  record(
+    CENARIO_23,
+    "usuário comum abre cadastro assistido",
+    "erro — insufficient_privilege",
+    comumAbreSessao.error
+      ? `erro: ${comumAbreSessao.error.message}`
+      : "EXECUTOU — QUALQUER UM ASSISTE QUALQUER UM",
+    !!comumAbreSessao.error,
+  );
+
+  // SEM sessão: é o estreitamento. Antes desta migration passava.
+  const semSessao = await ADMIN.client
+    .from("kennels")
+    .update({ city: "Sem Sessao" })
+    .eq("id", kennelA.id)
+    .select("id");
+  record(
+    CENARIO_23,
+    "admin SEM sessão edita o canil de A",
+    "0 linhas — policy nega",
+    semSessao.error
+      ? `erro: ${semSessao.error.message}`
+      : `${(semSessao.data ?? []).length} linha(s)` +
+        ((semSessao.data ?? []).length > 0 ? " — ESCRITA SILENCIOSA CONTINUA" : ""),
+    !!semSessao.error || (semSessao.data ?? []).length === 0,
+  );
+
+  const abre = await ADMIN.client.rpc("admin_start_assist_session", {
+    p_target_profile_id: A.id,
+    p_reason: "criador pediu ajuda — caso de evidência",
+  });
+  record(
+    CENARIO_23,
+    "admin abre cadastro assistido para A",
+    "sucesso",
+    abre.error ? `erro: ${abre.error.message}` : "sucesso",
+    !abre.error,
+  );
+
+  if (!abre.error) {
+    const comSessao = await ADMIN.client
+      .from("kennels")
+      .update({ city: "Com Sessao" })
+      .eq("id", kennelA.id)
+      .select("id");
+    record(
+      CENARIO_23,
+      "admin COM sessão edita o canil de A",
+      "1 linha",
+      describe(comSessao.error, comSessao.data ?? undefined),
+      !comSessao.error && (comSessao.data ?? []).length === 1,
+    );
+
+    // A sessão é de A, então o canil de D continua fora de alcance — é o que
+    // separa "assistir alguém" de "poder tudo".
+    const foraDoAlvo = await ADMIN.client
+      .from("kennels")
+      .update({ city: "Fora do Alvo" })
+      .eq("id", kennelD.id)
+      .select("id");
+    record(
+      CENARIO_23,
+      "sessão de A NÃO alcança o canil de D",
+      "0 linhas",
+      foraDoAlvo.error
+        ? `erro: ${foraDoAlvo.error.message}`
+        : `${(foraDoAlvo.data ?? []).length} linha(s)` +
+          ((foraDoAlvo.data ?? []).length > 0 ? " — SESSÃO VIROU PODER GERAL" : ""),
+      !!foraDoAlvo.error || (foraDoAlvo.data ?? []).length === 0,
+    );
+
+    const { data: trilha } = await admin
+      .from("audit_log")
+      .select("actor_id, reason")
+      .eq("action", "kennel.assist_write")
+      .eq("entity_id", kennelA.id);
+    record(
+      CENARIO_23,
+      "escrita sob sessão vira trilha com o motivo da sessão",
+      `>=1 linha, ator=${ADMIN.id}`,
+      `${(trilha ?? []).length} linha(s), ator=${trilha?.[0]?.actor_id}, motivo=${String(trilha?.[0]?.reason ?? "").slice(0, 18)}`,
+      (trilha ?? []).length >= 1 &&
+        trilha?.[0]?.actor_id === ADMIN.id &&
+        String(trilha?.[0]?.reason ?? "").startsWith("criador pediu ajuda"),
+    );
+
+    // O CASO QUE FALTAVA. O admin sobe uma foto no cão de A pelo caminho do
+    // DONO — o mesmo que produziu as quatro linhas erradas em produção — e a
+    // mídia tem de nascer no nome de A, não no dele.
+    const fotoPath = `${A.id}/caes/${dogAPub.id}/assistido-${RUN}.png`;
+    const subiu = await ADMIN.client.storage
+      .from(BUCKET)
+      .upload(fotoPath, PNG, { contentType: "image/png" });
+
+    if (!subiu.error) {
+      const registro = await ADMIN.client
+        .from("media")
+        .insert({
+          bucket_id: BUCKET,
+          storage_path: fotoPath,
+          dog_id: dogAPub.id,
+          role: "dog_gallery",
+          mime: "image/png",
+          size_bytes: PNG.length,
+          owner_id: A.id,
+          created_by: ADMIN.id,
+        })
+        .select("id, owner_id");
+      record(
+        CENARIO_23,
+        "mídia gravada sob sessão nasce com owner_id do CRIADOR",
+        `1 linha, owner=${A.id}`,
+        registro.error
+          ? `erro: ${registro.error.message}`
+          : `owner=${registro.data?.[0]?.owner_id}`,
+        !registro.error && registro.data?.[0]?.owner_id === A.id,
+      );
+
+      // E a policy recusa gravar a mesma mídia no nome do ADMIN: é a linha que
+      // teria impedido o defeito de produção, e não só corrigido depois.
+      const noNomeErrado = await ADMIN.client
+        .from("media")
+        .insert({
+          bucket_id: BUCKET,
+          storage_path: fotoPath,
+          dog_id: dogAPub.id,
+          role: "dog_gallery",
+          mime: "image/png",
+          size_bytes: PNG.length,
+          owner_id: ADMIN.id,
+          created_by: ADMIN.id,
+        })
+        .select("id");
+      record(
+        CENARIO_23,
+        "mídia em cão de A no nome do ADMIN é recusada",
+        "erro — policy nega",
+        noNomeErrado.error
+          ? `erro: ${noNomeErrado.error.message}`
+          : "ACEITOU — MÍDIA DE TERCEIRO NO NOME DO ADMIN",
+        !!noNomeErrado.error,
+      );
+    }
+
+    const encerra = await ADMIN.client.rpc("admin_end_assist_session");
+    const depoisDeEncerrar = await ADMIN.client
+      .from("kennels")
+      .update({ city: "Depois de Encerrar" })
+      .eq("id", kennelA.id)
+      .select("id");
+    record(
+      CENARIO_23,
+      "encerrada a sessão, a escrita volta a ser negada",
+      "0 linhas",
+      encerra.error
+        ? `erro ao encerrar: ${encerra.error.message}`
+        : `${(depoisDeEncerrar.data ?? []).length} linha(s)` +
+          ((depoisDeEncerrar.data ?? []).length > 0 ? " — SESSÃO NÃO FECHOU" : ""),
+      !encerra.error &&
+        (!!depoisDeEncerrar.error || (depoisDeEncerrar.data ?? []).length === 0),
+    );
+  }
+
+  // O CONTRASTE que impede o falso positivo: o dono continua editando o próprio
+  // canil, sem sessão nenhuma. Sem ele, uma policy que negasse todo mundo
+  // passaria em metade deste cenário.
+  const donoSemSessao = await A.client
+    .from("kennels")
+    .update({ city: "Editado Pelo Dono" })
+    .eq("id", kennelA.id)
+    .select("id");
+  record(
+    CENARIO_23,
+    "o DONO edita o próprio canil sem sessão (controle)",
+    "1 linha",
+    describe(donoSemSessao.error, donoSemSessao.data ?? undefined),
+    !donoSemSessao.error && (donoSemSessao.data ?? []).length === 1,
+  );
+
+  // ---------------------------------------------------------------------------
   // Limpeza
   //
   // POR POSSE, não por padrão de slug — e esta distinção não é estilo.
@@ -3870,6 +4067,9 @@ async function main() {
       // pelo prefixo do dono ele apareceria como resíduo de um dono que já foi
       // apagado.
       `${D.id}/kennel_logo/${kennelD.id}/logo-${RUN}.png`,
+      // Cenário 23: a foto que o ADMIN gravou sob o prefixo de A durante a
+      // sessão de cadastro assistido.
+      `${A.id}/caes/${dogAPub.id}/assistido-${RUN}.png`,
     ]);
 
   /**
@@ -3972,6 +4172,15 @@ async function main() {
   // diante — hard delete aqui é a mesma exceção consciente que `dogs`/
   // `kennels` já usam para fixture de teste, não a invariante de exclusão
   // lógica do produto.
+  // `admin_id` e `target_profile_id` são ON DELETE RESTRICT — as sessões saem
+  // antes dos perfis, mesma razão do `audit_log` logo abaixo.
+  await limpar("admin_assist_sessions", () =>
+    admin
+      .from("admin_assist_sessions")
+      .delete()
+      .or(`admin_id.in.(${ids.join(",")}),target_profile_id.in.(${ids.join(",")})`),
+  );
+
   await limpar("audit_log", () => admin.from("audit_log").delete().in("actor_id", ids));
 
   // `profiles` some por CASCADE de auth.users. Os canis já saíram, então o
