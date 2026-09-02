@@ -80,11 +80,12 @@ describe("startOfDaySaoPaulo / endOfDaySaoPaulo", () => {
 });
 
 describe("entityLabel / entityHref", () => {
-  it("traduz os quatro tipos de entidade conhecidos", () => {
+  it("traduz os cinco tipos de entidade conhecidos", () => {
     expect(entityLabel("profile")).toBe("Usuário");
     expect(entityLabel("kennel")).toBe("Canil");
     expect(entityLabel("dog")).toBe("Cão");
     expect(entityLabel("litter")).toBe("Ninhada");
+    expect(entityLabel("media")).toBe("Imagem");
   });
 
   it("tipo desconhecido devolve o próprio valor, sem quebrar a tela", () => {
@@ -105,12 +106,31 @@ describe("entityLabel / entityHref", () => {
     expect(entityLabel("litter")).toBe("Ninhada");
     expect(entityHref("litter", "abc")).toBeNull();
   });
+
+  // Mesma razão da ninhada: não existe tela para uma imagem isolada. Quem tem
+  // tela é o DONO dela, e o id dele está no `details`.
+  it("imagem tem rótulo mas não tem link", () => {
+    expect(entityLabel("media")).toBe("Imagem");
+    expect(entityHref("media", "abc")).toBeNull();
+  });
 });
 
 describe("actionLabel", () => {
-  it("traduz as duas ações de cadastro em nome do usuário", () => {
+  it("traduz as ações de cadastro em nome do usuário", () => {
     expect(actionLabel("dog.create_for_user")).toBe("Cadastrou cão para o usuário");
     expect(actionLabel("litter.create_for_user")).toBe("Cadastrou ninhada para o usuário");
+    expect(actionLabel("kennel.create_for_user")).toBe("Cadastrou canil para o usuário");
+    expect(actionLabel("media.create_for_user")).toBe("Enviou imagem para o usuário");
+  });
+
+  // Pares separados, e não um `set_published` com booleano no details: é o que
+  // torna "o que este admin colocou no ar" um `where action =` em vez de um
+  // filtro dentro do JSON.
+  it("publicar e tirar do ar são ações distintas, por entidade", () => {
+    expect(actionLabel("dog.publish")).toBe("Publicou cão");
+    expect(actionLabel("dog.unpublish")).toBe("Tirou cão do ar");
+    expect(actionLabel("kennel.publish")).toBe("Publicou canil");
+    expect(actionLabel("kennel.unpublish")).toBe("Tirou canil do ar");
   });
 
   it("ação desconhecida devolve o próprio valor, sem quebrar a tela", () => {
@@ -184,6 +204,85 @@ describe("detailsSummary", () => {
       expect(
         detailsSummary({ kennel_id: "k-1", owner_id: "u-1", sire_id: null, dam_id: null }),
       ).toBeNull();
+    });
+  });
+
+  describe("canil cadastrado em nome do usuário", () => {
+    /** O `details` que `admin_create_kennel_for_user` grava, na íntegra. */
+    function detalhesDeCanil(over: Record<string, unknown> = {}) {
+      return { owner_id: "u-1", nome: "Canil Aurora", slug: "canil-aurora", ...over };
+    }
+
+    // O endereço não é enfeite no histórico: `kennels_slug_key` é único GLOBAL e
+    // não parcial por `deleted_at`, então ele ficou queimado para sempre no
+    // instante desta linha — e quem o escolheu foi o admin, não o dono.
+    it("mostra o nome e o endereço definitivo", () => {
+      expect(detailsSummary(detalhesDeCanil())).toBe("Canil Aurora · /c/canil-aurora");
+    });
+
+    it("canil sem slug no details cai só no nome, sem inventar barra solta", () => {
+      expect(detailsSummary(detalhesDeCanil({ slug: "" }))).toBe("Canil Aurora");
+    });
+  });
+
+  describe("imagem enviada em nome do usuário", () => {
+    /** O `details` que `admin_register_media_for_user` grava, na íntegra. */
+    function detalhesDeMidia(over: Record<string, unknown> = {}) {
+      return {
+        owner_id: "u-1",
+        role: "kennel_logo",
+        entity_id: "k-1",
+        kennel_id: "k-1",
+        storage_path: "u-1/kennel_logo/k-1/abc.webp",
+        size_bytes: 51234,
+        founder_number_atribuido: null,
+        ...over,
+      };
+    }
+
+    it("diz qual imagem foi, mesmo sem nome no details", () => {
+      expect(detailsSummary(detalhesDeMidia())).toBe("logo do canil");
+      expect(detailsSummary(detalhesDeMidia({ role: "dog_gallery" }))).toBe("foto do cão");
+    });
+
+    // O caso que mais importa desta tela: o logo costuma ser o ÚLTIMO requisito
+    // de `kennel_is_founder_eligible`, então é o envio que queima o número — e
+    // `kennels_freeze_founder_number` o torna irreversível.
+    it("selo Fundador queimado pelo envio do logo aparece no resumo", () => {
+      expect(detailsSummary(detalhesDeMidia({ founder_number_atribuido: 137 }))).toBe(
+        "logo do canil · selo Fundador nº 137",
+      );
+    });
+
+    it("papel desconhecido não vira texto inventado", () => {
+      expect(detailsSummary(detalhesDeMidia({ role: "outra_coisa" }))).toBeNull();
+    });
+  });
+
+  describe("publicação por admin", () => {
+    // Publicar grava `{de, para}` como toda ação que MUDA um valor, então cai no
+    // primeiro ramo e nunca chega em `createdSummary` — mesmo com `slug` no
+    // details, que existe para a trilha e não para a célula de resumo.
+    it("publicar canil mostra a transição, não o endereço", () => {
+      expect(
+        detailsSummary({
+          owner_id: "u-1",
+          slug: "canil-aurora",
+          de: null,
+          para: "2026-09-01T10:00:00Z",
+        }),
+      ).toBe("— → 2026-09-01T10:00:00Z");
+    });
+
+    it("tirar do ar é a transição inversa", () => {
+      expect(
+        detailsSummary({
+          owner_id: "u-1",
+          kennel_id: "k-1",
+          de: "2026-09-01T10:00:00Z",
+          para: null,
+        }),
+      ).toBe("2026-09-01T10:00:00Z → —");
     });
   });
 });

@@ -1036,6 +1036,22 @@ export type Database = {
         }
         Returns: string
       }
+      admin_create_kennel_for_user: {
+        Args: {
+          p_city?: string
+          p_description?: string
+          p_instagram_handle?: string
+          p_name: string
+          p_owner_id: string
+          p_reason: string
+          p_registration_number?: string
+          p_slug: string
+          p_state?: string
+          p_website_url?: string
+          p_whatsapp?: string
+        }
+        Returns: string
+      }
       admin_create_litter_for_kennel: {
         Args: {
           p_born_on?: string
@@ -1052,8 +1068,25 @@ export type Database = {
         Args: { p_profile_id: string }
         Returns: string
       }
+      admin_register_media_for_user: {
+        Args: {
+          p_alt?: string
+          p_entity_id: string
+          p_height?: number
+          p_reason: string
+          p_role: string
+          p_storage_path: string
+          p_thumb_path?: string
+          p_width?: number
+        }
+        Returns: string
+      }
       admin_set_dog_hidden: {
         Args: { p_dog_id: string; p_hidden: boolean; p_reason: string }
+        Returns: string
+      }
+      admin_set_dog_published: {
+        Args: { p_dog_id: string; p_published: boolean; p_reason: string }
         Returns: string
       }
       admin_set_founder_number: {
@@ -1062,6 +1095,10 @@ export type Database = {
       }
       admin_set_kennel_hidden: {
         Args: { p_hidden: boolean; p_kennel_id: string; p_reason: string }
+        Returns: string
+      }
+      admin_set_kennel_published: {
+        Args: { p_kennel_id: string; p_published: boolean; p_reason: string }
         Returns: string
       }
       admin_set_profile_suspended: {

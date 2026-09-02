@@ -25,6 +25,18 @@ export type KennelFormState = {
   ok?: boolean;
 };
 
+/**
+ * A assinatura que `useActionState` exige, exportada para que uma tela de FORA
+ * deste módulo injete outra ação no `KennelForm` sem que `kennels` precise
+ * conhecê-la. Mesma razão e mesma direção de `DogFormAction`: `admin/actions.ts`
+ * já importa `kennels/validation` e `kennels/fields`, então uma tabela de modos
+ * aqui dentro fecharia o ciclo.
+ */
+export type KennelFormAction = (
+  state: KennelFormState,
+  formData: FormData,
+) => Promise<KennelFormState>;
+
 /** Mensagem de "você já tem um canil" quando a checagem prévia pega o caso. */
 const JA_TEM_CANIL =
   "Você já tem um canil. Cada conta tem um único canil — para começar outro, exclua o atual primeiro.";

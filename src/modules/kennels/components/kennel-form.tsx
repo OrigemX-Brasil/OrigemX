@@ -1,11 +1,17 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useRef, useState, type ReactNode } from "react";
 import { useFormStatus } from "react-dom";
 
+import { ConfirmSubmitDialog, type SubmitConfirm } from "@/components/confirm-submit-dialog";
 import { FormMessage } from "@/components/form-message";
 
-import { createKennel, updateKennel, type KennelFormState } from "../actions";
+import {
+  createKennel,
+  updateKennel,
+  type KennelFormAction,
+  type KennelFormState,
+} from "../actions";
 import { KENNEL_FORM_FIELDS, type KennelField, type KennelFieldName } from "../fields";
 import { slugify, validateKennel, type FieldErrors, type KennelInput } from "../validation";
 
@@ -108,6 +114,9 @@ function Submit({ label, disabled }: { label: string; disabled?: boolean }) {
 
 export function KennelForm({
   kennel,
+  action,
+  header,
+  confirm,
 }: {
   /**
    * Chaves do formulário, não `Record<string, …>`: com index signature aberta,
@@ -116,16 +125,49 @@ export function KennelForm({
    * que não é campo dele.
    */
   kennel?: Partial<Record<KennelFieldName, string | null>> & { id?: string };
+  /**
+   * Ação alternativa, injetada por quem chama. Ausente = o fluxo do dono
+   * (`createKennel`/`updateKennel`). É prop, e não uma tabela de modos aqui
+   * dentro, porque a tabela obrigaria `kennels` a importar quem o chama — e a
+   * dependência hoje só anda no outro sentido.
+   */
+  action?: KennelFormAction;
+  /** Bloco livre no topo, DENTRO do `<form>`: o que ele renderizar entra no
+   *  `FormData`. É onde mora o aviso e o campo de motivo do admin. */
+  header?: ReactNode;
+  /** Confirmação antes de gravar. Ausente = grava no primeiro clique. */
+  confirm?: SubmitConfirm;
 }) {
   const isEdit = Boolean(kennel?.id);
-  const action = isEdit ? updateKennel : createKennel;
 
-  const [state, formAction] = useActionState<KennelFormState, FormData>(action, {});
+  const [state, formAction] = useActionState<KennelFormState, FormData>(
+    action ?? (isEdit ? updateKennel : createKennel),
+    {},
+  );
   const [clientErrors, setClientErrors] = useState<FieldErrors>({});
   const slugOriginal = String(kennel?.slug ?? "");
   const [slug, setSlug] = useState<string>(slugOriginal);
   const [slugTouched, setSlugTouched] = useState(Boolean(kennel?.slug));
   const [confirmSlugChange, setConfirmSlugChange] = useState(false);
+
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  /**
+   * Passe de uma viagem: o botão de dentro do diálogo marca, o `onSubmit`
+   * consome. Ref e não state — `onClick` e o evento `submit` acontecem na MESMA
+   * tarefa síncrona, e um `setState` não estaria visível a tempo.
+   */
+  const confirmedRef = useRef(false);
+  const [confirmData, setConfirmData] = useState<FormData | null>(null);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
+
+  /**
+   * Resposta do servidor com erro FECHA o diálogo: a mensagem mora no
+   * formulário, atrás dele. Mantê-lo aberto seria um modal mudo sobre o único
+   * texto que explica o que houve. Mesmo efeito de `DogForm`.
+   */
+  useEffect(() => {
+    if (state.formError || state.errors) dialogRef.current?.close();
+  }, [state.formError, state.errors]);
 
   const errors: FieldErrors = { ...clientErrors, ...state.errors };
 
@@ -158,14 +200,45 @@ export function KennelForm({
         }
         const found = validateKennel(input);
         setClientErrors(found);
+
+        // `noValidate` está ligado neste formulário, então `required`/`minLength`
+        // nos campos de quem chama são decoração. A regra dele roda AQUI.
+        const extra = confirm?.validate?.(data) ?? null;
+        setConfirmError(extra);
+
         // Validação de client é conveniência. A Server Action revalida tudo —
         // um POST direto pula esta tela inteira.
-        if (Object.keys(found).length > 0) e.preventDefault();
+        if (Object.keys(found).length > 0 || extra) {
+          e.preventDefault();
+          confirmedRef.current = false; // erro depois de confirmar: recomeça
+          dialogRef.current?.close();
+          return;
+        }
+
+        if (confirm && !confirmedRef.current) {
+          e.preventDefault();
+          setConfirmData(data); // instantâneo do que está digitado AGORA
+          dialogRef.current?.showModal();
+          return;
+        }
+
+        confirmedRef.current = false; // passe consumido; daqui é submit de verdade
       }}
       className="flex flex-col gap-6"
       noValidate
     >
       {kennel?.id ? <input type="hidden" name="id" value={kennel.id} /> : null}
+
+      {header}
+
+      {confirmError ? (
+        <p
+          role="alert"
+          className="border-danger-subtle bg-danger-subtle text-fg rounded-control border px-3 py-2.5 text-sm"
+        >
+          {confirmError}
+        </p>
+      ) : null}
 
       {state.formError ? (
         <p
@@ -227,11 +300,34 @@ export function KennelForm({
 
       <div className="flex flex-wrap items-center gap-3">
         <Submit
-          label={isEdit ? "Salvar alterações" : "Criar canil"}
+          label={confirm ? confirm.openLabel : isEdit ? "Salvar alterações" : "Criar canil"}
           disabled={slugChanged && !confirmSlugChange}
         />
         {state.ok ? <FormMessage message="Alterações salvas." /> : null}
       </div>
+
+      {confirm ? (
+        <ConfirmSubmitDialog
+          dialogRef={dialogRef}
+          title={confirm.title}
+          confirmLabel={confirm.confirmLabel}
+          onConfirm={() => {
+            confirmedRef.current = true;
+          }}
+          onCancel={() => {
+            confirmedRef.current = false;
+          }}
+        >
+          {/*
+            Progenitores nulos: o contrato de `SubmitConfirm` nasceu no `DogForm`,
+            onde o nome do pai e da mãe só existe no estado do componente e não
+            no `FormData`. Canil não tem esse problema — tudo que o resumo
+            precisa já está no formulário. Passar nulos aqui é mais barato que
+            bifurcar o tipo, e `AdminKennelForm` simplesmente os ignora.
+          */}
+          {confirmData ? confirm.summary(confirmData, { sire: null, dam: null }) : null}
+        </ConfirmSubmitDialog>
+      ) : null}
     </form>
   );
 }

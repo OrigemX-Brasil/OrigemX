@@ -6,6 +6,7 @@ import { BackLink } from "@/components/back-link";
 import { EmptyState } from "@/modules/admin/components/empty-state";
 import { FounderNumberDialog } from "@/modules/admin/components/founder-number-dialog";
 import { HideEntityDialog } from "@/modules/admin/components/hide-entity-dialog";
+import { PublishEntityDialog } from "@/modules/admin/components/publish-entity-dialog";
 import { StatusChip } from "@/modules/admin/components/status-chip";
 import { formatDateTime } from "@/modules/admin/format";
 import {
@@ -34,15 +35,22 @@ export const metadata: Metadata = { title: "Canil — Admin" };
  * `admin_set_*` → `private.audit()`, nunca pelo caminho de escrita do dono: o
  * rastro não tem como confundir "admin agiu" com "dono editou o próprio".
  *
- * CADASTRO EM NOME DO DONO — cão e ninhada, via `admin_create_*_for_kennel`.
- * Mesma regra e o mesmo motivo: `owner_id` sai DESTE canil (a aplicação nunca
- * nomeia o dono, então não tem como errá-lo), `created_by` é o admin, e a linha
- * de `audit_log` commita na mesma transação do INSERT.
+ * CADASTRO EM NOME DO DONO — cão, ninhada e logo, via `admin_create_*` e
+ * `admin_register_media_for_user`. Mesma regra e o mesmo motivo: `owner_id` sai
+ * DESTE canil (a aplicação nunca nomeia o dono, então não tem como errá-lo),
+ * `created_by` é o admin, e a linha de `audit_log` commita na mesma transação
+ * do INSERT.
  *
- * O QUE CONTINUA FORA DAQUI: publicar/despublicar e editar. Isso é do dono, em
- * `/painel`. A ninhada criada por aqui nasce rascunho por construção — a RPC
- * não aceita `published_at` —, e o cão só herda publicação de ninhada já
- * publicada. Nenhuma tela deste módulo oferece o botão de publicar.
+ * PUBLICAÇÃO — desde `admin_cadastra_tudo_para_usuario`, também mora aqui. Não
+ * é porta nova: `kennels_update_own` sempre teve `or private.is_admin()` e
+ * `publishKennel` nunca filtrou posse, então um admin já publicava qualquer
+ * canil pelo `/painel` do dono, SEM rastro. O que mudou é que agora existe um
+ * caminho que audita — e o do dono passou a recusar quem não é dono.
+ *
+ * O QUE CONTINUA FORA DAQUI: editar os campos do canil. Isso é do dono, em
+ * `/painel`. O que o admin cadastra nasce rascunho por construção — as RPCs de
+ * criação não aceitam `published_at` —, e colocar no ar é sempre uma SEGUNDA
+ * ação, com motivo próprio e linha própria no Histórico.
  */
 export default async function AdminKennelDetailPage({
   params,
@@ -99,6 +107,19 @@ export default async function AdminKennelDetailPage({
                 currentNumber={kennel.founder_number}
               />
             ) : null}
+            {/*
+              Publicar e ocultar convivem porque são coisas DIFERENTES:
+              `hidden_at` é moderação (o admin tirou do ar), `published_at` é
+              estado editorial (está pronto para o público). Um canil reativado
+              mas em rascunho continua invisível.
+            */}
+            <PublishEntityDialog
+              entityType="kennel"
+              entityId={kennel.id}
+              name={kennel.name}
+              isPublished={Boolean(kennel.published_at)}
+              ownerName={dono}
+            />
             <HideEntityDialog
               entityType="kennel"
               entityId={kennel.id}
@@ -134,9 +155,9 @@ export default async function AdminKennelDetailPage({
           <div className="flex flex-col gap-1">
             <h2 className="font-display text-base font-semibold">Cadastrar em nome de {dono}</h2>
             <p className="text-fg-muted text-sm">
-              O registro nasce pertencendo ao dono — aparece no painel dele, e publicar continua
-              sendo decisão dele. A autoria fica sua, e a criação vai para o Histórico com o motivo
-              que você escrever.
+              O registro nasce pertencendo ao dono e em rascunho — aparece no painel dele, e ele
+              edita normalmente. Colocar no ar é uma segunda decisão, com botão próprio acima. A
+              autoria fica sua, e cada ação vai para o Histórico com o motivo que você escrever.
               {owner?.suspended_at
                 ? " O dono está suspenso: ele não vai conseguir editar nem publicar enquanto isso durar."
                 : ""}
@@ -155,6 +176,17 @@ export default async function AdminKennelDetailPage({
             >
               Cadastrar ninhada
             </Link>
+            {/*
+              Tela à parte, e não um campo aqui: o envio do logo pode CONCEDER o
+              Selo Criador Fundador, que é irreversível. Uma ação dessas não
+              divide espaço com o resto, onde alguém clica de passagem.
+            */}
+            <Link
+              href={`/admin/canis/${kennel.id}/logo`}
+              className="border-border-strong text-fg hover:bg-surface-hover rounded-control border px-4 py-2 text-sm font-medium transition-colors"
+            >
+              Enviar logo
+            </Link>
           </div>
         </section>
       ) : (
@@ -166,8 +198,8 @@ export default async function AdminKennelDetailPage({
 
         {recemCriada ? (
           <p className="border-accent bg-accent-subtle text-fg rounded-card border px-4 py-3 text-sm">
-            Ninhada cadastrada. Nasceu rascunho em nome de {dono} — publicar continua sendo decisão
-            dele. Ela está destacada na lista abaixo.
+            Ninhada cadastrada. Nasceu rascunho em nome de {dono}, e está destacada na lista
+            abaixo.
           </p>
         ) : null}
 

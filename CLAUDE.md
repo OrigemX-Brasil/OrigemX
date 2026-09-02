@@ -72,6 +72,28 @@ Deploy Vercel.
 - RLS habilitada em **TODAS** as tabelas. Nenhuma tabela pública sem policy.
 - Nunca usar `service_role` key no client. Nunca expor segredo em `NEXT_PUBLIC_`.
 - Autorização é decidida no banco (RLS), não só na UI.
+- **Toda escrita de admin em registro de terceiro passa por função SECURITY DEFINER
+  auditada.** Nunca por policy alargada: `private.audit()` não tem EXECUTE para ninguém e
+  `audit_log` não tem GRANT de INSERT, então uma policy permissiva produziria escrita sem
+  trilha. A exceção é o Storage — o upload vai do navegador direto para a API, sem passar
+  por Postgres, e ali a policy é a única defesa possível (`private.can_write_storage_prefix`).
+  Consequência aceita e registrada: o upload em si não fica auditado; só o registro em `media`.
+
+### Admin publica (desde 01/09/2026)
+
+O admin pode publicar e tirar do ar canil e cão em nome do criador. **Não foi uma porta
+nova** — `dogs_update` e `kennels_update_own` sempre tiveram `or private.is_admin()`, e
+`publishDog`/`publishKennel` nunca filtraram posse, então um admin já publicava qualquer
+registro pelo `/painel` do dono, sem rastro nenhum. O que mudou:
+
+- existe caminho próprio e AUDITADO (`admin_set_*_published`), com motivo obrigatório;
+- o caminho do DONO passou a recusar quem não é dono, fechando a publicação silenciosa;
+- criar e publicar são SEMPRE duas ações, com duas linhas de trilha. Nenhuma RPC de
+  criação aceita `published_at`.
+
+Isto não move a fronteira de EDIÇÃO: alterar os campos do registro continua sendo do dono,
+em `/painel`. E não dispara e-mail ao criador — os quatro e-mails do aditivo são definidos
+como ação DO USUÁRIO, e um admin publicando não é ação dele.
 
 ---
 
@@ -212,6 +234,10 @@ Referência rápida — o banco é quem garante, não a aplicação.
 | LGPD do depoimento não vira dado persistido | checkbox validado em `addTestimonial`, nunca lido em `TestimonialInput`/nunca gravado |
 | FAQ é por canil, sem FAQ global | RLS `kennel_faqs_select` (`owns_kennel`), sem `owner_id` próprio |
 | Aceita proposta é só rótulo, sem canal de oferta | CHECK `dogs_accepts_offer_requires_litter` + ausência de qualquer action/tabela de oferta |
+| Admin cadastra para o dono, sempre auditado | funções `admin_create_*_for_kennel` / `admin_create_kennel_for_user` (SECURITY DEFINER) — `private.audit()` não tem EXECUTE para ninguém, então a linha de trilha só nasce lá dentro |
+| Canil de terceiro só pela porta auditada | `kennels_insert_own` exige `auth.uid() = owner_id` e **não** tem ramo de admin, de propósito |
+| Admin escreve no Storage do dono, não em qualquer lugar | `private.can_write_storage_prefix` — o prefixo tem de ser um perfil VIVO; o upload não passa por Postgres, então a policy é a única defesa |
+| Publicar por admin deixa rastro | `admin_set_dog_published` / `admin_set_kennel_published`; o caminho do dono passou a recusar quem não é dono (`ehDonoDoCao`, em `media/publish.ts`) |
 
 ### Schema
 

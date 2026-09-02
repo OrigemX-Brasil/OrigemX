@@ -27,6 +27,12 @@ export const ACTION_LABEL: Record<string, string> = {
   "kennel.founder_number.set": "Corrigiu número do selo",
   "dog.create_for_user": "Cadastrou cão para o usuário",
   "litter.create_for_user": "Cadastrou ninhada para o usuário",
+  "kennel.create_for_user": "Cadastrou canil para o usuário",
+  "media.create_for_user": "Enviou imagem para o usuário",
+  "dog.publish": "Publicou cão",
+  "dog.unpublish": "Tirou cão do ar",
+  "kennel.publish": "Publicou canil",
+  "kennel.unpublish": "Tirou canil do ar",
 };
 
 export function actionLabel(action: string): string {
@@ -53,25 +59,38 @@ export function detailsSummary(details: unknown): string | null {
   return createdSummary(d);
 }
 
+/** O que cada `role` de mídia é, em português, no histórico. */
+const MEDIA_ROLE_LABEL: Record<string, string> = {
+  kennel_logo: "logo do canil",
+  dog_gallery: "foto do cão",
+};
+
 /**
- * Resumo de `dog.create_for_user`.
+ * Resumo das ações de CRIAÇÃO (`*.create_for_user`).
  *
  * O selo Fundador é o item que justifica esta função existir: cadastrar o
- * primeiro cão de um canil elegível QUEIMA um número do pool, de forma
- * irreversível, como efeito colateral de um trigger. A RPC registra isso no
- * `details` justamente para a decisão não ficar invisível no histórico — se não
- * aparecesse aqui, continuaria invisível na tela.
+ * primeiro cão de um canil elegível, ou enviar o LOGO que fecha a
+ * elegibilidade, QUEIMA um número do pool de forma irreversível, como efeito
+ * colateral de um trigger. As RPCs registram isso no `details` justamente para
+ * a decisão não ficar invisível no histórico — se não aparecesse aqui,
+ * continuaria invisível na tela.
+ *
+ * `kennel.create_for_user` mostra nome e ENDEREÇO, e o endereço não é enfeite:
+ * `kennels_slug_key` é único global e não parcial por `deleted_at`, então
+ * aquele endereço ficou queimado para sempre no momento daquela linha.
  *
  * `litter.create_for_user` grava só ids (canil, dono, progenitores), que não
  * dizem nada como texto: devolve null e a célula fica vazia, que já é o
  * comportamento para details desconhecido.
  */
 function createdSummary(d: Record<string, unknown>): string | null {
-  if (!("nome" in d) && !("founder_number_atribuido" in d)) return null;
+  if (!("nome" in d) && !("founder_number_atribuido" in d) && !("role" in d)) return null;
 
   const partes: string[] = [];
 
   if (typeof d.nome === "string" && d.nome.length > 0) partes.push(d.nome);
+  if (typeof d.role === "string" && MEDIA_ROLE_LABEL[d.role]) partes.push(MEDIA_ROLE_LABEL[d.role]);
+  if (typeof d.slug === "string" && d.slug.length > 0) partes.push(`/c/${d.slug}`);
   if (d.litter_id) partes.push("filhote de ninhada");
   if (d.published_at) partes.push("nasceu publicado com a ninhada");
   if (typeof d.founder_number_atribuido === "number") {
@@ -132,6 +151,7 @@ export const ENTITY_LABEL: Record<string, string> = {
   kennel: "Canil",
   dog: "Cão",
   litter: "Ninhada",
+  media: "Imagem",
 };
 
 export function entityLabel(entityType: string): string {
@@ -139,9 +159,11 @@ export function entityLabel(entityType: string): string {
 }
 
 /**
- * `litter` fica DE FORA de propósito: não existe tela `/admin/ninhadas`, e
- * inventar um link quebrado é pior que não linkar. `entityHref` devolve null e a
- * célula vira texto puro — o mesmo que já acontecia com tipo desconhecido.
+ * `litter` e `media` ficam DE FORA de propósito: não existe `/admin/ninhadas`
+ * nem tela para uma imagem isolada, e inventar um link quebrado é pior que não
+ * linkar. `entityHref` devolve null e a célula vira texto puro — o mesmo que já
+ * acontecia com tipo desconhecido. Para a imagem, quem tem tela é o DONO dela
+ * (canil ou cão), e o id dele está no `details`.
  */
 const ENTITY_BASE_PATH: Record<string, string> = {
   profile: "/admin/usuarios",

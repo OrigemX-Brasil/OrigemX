@@ -2,10 +2,10 @@
 
 | | |
 |---|---|
-| Data | 2026-08-19T16:46:46.260Z |
+| Data | 2026-09-02T01:02:40.765Z |
 | Projeto | `https://lcqhnfdsrioufwvnrqnt.supabase.co` |
-| Execução | `mt0bp6tp` |
-| Resultado | **APROVADO** — 155/155 PASS |
+| Execução | `mtje4ywy` |
+| Resultado | **APROVADO** — 186/186 PASS |
 
 
 ## Método
@@ -91,15 +91,15 @@ falha. O que a RLS isola é:
 | 10. Mídia | B (não é quem criou o fantasma) tenta gravar foto nele | erro de permissão | erro 42501: new row violates row-level security policy for table "media" | **PASS** |
 | 11b. Selo Fundador (concorrência) | canil sem cão não recebe selo | todos sem número | 0 com número | **PASS** |
 | 11b. Selo Fundador (concorrência) | 5 atribuições CONCORRENTES não geram número duplicado | 5 números distintos | 5 atribuídos, 5 distintos | **PASS** |
-| 11b. Selo Fundador (concorrência) | nenhum número emitido abaixo de 100 | todos >= 100 | min 555064, max 555068 | **PASS** |
-| 11b. Selo Fundador (concorrência) | exclusão lógica não devolve o número ao pool | número permanece | nº 555066 | **PASS** |
+| 11b. Selo Fundador (concorrência) | nenhum número emitido abaixo de 100 | todos >= 100 | min 555079, max 555083 | **PASS** |
+| 11b. Selo Fundador (concorrência) | exclusão lógica não devolve o número ao pool | número permanece | nº 555082 | **PASS** |
 | 11a. Selo Fundador (autorização) | usuário grava founder_number no PRÓPRIO canil | erro de permissão de coluna | erro 42501: permission denied for table kennels | **PASS** |
 | 11a. Selo Fundador (autorização) | usuário grava founder_number no canil de OUTRO | erro de permissão | erro 42501: permission denied for table kennels | **PASS** |
 | 11a. Selo Fundador (autorização) | após as duas tentativas, o número no banco não mudou | continua nulo | nulo | **PASS** |
 | 12. Bucket público | A grava no próprio prefixo do bucket público | sucesso | sucesso | **PASS** |
 | 12. Bucket público | B grava no prefixo de A no bucket público | erro de permissão | erro: new row violates row-level security policy | **PASS** |
 | 12. Bucket público | anônimo grava no bucket público | erro de permissão | erro: new row violates row-level security policy | **PASS** |
-| 12. Bucket público | URL pública não carrega token nem expiração | sem ?token= e sem expires | /storage/v1/object/public/kennel-media-public/1a35eca1-af1b-49a8-bc6d-9096a85be569/canis/publico-mt0bp6tp.png | **PASS** |
+| 12. Bucket público | URL pública não carrega token nem expiração | sem ?token= e sem expires | /storage/v1/object/public/kennel-media-public/66fe5601-371b-49de-a11e-44bedae12bcb/canis/publico-mtje4ywy.png | **PASS** |
 | 12. Bucket público | anônimo BAIXA o objeto pela URL pública, sem sessão | HTTP 200 | HTTP 200 | **PASS** |
 | 12. Bucket público | A move o objeto de volta ao bucket privado (despublicar) | sucesso | sucesso | **PASS** |
 | 12. Bucket público | objeto sai do bucket público ao despublicar (fonte: Storage) | não está mais lá | removido | **PASS** |
@@ -115,7 +115,7 @@ falha. O que a RLS isola é:
 | 14. Superfície admin_* | usuário comum chama admin_set_dog_hidden | erro — insufficient_privilege | erro: apenas um admin pode ocultar ou reativar um cão | **PASS** |
 | 14. Superfície admin_* | estado de B, do canil e do cão após as quatro tentativas | nada mudou | nada mudou | **PASS** |
 | 14. Superfície admin_* | usuário comum chama admin_get_profile_email | erro — insufficient_privilege | erro: apenas um admin pode ler o e-mail de um usuário | **PASS** |
-| 14. Superfície admin_* | admin chama admin_get_profile_email para B | rls-mt0bp6tp-b@origemx.test | rls-mt0bp6tp-b@origemx.test | **PASS** |
+| 14. Superfície admin_* | admin chama admin_get_profile_email para B | rls-mtje4ywy-b@origemx.test | rls-mtje4ywy-b@origemx.test | **PASS** |
 | 15. Ciclo de suspensão | admin suspende B de verdade, pela RPC | sucesso | sucesso | **PASS** |
 | 15. Ciclo de suspensão | audit_log tem exatamente 1 linha para esta suspensão | 1 linha | 1 linha(s) | **PASS** |
 | 15. Ciclo de suspensão | B (já suspenso) tenta escrever com a sessão que já tinha aberta | 0 linhas | 0 linha(s) | **PASS** |
@@ -135,12 +135,12 @@ falha. O que a RLS isola é:
 | 16. Ciclo de ocultar canil e cão | audit_log tem exatamente 1 linha para cada reativação | 2 linhas | 2 linha(s) | **PASS** |
 | 16. Ciclo de ocultar canil e cão | sessão anônima volta a ver o canil, reativado | 1 linha | 1 linha(s) | **PASS** |
 | 16. Ciclo de ocultar canil e cão | sessão anônima volta a ver o cão, reativado | 1 linha | 1 linha(s) | **PASS** |
-| 17. Corrigir número do selo | admin tenta atribuir a um canil o número que já pertence a outro | erro — número já pertence a outro canil | erro: o número 555068 já pertence a outro canil | **PASS** |
-| 17. Corrigir número do selo | número do canil-alvo não mudou depois da tentativa de duplicidade | nº 555065 | nº 555065 | **PASS** |
+| 17. Corrigir número do selo | admin tenta atribuir a um canil o número que já pertence a outro | erro — número já pertence a outro canil | erro: o número 555079 já pertence a outro canil | **PASS** |
+| 17. Corrigir número do selo | número do canil-alvo não mudou depois da tentativa de duplicidade | nº 555083 | nº 555083 | **PASS** |
 | 17. Corrigir número do selo | admin libera o número do canil (correção real, primeira metade) | sucesso | sucesso | **PASS** |
 | 17. Corrigir número do selo | admin devolve o número certo (correção real, segunda metade) | sucesso | sucesso | **PASS** |
-| 17. Corrigir número do selo | audit_log grava as duas correções, de→para corretos | 2 linhas: {de:555064,para:null} e {de:null,para:555064} | 2 linha(s): [{"de":555064,"para":null},{"de":null,"para":555064}] | **PASS** |
-| 17. Corrigir número do selo | canil termina com o número original — round-trip fechado | nº 555064 | nº 555064 | **PASS** |
+| 17. Corrigir número do selo | audit_log grava as duas correções, de→para corretos | 2 linhas: {de:555081,para:null} e {de:null,para:555081} | 2 linha(s): [{"de":555081,"para":null},{"de":null,"para":555081}] | **PASS** |
+| 17. Corrigir número do selo | canil termina com o número original — round-trip fechado | nº 555081 | nº 555081 | **PASS** |
 | 18. Vídeo | A registra o vídeo do próprio cão | criado | criado | **PASS** |
 | 18. Vídeo | B registra vídeo no cão de A | negado (42501) | erro 42501: new row violates row-level security policy for table "dog_videos" | **PASS** |
 | 18. Vídeo | B registra vídeo forjando owner_id de A | negado (42501) | erro 42501: new row violates row-level security policy for table "dog_videos" | **PASS** |
@@ -181,7 +181,7 @@ falha. O que a RLS isola é:
 | 20. Exames genéticos | anônimo lê exame de cão PUBLICADO | 1 linha | 1 linha(s) | **PASS** |
 | 20. Exames genéticos | anônimo lê exame de cão em RASCUNHO | 0 linhas | 0 linha(s) | **PASS** |
 | 20. Exames genéticos | anônimo lê registro de saúde de cão em RASCUNHO (mesma delegação) | 0 linhas | 0 linha(s) | **PASS** |
-| 20. Exames genéticos | listagem anônima sem filtro NÃO traz exame de cão em rascunho | nenhuma linha do cão em rascunho | 1 linha(s) | **PASS** |
+| 20. Exames genéticos | listagem anônima sem filtro NÃO traz exame de cão em rascunho | nenhuma linha do cão em rascunho | 18 linha(s) | **PASS** |
 | 20. Exames genéticos | B cadastra exame no cão de A | recusado | erro 42501: new row violates row-level security policy for table "dog_genetic_tests" | **PASS** |
 | 20. Exames genéticos | B edita exame do cão de A | recusado (0 linhas) | 0 linha(s) | **PASS** |
 | 20. Exames genéticos | A edita o PRÓPRIO exame | 1 linha | 1 linha(s) | **PASS** |
@@ -191,3 +191,34 @@ falha. O que a RLS isola é:
 | 20. Exames genéticos | B edita registro de saúde do cão de A | recusado (0 linhas) | 0 linha(s) | **PASS** |
 | 20. Exames genéticos | A edita o PRÓPRIO registro de saúde | 1 linha | 1 linha(s) | **PASS** |
 | 20. Exames genéticos | A apaga fisicamente o próprio registro de saúde | negado (42501) | erro 42501: permission denied for table dog_health_records | **PASS** |
+| 21. Admin cadastra para outro usuário | usuário comum chama admin_create_dog_for_kennel | erro — insufficient_privilege | erro: apenas um admin pode cadastrar um cão em nome de outra pessoa | **PASS** |
+| 21. Admin cadastra para outro usuário | usuário comum chama admin_create_litter_for_kennel | erro — insufficient_privilege | erro: apenas um admin pode cadastrar uma ninhada em nome de outra pessoa | **PASS** |
+| 21. Admin cadastra para outro usuário | nada foi gravado pelas duas tentativas negadas | 0 linhas | 0 linha(s) | **PASS** |
+| 21. Admin cadastra para outro usuário | B cadastra cão com owner_id de outra pessoa, direto pela API | negado (42501) | erro 42501: new row violates row-level security policy for table "dogs" | **PASS** |
+| 21. Admin cadastra para outro usuário | B cadastra cão no canil de D, direto pela API | negado (42501) | erro 42501: new row violates row-level security policy for table "dogs" | **PASS** |
+| 21. Admin cadastra para outro usuário | admin SUSPENSO chama admin_create_dog_for_kennel | erro — insufficient_privilege | erro: apenas um admin pode cadastrar um cão em nome de outra pessoa | **PASS** |
+| 21. Admin cadastra para outro usuário | admin SUSPENSO chama admin_create_litter_for_kennel | erro — insufficient_privilege | erro: apenas um admin pode cadastrar uma ninhada em nome de outra pessoa | **PASS** |
+| 21. Admin cadastra para outro usuário | admin cadastra cão comum no canil de outro usuário | sucesso — id devolvido | id 5b6bf693-e870-46f4-b465-16bdac8984fa | **PASS** |
+| 21. Admin cadastra para outro usuário | owner_id vem do canil de destino, created_by é o admin | owner=ea876538-395c-4e21-ac7a-23954301e3ae kennel=1794588a-b678-4dd4-98ea-135d2500be79 created_by=ee5932ca-ae28-4ed8-b141-90c105a616d1 | owner=ea876538-395c-4e21-ac7a-23954301e3ae kennel=1794588a-b678-4dd4-98ea-135d2500be79 created_by=ee5932ca-ae28-4ed8-b141-90c105a616d1 | **PASS** |
+| 21. Admin cadastra para outro usuário | cadastro do cão gera exatamente 1 linha de auditoria, com o motivo | 1 linha, motivo preservado | 1 linha(s), motivo: cliente pediu por telefone — caso de evidência | **PASS** |
+| 21. Admin cadastra para outro usuário | admin cadastra ninhada no canil de outro usuário | sucesso — id devolvido | id 15cf456d-ccba-4b8d-9ab1-82ab28a89fd1 | **PASS** |
+| 21. Admin cadastra para outro usuário | ninhada nasce SEMPRE rascunho — publicar continua sendo do dono | created_by=ee5932ca-ae28-4ed8-b141-90c105a616d1 published_at=nulo | created_by=ee5932ca-ae28-4ed8-b141-90c105a616d1 published_at=nulo | **PASS** |
+| 21. Admin cadastra para outro usuário | cadastro da ninhada gera exatamente 1 linha de auditoria | 1 linha | 1 linha(s) | **PASS** |
+| 21. Admin cadastra para outro usuário | filhote cadastrado pelo admin herda par e status da ninhada | litter=15cf456d-ccba-4b8d-9ab1-82ab28a89fd1 status=available par=c05ab8d0-c26d-4d59-aff3-caad6a3b933a/b8ef3595-798b-4e8e-9251-fc9ee3d30099 | litter=15cf456d-ccba-4b8d-9ab1-82ab28a89fd1 status=available sire=c05ab8d0-c26d-4d59-aff3-caad6a3b933a dam=b8ef3595-798b-4e8e-9251-fc9ee3d30099 | **PASS** |
+| 21. Admin cadastra para outro usuário | D (dono) LÊ o cão que o admin cadastrou em nome dele | 1 linha | 1 linha(s) | **PASS** |
+| 21. Admin cadastra para outro usuário | D (dono) EDITA o cão que o admin cadastrou em nome dele | 1 linha | 1 linha(s) | **PASS** |
+| 21. Admin cadastra para outro usuário | D (dono) EDITA a ninhada que o admin cadastrou em nome dele | 1 linha | 1 linha(s) | **PASS** |
+| 22. Admin cadastra canil, mídia e publica | usuário comum chama admin_create_kennel_for_user | erro — insufficient_privilege | erro: apenas um admin pode cadastrar um canil em nome de outra pessoa | **PASS** |
+| 22. Admin cadastra canil, mídia e publica | usuário comum chama admin_register_media_for_user | erro — insufficient_privilege | erro: apenas um admin pode registrar mídia em nome de outra pessoa | **PASS** |
+| 22. Admin cadastra canil, mídia e publica | usuário comum chama admin_set_kennel_published | erro — insufficient_privilege | erro: apenas um admin pode publicar ou despublicar um canil em nome de outra pessoa | **PASS** |
+| 22. Admin cadastra canil, mídia e publica | usuário comum chama admin_set_dog_published | erro — insufficient_privilege | erro: apenas um admin pode publicar ou despublicar um cão em nome de outra pessoa | **PASS** |
+| 22. Admin cadastra canil, mídia e publica | usuário comum grava no prefixo de D (a policy alargou só para admin) | erro de permissão | erro: new row violates row-level security policy | **PASS** |
+| 22. Admin cadastra canil, mídia e publica | admin grava sob prefixo que não é de nenhum perfil | erro de permissão | erro: new row violates row-level security policy | **PASS** |
+| 22. Admin cadastra canil, mídia e publica | admin grava no prefixo do DONO (controle: precisa funcionar) | sucesso | sucesso | **PASS** |
+| 22. Admin cadastra canil, mídia e publica | canil criado pelo admin pertence a E, com autoria do admin e em rascunho | owner=05808cfe-5b07-4259-85e2-cf904691491a created_by=ee5932ca-ae28-4ed8-b141-90c105a616d1 published_at=null | owner=05808cfe-5b07-4259-85e2-cf904691491a created_by=ee5932ca-ae28-4ed8-b141-90c105a616d1 published_at=null | **PASS** |
+| 22. Admin cadastra canil, mídia e publica | segundo canil para o mesmo dono (kennels_owner_uk) | erro — unique_violation | erro: este usuário já tem um canil; cada criador tem no máximo um canil vivo | **PASS** |
+| 22. Admin cadastra canil, mídia e publica | E (dono) EDITA o canil que o admin criou em nome dele | 1 linha | 1 linha(s) | **PASS** |
+| 22. Admin cadastra canil, mídia e publica | admin publica o canil de E, e a decisão fica na trilha | published_at preenchido | published_at=2026-09-02T01:02:33.579163+00:00 | **PASS** |
+| 22. Admin cadastra canil, mídia e publica | publicação por admin gera 1 linha de auditoria identificando o admin | 1 linha, ator=ee5932ca-ae28-4ed8-b141-90c105a616d1 | 1 linha(s), ator=ee5932ca-ae28-4ed8-b141-90c105a616d1 | **PASS** |
+| 22. Admin cadastra canil, mídia e publica | mídia com caminho no prefixo do ADMIN, e não do dono | erro — check_violation | erro: o caminho precisa começar pelo id do dono (ea876538-395c-4e21-ac7a-23954301e3ae), e começa por "ee5932ca-ae28-4ed8-b141-90c105a616d1" | **PASS** |
+| 22. Admin cadastra canil, mídia e publica | mídia registrada pelo admin pertence ao DONO, com mime lido do Storage | owner=ea876538-395c-4e21-ac7a-23954301e3ae created_by=ee5932ca-ae28-4ed8-b141-90c105a616d1 mime=image/png | owner=ea876538-395c-4e21-ac7a-23954301e3ae created_by=ee5932ca-ae28-4ed8-b141-90c105a616d1 mime=image/png | **PASS** |

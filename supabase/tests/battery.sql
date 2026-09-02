@@ -2379,6 +2379,537 @@ exception when others then
                       'ERRO: ' || sqlstate || ' ' || sqlerrm, false);
 end $$;
 
+-- =============================================================================
+-- Grupo 11 — admin cadastra CANIL e MÍDIA, e PUBLICA, em nome de outro usuário
+--            (casos 99 a 116)
+--
+-- Continuação do Grupo 10, para a migration `admin_cadastra_tudo_para_usuario`.
+-- O que só a FUNÇÃO garante, e nenhuma policy garantiria:
+--
+--   * quem NÃO é admin continua recusado nas QUATRO portas novas;
+--   * `owner_id` do canil é o USUÁRIO ALVO e `created_by` é o admin;
+--   * o canil nasce RASCUNHO — publicar é ação separada, com linha própria;
+--   * `kennels_owner_uk` e `kennels_slug_key` chegam os dois como 23505, e a
+--     função os distingue pelo NOME do índice para dar mensagem certa;
+--   * o caminho da mídia TEM de começar pelo id do dono — é o que impede
+--     metadata apontando para arquivo alheio (caso 114);
+--   * publicar duas vezes NÃO gera duas linhas de auditoria (o ramo no-op);
+--   * o DONO continua editando o que o admin criou.
+--
+-- FORA DAQUI, e por limitação do Storage e não por escolha: o caminho FELIZ do
+-- registro de mídia. `storage.protect_delete()` recusa DELETE direto em
+-- `storage.objects`, então um objeto de fixture ficaria para sempre — ver a
+-- nota antes do caso 114. Quem prova aquilo é o Cenário 22 de
+-- `scripts/test-rls.mts`, com upload de verdade.
+--
+-- FORA DE ESCOPO DE PROPÓSITO: o canil criado aqui NÃO recebe cidade/estado,
+-- então não fica elegível ao selo Fundador. Sem isso, este grupo queimaria um
+-- número REAL da sequence a cada execução — e `kennels_freeze_founder_number`
+-- tornaria isso irreversível. Mesma escolha que o Grupo 10 já fazia com K9.
+-- =============================================================================
+
+do $$
+declare
+  u10 constant uuid := 'b1000000-0000-4000-8000-000000000010';  -- sem canil ainda
+  u11 constant uuid := 'b1000000-0000-4000-8000-000000000011';  -- para o slug queimado
+begin
+  insert into auth.users (
+    id, instance_id, aud, role, email, encrypted_password,
+    email_confirmed_at, created_at, updated_at,
+    raw_app_meta_data, raw_user_meta_data
+  )
+  values
+    (u10, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+     'battery-u10@example.test', '', now(), now(), now(), '{}'::jsonb,
+     '{"full_name":"Battery Dez"}'::jsonb),
+    (u11, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+     'battery-u11@example.test', '', now(), now(), now(), '{}'::jsonb,
+     '{"full_name":"Battery Onze"}'::jsonb);
+end $$;
+
+-- -----------------------------------------------------------------------------
+-- Quem NÃO é admin continua recusado — nas quatro portas novas
+-- -----------------------------------------------------------------------------
+
+-- 99. Usuário comum chama admin_create_kennel_for_user.
+do $$
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000001","role":"authenticated"}';
+  perform public.admin_create_kennel_for_user(
+    p_owner_id => 'b1000000-0000-4000-8000-000000000010',
+    p_name     => 'Canil Tentativa',
+    p_slug     => 'battery-tentativa-comum',
+    p_reason   => 'tentativa de usuário comum'
+  );
+  reset role;
+  perform pg_temp.rec(99, 'usuário comum chama admin_create_kennel_for_user',
+                      '42501 insufficient_privilege',
+                      'ACEITOU — QUALQUER UM CRIA CANIL PARA QUALQUER UM', false);
+exception when others then
+  reset role;
+  perform pg_temp.rec(99, 'usuário comum chama admin_create_kennel_for_user',
+                      '42501 insufficient_privilege', sqlstate || ' ' || sqlerrm,
+                      sqlstate = '42501');
+end $$;
+
+-- 100. Usuário comum chama admin_register_media_for_user.
+do $$
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000001","role":"authenticated"}';
+  perform public.admin_register_media_for_user(
+    p_role         => 'kennel_logo',
+    p_entity_id    => 'c1000000-0000-4000-8000-000000000024',
+    p_storage_path => 'qualquer/coisa.webp',
+    p_reason       => 'tentativa de usuário comum'
+  );
+  reset role;
+  perform pg_temp.rec(100, 'usuário comum chama admin_register_media_for_user',
+                      '42501 insufficient_privilege',
+                      'ACEITOU — QUALQUER UM REGISTRA MÍDIA PARA QUALQUER UM', false);
+exception when others then
+  reset role;
+  perform pg_temp.rec(100, 'usuário comum chama admin_register_media_for_user',
+                      '42501 insufficient_privilege', sqlstate || ' ' || sqlerrm,
+                      sqlstate = '42501');
+end $$;
+
+-- 101. Usuário comum chama admin_set_dog_published.
+do $$
+declare v_dog_id uuid;
+begin
+  select id into v_dog_id from battery_ids where label = 'dog_para_u9';
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000001","role":"authenticated"}';
+  perform public.admin_set_dog_published(v_dog_id, true, 'tentativa de usuário comum');
+  reset role;
+  perform pg_temp.rec(101, 'usuário comum chama admin_set_dog_published',
+                      '42501 insufficient_privilege',
+                      'ACEITOU — QUALQUER UM PUBLICA CÃO DE QUALQUER UM', false);
+exception when others then
+  reset role;
+  perform pg_temp.rec(101, 'usuário comum chama admin_set_dog_published',
+                      '42501 insufficient_privilege', sqlstate || ' ' || sqlerrm,
+                      sqlstate = '42501');
+end $$;
+
+-- 102. Usuário comum chama admin_set_kennel_published.
+do $$
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000001","role":"authenticated"}';
+  perform public.admin_set_kennel_published(
+    'c1000000-0000-4000-8000-000000000024', true, 'tentativa de usuário comum');
+  reset role;
+  perform pg_temp.rec(102, 'usuário comum chama admin_set_kennel_published',
+                      '42501 insufficient_privilege',
+                      'ACEITOU — QUALQUER UM PUBLICA CANIL DE QUALQUER UM', false);
+exception when others then
+  reset role;
+  perform pg_temp.rec(102, 'usuário comum chama admin_set_kennel_published',
+                      '42501 insufficient_privilege', sqlstate || ' ' || sqlerrm,
+                      sqlstate = '42501');
+end $$;
+
+-- -----------------------------------------------------------------------------
+-- O canil nasce do dono certo, com autoria do admin, em rascunho
+-- -----------------------------------------------------------------------------
+
+-- 103. SEM cidade/estado, de propósito — ver a nota de escopo e o caso 116.
+do $$
+declare
+  v_id      uuid;
+  v_owner   uuid;
+  v_creator uuid;
+  v_pub     timestamptz;
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000006","role":"authenticated"}';
+  select public.admin_create_kennel_for_user(
+    p_owner_id => 'b1000000-0000-4000-8000-000000000010',
+    p_name     => 'Canil Battery Dez',
+    p_slug     => 'battery-canil-dez',
+    p_reason   => 'criador sem canil pediu ajuda — caso de bateria'
+  ) into v_id;
+  reset role;
+
+  insert into battery_ids values ('canil_para_u10', v_id);
+
+  select k.owner_id, k.created_by, k.published_at
+    into v_owner, v_creator, v_pub
+    from public.kennels k where k.id = v_id;
+
+  perform pg_temp.rec(103, 'admin cria canil: dono é o alvo, autoria é do admin, nasce rascunho',
+                      'owner=u10 created_by=admin published_at=nulo',
+                      'owner=' || coalesce(v_owner::text, 'nulo')
+                        || ' created_by=' || coalesce(v_creator::text, 'nulo')
+                        || ' published_at=' || coalesce(v_pub::text, 'nulo'),
+                      v_owner = 'b1000000-0000-4000-8000-000000000010'
+                      and v_creator = 'b1000000-0000-4000-8000-000000000006'
+                      and v_pub is null);
+exception when others then
+  reset role;
+  perform pg_temp.rec(103, 'admin cria canil: dono é o alvo, autoria é do admin, nasce rascunho',
+                      'sucesso', 'ERRO: ' || sqlstate || ' ' || sqlerrm, false);
+end $$;
+
+-- 104. Uma linha de auditoria, com o motivo e o slug queimado no details.
+do $$
+declare
+  v_id     uuid;
+  v_n      int;
+  -- TEXT, não uuid: não existe `min(uuid)`/`max(uuid)` no Postgres. O cast é o
+  -- que permite agregar o ator numa consulta que também conta as linhas —
+  -- mesmo motivo pelo qual o caso 85 agrega só `reason`.
+  v_actor  text;
+  v_reason text;
+  v_slug   text;
+begin
+  select id into v_id from battery_ids where label = 'canil_para_u10';
+
+  select count(*), max(a.actor_id::text), max(a.reason), max(a.details->>'slug')
+    into v_n, v_actor, v_reason, v_slug
+    from public.audit_log a
+   where a.action = 'kennel.create_for_user' and a.entity_id = v_id;
+
+  perform pg_temp.rec(104, 'criação do canil gera 1 linha de auditoria, com motivo e slug',
+                      '1 linha, ator=admin, slug=battery-canil-dez',
+                      v_n || ' linha(s), ator=' || coalesce(v_actor, 'nulo')
+                        || ', slug=' || coalesce(v_slug, 'nulo')
+                        || ', motivo=' || coalesce(left(v_reason, 20), 'nulo'),
+                      v_n = 1
+                      and v_actor = 'b1000000-0000-4000-8000-000000000006'
+                      and v_slug = 'battery-canil-dez'
+                      and v_reason like 'criador sem canil%');
+end $$;
+
+-- 105. Segundo canil para o MESMO dono. `kennels_owner_uk` é único parcial em
+--      `(owner_id) where deleted_at is null` — um criador tem no máximo um
+--      canil vivo, e é invariante do projeto.
+do $$
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000006","role":"authenticated"}';
+  perform public.admin_create_kennel_for_user(
+    p_owner_id => 'b1000000-0000-4000-8000-000000000010',
+    p_name     => 'Canil Battery Dez Bis',
+    p_slug     => 'battery-canil-dez-bis',
+    p_reason   => 'tentativa de segundo canil — caso de bateria'
+  );
+  reset role;
+  perform pg_temp.rec(105, 'segundo canil para o mesmo dono', '23505 unique_violation',
+                      'ACEITOU — DOIS CANIS VIVOS PARA O MESMO CRIADOR', false);
+exception when others then
+  reset role;
+  perform pg_temp.rec(105, 'segundo canil para o mesmo dono', '23505 unique_violation',
+                      sqlstate || ' ' || sqlerrm, sqlstate = '23505');
+end $$;
+
+-- 106. Slug JÁ QUEIMADO, para um dono que ainda não tem canil. Isola o outro
+--      índice: aqui `kennels_owner_uk` não é violado, só `kennels_slug_key`.
+do $$
+declare v_msg text;
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000006","role":"authenticated"}';
+  perform public.admin_create_kennel_for_user(
+    p_owner_id => 'b1000000-0000-4000-8000-000000000011',
+    p_name     => 'Canil Slug Repetido',
+    p_slug     => 'battery-canil-nove',  -- já é de K9
+    p_reason   => 'tentativa de slug repetido — caso de bateria'
+  );
+  reset role;
+  perform pg_temp.rec(106, 'slug já em uso é recusado com a mensagem do slug, não a do dono',
+                      '23505 + mensagem sobre endereço',
+                      'ACEITOU — DOIS CANIS COM O MESMO ENDEREÇO', false);
+exception when others then
+  reset role;
+  v_msg := sqlerrm;
+  perform pg_temp.rec(106, 'slug já em uso é recusado com a mensagem do slug, não a do dono',
+                      '23505 + mensagem sobre endereço',
+                      sqlstate || ' ' || left(v_msg, 40),
+                      sqlstate = '23505' and v_msg like '%endereço%');
+end $$;
+
+-- 107. Usuário de destino inexistente.
+do $$
+begin
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000006","role":"authenticated"}';
+  perform public.admin_create_kennel_for_user(
+    p_owner_id => 'b1000000-0000-4000-8000-0000000000ff',
+    p_name     => 'Canil do Ninguém',
+    p_slug     => 'battery-canil-ninguem',
+    p_reason   => 'usuário inexistente — caso de bateria'
+  );
+  reset role;
+  perform pg_temp.rec(107, 'canil para usuário inexistente', 'P0002 no_data_found',
+                      'ACEITOU — CANIL SEM DONO DE VERDADE', false);
+exception when others then
+  reset role;
+  perform pg_temp.rec(107, 'canil para usuário inexistente', 'P0002 no_data_found',
+                      sqlstate || ' ' || sqlerrm, sqlstate = 'P0002');
+end $$;
+
+-- 108. O REQUISITO CENTRAL: o dono edita o canil que o admin criou, como se
+--      fosse dele. Sem isto, "cadastrar em nome de alguém" produziria um
+--      registro órfão que ninguém no painel do criador consegue tocar.
+do $$
+declare v_id uuid; v_n int;
+begin
+  select id into v_id from battery_ids where label = 'canil_para_u10';
+
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000010","role":"authenticated"}';
+  with alterado as (
+    update public.kennels set description = 'editado pelo dono'
+     where id = v_id and deleted_at is null
+    returning 1
+  )
+  select count(*) into v_n from alterado;
+  reset role;
+
+  perform pg_temp.rec(108, 'o DONO edita o canil que o admin criou para ele',
+                      '1 linha alterada', v_n || ' linha(s)', v_n = 1);
+exception when others then
+  reset role;
+  perform pg_temp.rec(108, 'o DONO edita o canil que o admin criou para ele',
+                      '1 linha alterada', 'ERRO: ' || sqlstate || ' ' || sqlerrm, false);
+end $$;
+
+-- -----------------------------------------------------------------------------
+-- Publicação: ação SEPARADA da criação, e auditada
+-- -----------------------------------------------------------------------------
+
+-- 109. Admin publica o canil que criou.
+do $$
+declare v_id uuid; v_pub timestamptz;
+begin
+  select id into v_id from battery_ids where label = 'canil_para_u10';
+
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000006","role":"authenticated"}';
+  perform public.admin_set_kennel_published(v_id, true, 'dono pediu para colocar no ar');
+  reset role;
+
+  select published_at into v_pub from public.kennels where id = v_id;
+
+  perform pg_temp.rec(109, 'admin publica o canil do dono', 'published_at preenchido',
+                      coalesce(v_pub::text, 'nulo'), v_pub is not null);
+exception when others then
+  reset role;
+  perform pg_temp.rec(109, 'admin publica o canil do dono', 'published_at preenchido',
+                      'ERRO: ' || sqlstate || ' ' || sqlerrm, false);
+end $$;
+
+-- 110. Auditoria da publicação — ação PRÓPRIA, separada da criação.
+do $$
+declare v_id uuid; v_n int; v_actor text;
+begin
+  select id into v_id from battery_ids where label = 'canil_para_u10';
+
+  select count(*), max(a.actor_id::text) into v_n, v_actor
+    from public.audit_log a
+   where a.action = 'kennel.publish' and a.entity_id = v_id;
+
+  perform pg_temp.rec(110, 'publicar gera linha kennel.publish, distinta da criação',
+                      '1 linha, ator=admin',
+                      v_n || ' linha(s), ator=' || coalesce(v_actor, 'nulo'),
+                      v_n = 1 and v_actor = 'b1000000-0000-4000-8000-000000000006');
+end $$;
+
+-- 111. Publicar de novo é NO-OP e não polui a trilha. O ramo
+--      `if (v_old is not null) = p_published then return` existe para isto:
+--      sem ele, cada clique repetido viraria uma linha de histórico que não
+--      mudou nada.
+do $$
+declare v_id uuid; v_n int;
+begin
+  select id into v_id from battery_ids where label = 'canil_para_u10';
+
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000006","role":"authenticated"}';
+  perform public.admin_set_kennel_published(v_id, true, 'segunda chamada — caso de bateria');
+  reset role;
+
+  select count(*) into v_n from public.audit_log a
+   where a.action = 'kennel.publish' and a.entity_id = v_id;
+
+  perform pg_temp.rec(111, 'publicar canil já publicado não gera segunda linha',
+                      '1 linha', v_n || ' linha(s)', v_n = 1);
+exception when others then
+  reset role;
+  perform pg_temp.rec(111, 'publicar canil já publicado não gera segunda linha',
+                      '1 linha', 'ERRO: ' || sqlstate || ' ' || sqlerrm, false);
+end $$;
+
+-- 112. Tirar do ar é o par oposto, com ação própria.
+do $$
+declare v_id uuid; v_pub timestamptz; v_n int;
+begin
+  select id into v_id from battery_ids where label = 'canil_para_u10';
+
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000006","role":"authenticated"}';
+  perform public.admin_set_kennel_published(v_id, false, 'dono pediu para tirar do ar');
+  reset role;
+
+  select published_at into v_pub from public.kennels where id = v_id;
+  select count(*) into v_n from public.audit_log a
+   where a.action = 'kennel.unpublish' and a.entity_id = v_id;
+
+  perform pg_temp.rec(112, 'admin tira o canil do ar, com ação própria na trilha',
+                      'published_at nulo e 1 linha kennel.unpublish',
+                      'published_at=' || coalesce(v_pub::text, 'nulo')
+                        || ' linhas=' || v_n,
+                      v_pub is null and v_n = 1);
+exception when others then
+  reset role;
+  perform pg_temp.rec(112, 'admin tira o canil do ar, com ação própria na trilha',
+                      'published_at nulo e 1 linha kennel.unpublish',
+                      'ERRO: ' || sqlstate || ' ' || sqlerrm, false);
+end $$;
+
+-- 113. O mesmo para CÃO, sobre o registro que o Grupo 10 criou.
+do $$
+declare v_dog_id uuid; v_pub timestamptz; v_n int;
+begin
+  select id into v_dog_id from battery_ids where label = 'dog_para_u9';
+
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000006","role":"authenticated"}';
+  perform public.admin_set_dog_published(v_dog_id, true, 'dono pediu para publicar o cão');
+  reset role;
+
+  select published_at into v_pub from public.dogs where id = v_dog_id;
+  select count(*) into v_n from public.audit_log a
+   where a.action = 'dog.publish' and a.entity_id = v_dog_id;
+
+  perform pg_temp.rec(113, 'admin publica o cão do dono, com auditoria',
+                      'published_at preenchido e 1 linha dog.publish',
+                      'published_at=' || coalesce(v_pub::text, 'nulo') || ' linhas=' || v_n,
+                      v_pub is not null and v_n = 1);
+exception when others then
+  reset role;
+  perform pg_temp.rec(113, 'admin publica o cão do dono, com auditoria',
+                      'published_at preenchido e 1 linha dog.publish',
+                      'ERRO: ' || sqlstate || ' ' || sqlerrm, false);
+end $$;
+
+-- -----------------------------------------------------------------------------
+-- Mídia: o dono sai da ENTIDADE, e o caminho tem de ser o dele
+-- -----------------------------------------------------------------------------
+
+-- O CAMINHO FELIZ DA MÍDIA NÃO MORA AQUI, e a limitação é do Storage, não uma
+-- escolha de cobertura: `storage.protect_delete()` recusa DELETE direto em
+-- `storage.objects` ("Use the Storage API instead"). O INSERT de um objeto de
+-- fixture até passa, mas não haveria como removê-lo — e como esta bateria
+-- COMMITA quando passa, cada execução deixaria para trás uma linha apontando
+-- para um arquivo que nunca existiu.
+--
+-- Quem prova o registro bem-sucedido é o Cenário 22 de `scripts/test-rls.mts`,
+-- com upload de verdade pela API do Storage: dono vindo da entidade, autoria do
+-- admin e mime lido do arquivo. É evidência mais forte que esta, não mais fraca.
+--
+-- O que SOBRA para o SQL é o caso 114, e ele não precisa de arquivo nenhum: a
+-- checagem de prefixo acontece ANTES da leitura de `storage.objects`, então a
+-- recusa é alcançável sem fixture.
+
+-- 114. Caminho começando pelo id do ADMIN, não do dono. A policy de Storage
+--      aceitaria (o admin pode escrever sob qualquer prefixo vivo), então é a
+--      função quem impede a metadata de apontar para arquivo de outra pessoa.
+do $$
+declare v_k uuid;
+begin
+  select id into v_k from battery_ids where label = 'canil_para_u10';
+
+  set local role authenticated;
+  set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000006","role":"authenticated"}';
+  perform public.admin_register_media_for_user(
+    p_role         => 'kennel_logo',
+    p_entity_id    => v_k,
+    p_storage_path => 'b1000000-0000-4000-8000-000000000006/kennel_logo/x/y.webp',
+    p_reason       => 'caminho no prefixo errado — caso de bateria'
+  );
+  reset role;
+  perform pg_temp.rec(114, 'mídia com caminho fora do prefixo do dono',
+                      '23514 check_violation',
+                      'ACEITOU — METADATA APONTANDO PARA ARQUIVO DE OUTRA PESSOA', false);
+exception when others then
+  reset role;
+  perform pg_temp.rec(114, 'mídia com caminho fora do prefixo do dono',
+                      '23514 check_violation', sqlstate || ' ' || sqlerrm,
+                      sqlstate = '23514');
+end $$;
+
+
+-- -----------------------------------------------------------------------------
+-- Admin SUSPENSO nas portas novas. Dentro de SECURITY DEFINER não há RLS:
+-- `private.is_admin()` é a ÚNICA coisa que barra.
+-- -----------------------------------------------------------------------------
+
+-- 115. Admin suspenso cria canil.
+do $$
+declare v_erro text;
+begin
+  update public.profiles set suspended_at = now()
+   where id = 'b1000000-0000-4000-8000-000000000006';
+
+  begin
+    set local role authenticated;
+    set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000006","role":"authenticated"}';
+    perform public.admin_create_kennel_for_user(
+      p_owner_id => 'b1000000-0000-4000-8000-000000000011',
+      p_name     => 'Canil de Admin Suspenso',
+      p_slug     => 'battery-canil-suspenso',
+      p_reason   => 'admin suspenso tentando criar canil — caso de bateria'
+    );
+    reset role;
+    v_erro := null;
+  exception when others then
+    reset role;
+    v_erro := sqlstate;
+  end;
+
+  update public.profiles set suspended_at = null
+   where id = 'b1000000-0000-4000-8000-000000000006';
+
+  perform pg_temp.rec(115, 'admin SUSPENSO chama admin_create_kennel_for_user',
+                      '42501 insufficient_privilege',
+                      coalesce(v_erro, 'ACEITOU — SUSPENSÃO NÃO BARRA O ADMIN'),
+                      v_erro = '42501');
+end $$;
+
+-- 116. Admin suspenso publica.
+do $$
+declare v_erro text; v_k uuid;
+begin
+  select id into v_k from battery_ids where label = 'canil_para_u10';
+
+  update public.profiles set suspended_at = now()
+   where id = 'b1000000-0000-4000-8000-000000000006';
+
+  begin
+    set local role authenticated;
+    set local "request.jwt.claims" to '{"sub":"b1000000-0000-4000-8000-000000000006","role":"authenticated"}';
+    perform public.admin_set_kennel_published(v_k, true, 'admin suspenso publicando — bateria');
+    reset role;
+    v_erro := null;
+  exception when others then
+    reset role;
+    v_erro := sqlstate;
+  end;
+
+  update public.profiles set suspended_at = null
+   where id = 'b1000000-0000-4000-8000-000000000006';
+
+  perform pg_temp.rec(116, 'admin SUSPENSO chama admin_set_kennel_published',
+                      '42501 insufficient_privilege',
+                      coalesce(v_erro, 'ACEITOU — SUSPENSÃO NÃO BARRA A PUBLICAÇÃO'),
+                      v_erro = '42501');
+end $$;
+
 -- -----------------------------------------------------------------------------
 -- Limpeza. Vem ANTES do relatório de propósito: a Management API devolve o
 -- resultado do último statement, então o SELECT final tem de ser o último.
@@ -2392,6 +2923,17 @@ end $$;
 
 -- Mídia antes dos canis: media.kennel_id é FK RESTRICT.
 delete from public.media where storage_path like 'battery/%';
+
+-- Cinto para qualquer mídia de fixture que não caia no padrão de caminho acima
+-- — `admin_register_media_for_user` grava sob o prefixo do DONO, não sob
+-- 'battery/'. Precisa vir antes de `auth.users` (owner_id é FK RESTRICT).
+--
+-- NÃO há `delete from storage.objects` aqui, e a ausência é obrigatória:
+-- `storage.protect_delete()` recusa DELETE direto naquela tabela. É por isso
+-- que este arquivo não cria objeto de Storage nenhum — ver a nota antes do
+-- caso 114.
+delete from public.media
+ where owner_id in (select id from auth.users where email like 'battery-%@example.test');
 -- Vídeo antes dos cães: dog_videos.dog_id é FK RESTRICT.
 delete from public.dog_videos where provider_uid like 'battery-%';
 delete from public.dog_identifiers

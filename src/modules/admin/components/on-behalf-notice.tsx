@@ -18,17 +18,23 @@ export function OnBehalfNotice({
   ownerSuspended,
   children,
 }: {
-  kennelName: string;
+  /**
+   * Ausente no cadastro de CANIL, e a ausência é literal: ali o canil ainda não
+   * existe, então não há nome a citar. Nos demais cadastros o canil de destino
+   * é a informação que evita o engano, e some da frase se não vier.
+   */
+  kennelName?: string;
   ownerName: string;
   ownerSuspended: boolean;
-  /** A frase específica do que está sendo cadastrado (cão ou ninhada). */
+  /** A frase específica do que está sendo cadastrado (canil, cão ou ninhada). */
   children: ReactNode;
 }) {
   return (
     <div className="border-warning-subtle bg-warning-subtle rounded-card flex flex-col gap-4 border p-5">
       <div className="flex flex-col gap-1">
         <p className="text-fg text-sm font-medium">
-          Você está cadastrando em nome de {ownerName}, no {kennelName}.
+          Você está cadastrando em nome de {ownerName}
+          {kennelName ? `, no ${kennelName}` : ""}.
         </p>
         <p className="text-fg-muted text-sm">
           {children} A autoria fica registrada como sua, e esta criação vai para o Histórico com o

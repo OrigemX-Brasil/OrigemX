@@ -16,19 +16,26 @@ import {
   type MediaRole,
 } from "../constraints";
 import { compressImage } from "../resize";
+import type { RegisterAction } from "../upload-one";
 
 /**
  * Envio de imagem.
  *
  * O fluxo tem três passos e a ordem importa:
  *   1. comprimir NO CLIENT — é o que decide se o plano de armazenamento dura;
- *   2. subir os dois arquivos direto para o Storage, com a sessão do usuário,
- *      onde a policy compara o primeiro segmento do caminho com auth.uid();
+ *   2. subir os dois arquivos direto para o Storage, com a sessão de quem está
+ *      logado, contra a policy de `storage.objects` do bucket privado;
  *   3. registrar a metadata numa Server Action, que reconfere tamanho e mime
  *      lendo o Storage — nunca acreditando no que este componente afirma.
  *
  * O binário não passa pelo servidor Next em momento nenhum, e nunca vira
  * base64: sempre Blob.
+ *
+ * `ownerId` é o dono do ARQUIVO, e nem sempre é quem está logado: quando um
+ * admin envia em nome de um criador, o caminho continua começando pelo id do
+ * CRIADOR — é `private.can_write_storage_prefix` que autoriza a sessão do admin
+ * a escrever ali, e é o que mantém `media.owner_id` igual ao primeiro segmento
+ * do caminho.
  */
 export function ImageUploader({
   role,
@@ -38,6 +45,7 @@ export function ImageUploader({
   helpText,
   onUploaded,
   consent,
+  registerAction = registerMedia,
 }: {
   role: MediaRole;
   entityId: string;
@@ -45,6 +53,14 @@ export function ImageUploader({
   label: string;
   helpText?: string;
   onUploaded?: () => void;
+  /**
+   * Qual Server Action registra a metadata, no passo 3. Default `registerMedia`
+   * — o comportamento de sempre, para quem não passa nada. O painel
+   * administrativo passa `registerMediaForUser`, que deriva o dono da ENTIDADE
+   * e grava a linha de auditoria. Mesma prop, mesmo nome e mesma razão de
+   * `uploadOneImage` (`../upload-one`), que a galeria já usa.
+   */
+  registerAction?: RegisterAction;
   /**
    * Gate de consentimento por ENVIO — hoje só `testimonial_avatar` usa. Sem
    * esta prop, o componente nasce exatamente como sempre foi: campo de
@@ -138,7 +154,7 @@ export function ImageUploader({
       fd.set("height", String(full.height));
       if (consent) fd.set(consent.fieldName, consented ? "on" : "off");
 
-      const result = await registerMedia({}, fd);
+      const result = await registerAction({}, fd);
       setStatus(null);
 
       if (result.error) {

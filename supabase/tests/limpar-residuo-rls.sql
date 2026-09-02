@@ -31,6 +31,7 @@ declare
   v_canis    uuid[];
   v_donos    uuid[];
   v_caes     uuid[];
+  n_filhotes integer;
   n_caes     integer;
   n_canis    integer;
   n_users    integer;
@@ -54,25 +55,45 @@ begin
     return;
   end if;
 
-  -- Um cão de teste não pode ser pai de um cão real. Se for, o DELETE abaixo
-  -- falha por FK e a transação inteira volta — que é o comportamento certo:
-  -- melhor abortar do que mutilar a árvore de alguém.
-  update public.dogs
-     set sire_id = null, dam_id = null
-   where id = any (v_caes);
-
   delete from public.media           where dog_id = any (v_caes) or kennel_id = any (v_canis) or owner_id = any (v_donos);
   -- `dog_videos.dog_id` é ON DELETE RESTRICT: sem esta linha, o delete de
   -- `dogs` abaixo apanha e a transação inteira volta.
   delete from public.dog_videos      where dog_id = any (v_caes) or owner_id = any (v_donos);
   delete from public.dog_identifiers where dog_id = any (v_caes);
-  delete from public.dogs            where id = any (v_caes);
-  get diagnostics n_caes = row_count;
+
+  -- A NINHADA FICA NO MEIO DOS CÃES, e as três etapas são obrigatórias por FKs
+  -- ON DELETE RESTRICT que apontam em sentidos OPOSTOS:
+  --
+  --   dogs.litter_id         -> kennel_litters   o FILHOTE sai antes da ninhada
+  --   kennel_litters.sire_id -> dogs             a NINHADA sai antes do pai/mãe
+  --   kennel_litters.dam_id  -> dogs
+  --
+  -- E o `update` que zera o parentesco tem de vir DEPOIS dos filhotes saírem:
+  -- `dogs_check_litter_parents` recusa um filhote cujo par divirja do par da
+  -- ninhada, então zerar sire/dam de um filhote levanta 23514 e derruba a
+  -- transação inteira. Este arquivo é anterior à ninhada, e foi assim que ele
+  -- passou a falhar sem ninguém notar.
+  delete from public.dogs where id = any (v_caes) and litter_id is not null;
+  get diagnostics n_filhotes = row_count;
 
   -- `kennel_litters.kennel_id` também é ON DELETE RESTRICT. A tabela não tem
   -- `owner_id` próprio — posse é sempre via canil — então o filtro é só por
   -- `kennel_id`, não por dono.
   delete from public.kennel_litters where kennel_id = any (v_canis);
+
+  -- Só agora: sem filhote sobrando, o trigger acima não tem o que recusar.
+  --
+  -- Um cão de teste não pode ser pai de um cão real. Se for, o DELETE abaixo
+  -- falha por FK e a transação inteira volta — que é o comportamento certo:
+  -- melhor abortar do que mutilar a árvore de alguém.
+  update public.dogs
+     set sire_id = null, dam_id = null
+   where id = any (v_caes)
+     and litter_id is null;
+
+  delete from public.dogs where id = any (v_caes);
+  get diagnostics n_caes = row_count;
+  n_caes := n_caes + n_filhotes;
 
   delete from public.kennels where id = any (v_canis);
   get diagnostics n_canis = row_count;

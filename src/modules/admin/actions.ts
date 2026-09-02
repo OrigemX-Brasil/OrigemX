@@ -12,6 +12,14 @@ import {
   type DogFieldErrors,
   type DogInput,
 } from "@/modules/dogs/validation";
+import type { KennelFormState } from "@/modules/kennels/actions";
+import { KENNEL_FORM_FIELDS } from "@/modules/kennels/fields";
+import { isSlugTaken } from "@/modules/kennels/queries";
+import {
+  normalizeKennelInput,
+  validateKennel,
+  type KennelInput,
+} from "@/modules/kennels/validation";
 import { LITTER_FIELDS } from "@/modules/litters/fields";
 import {
   normalizeLitterInput,
@@ -19,6 +27,31 @@ import {
   type FieldErrors as LitterFieldErrors,
   type LitterInput,
 } from "@/modules/litters/validation";
+import { parentPublishState, type MediaActionState } from "@/modules/media/actions";
+import {
+  BUCKET_PRIVATE,
+  BUCKET_PUBLIC,
+  MAX_GALLERY_ITEMS,
+  pathBelongsTo,
+  targetBucketFor,
+  validateQuota,
+  validateStoredFile,
+} from "@/modules/media/constraints";
+import {
+  kennelSlugOf,
+  publishedLitterPublicIds,
+  revalidateDogPaths,
+  revalidateKennelPaths,
+} from "@/modules/media/publish-targets";
+import type { PublishState } from "@/modules/media/publish";
+import { countDogGallery, getUsedBytes, statStorageObject } from "@/modules/media/queries";
+import {
+  dogMediaRows,
+  kennelMediaRows,
+  litterMediaRowsForKennel,
+  reconcileMediaBucket,
+  testimonialMediaRowsForKennel,
+} from "@/modules/media/sync";
 
 import { resolveHideReason, resolveSuspendReason } from "./format";
 
@@ -352,4 +385,429 @@ export async function createLitterForUser(
   // link útil apontaria de volta para a lista do canil. O id vai na query e a
   // tela do canil confirma a criação destacando a linha nova.
   redirect(`/admin/canis/${kennelId}?criada=${data}`);
+}
+
+/* ===========================================================================
+ * CANIL EM NOME DE OUTRA PESSOA — o primeiro degrau
+ * ===========================================================================
+ *
+ * Sem isto, as duas ações acima não têm onde acontecer para quem acabou de
+ * chegar: cão e ninhada exigem canil de destino, e o painel do usuário sem
+ * canil não oferecia nada.
+ */
+
+function readKennelForm(formData: FormData): KennelInput {
+  const input: KennelInput = {};
+  for (const field of KENNEL_FORM_FIELDS) {
+    const raw = formData.get(field.name);
+    if (typeof raw === "string") input[field.name] = raw;
+  }
+  return input;
+}
+
+/**
+ * Cadastra o canil de outra pessoa. Nasce SEMPRE rascunho — a RPC não aceita
+ * `published_at`.
+ *
+ * REUSA `KennelFormState` em vez de declarar um estado próprio: todos os
+ * membros são opcionais, então o `KennelForm` aceita este retorno sem
+ * conversão, e um tipo a mais só criaria duas definições para manter em dia.
+ */
+export async function createKennelForUser(
+  _prev: KennelFormState,
+  formData: FormData,
+): Promise<KennelFormState> {
+  await requireAdmin();
+
+  const ownerId = readId(formData, "owner_id");
+  const reason = String(formData.get("reason") ?? "").trim();
+  const input = readKennelForm(formData);
+
+  if (!ownerId) return { formError: "Usuário de destino não identificado.", values: input };
+  if (reason.length < 3) {
+    return { formError: "Descreva o motivo do cadastro (mínimo 3 caracteres).", values: input };
+  }
+
+  const errors = validateKennel(input);
+  if (Object.keys(errors).length > 0) return { errors, values: input };
+
+  const values = normalizeKennelInput(input);
+  const { name, slug } = values;
+  if (!name || !slug) {
+    return { formError: "Nome e endereço público são obrigatórios.", values: input };
+  }
+
+  // Consulta antes de gravar SÓ pela mensagem — é o que faz o erro aparecer no
+  // campo do endereço em vez de virar banner acima do formulário. Quem GARANTE
+  // continua sendo `kennels_slug_key`, e a RPC traduz o 23505 se a corrida
+  // escapar daqui. Mesmo par de defesas de `createKennel`.
+  if (await isSlugTaken(slug)) {
+    return {
+      errors: {
+        slug: "Esse endereço já está em uso. O endereço fica reservado mesmo se o canil for excluído.",
+      },
+      values: input,
+    };
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("admin_create_kennel_for_user", {
+    p_owner_id: ownerId,
+    p_name: name,
+    p_slug: slug,
+    p_reason: reason,
+    p_description: values.description ?? undefined,
+    p_city: values.city ?? undefined,
+    p_state: values.state ?? undefined,
+    p_website_url: values.website_url ?? undefined,
+    p_instagram_handle: values.instagram_handle ?? undefined,
+    p_whatsapp: values.whatsapp ?? undefined,
+    p_registration_number: values.registration_number ?? undefined,
+  });
+
+  if (error || !data) {
+    return { formError: error?.message ?? "Não foi possível cadastrar o canil.", values: input };
+  }
+
+  revalidatePath(`/admin/usuarios/${ownerId}`);
+  revalidatePath("/admin/canis");
+  revalidatePath("/admin/historico");
+  // Vai direto para a tela do canil: é de lá que saem cão e ninhada, então o
+  // próximo passo do admin já está na tela onde ele cai.
+  redirect(`/admin/canis/${data}`);
+}
+
+/* ===========================================================================
+ * MÍDIA EM NOME DO DONO
+ * ===========================================================================
+ */
+
+/**
+ * Registra a metadata da imagem que o admin acabou de subir para o prefixo do
+ * DONO.
+ *
+ * A assinatura é a de `RegisterAction` (`media/upload-one.ts`) porque é
+ * exatamente ali que ela é injetada: `uploadOneImage` já aceita `ownerId` e
+ * `registerAction` como parâmetros — foi desenhado para isto —, então o
+ * caminho do dono não muda em nada.
+ *
+ * QUOTA E TETO DE GALERIA FICAM AQUI, e não na RPC: são limites de PLANO, não
+ * invariantes de segurança, e as constantes vivem em `media/constraints.ts`.
+ * Duplicá-las em SQL criaria dois números para manter iguais. A quota é cobrada
+ * do DONO (`getUsedBytes(ownerId)`), nunca do admin — o arquivo ocupa o plano
+ * de quem vai ficar com ele.
+ *
+ * O `reason` NÃO vem do `uploadOneImage`: quem o injeta no `FormData` é o
+ * wrapper client da tela de upload, que o guarda no estado. Sem ele a RPC
+ * recusa, porque `private.audit()` exige motivo.
+ */
+export async function registerMediaForUser(
+  _prev: MediaActionState,
+  formData: FormData,
+): Promise<MediaActionState> {
+  await requireAdmin();
+
+  const role = String(formData.get("role") ?? "");
+  const entityId = String(formData.get("entity_id") ?? "");
+  const storagePath = String(formData.get("storage_path") ?? "");
+  const thumbPath = String(formData.get("thumb_path") ?? "") || null;
+  const width = Number(formData.get("width") ?? 0) || null;
+  const height = Number(formData.get("height") ?? 0) || null;
+  const reason = String(formData.get("reason") ?? "").trim();
+
+  if (role !== "kennel_logo" && role !== "dog_gallery") {
+    return { error: "Tipo de mídia inválido para envio por admin." };
+  }
+  if (!entityId || !storagePath) return { error: "Envio incompleto." };
+  if (reason.length < 3) return { error: "Descreva o motivo do envio (mínimo 3 caracteres)." };
+
+  const supabase = await createClient();
+  const cleanup = async () => {
+    const paths = [storagePath, thumbPath].filter((p): p is string => Boolean(p));
+    await supabase.storage.from(BUCKET_PRIVATE).remove(paths);
+  };
+
+  // O DONO sai da ENTIDADE, aqui e na RPC — a checagem é dupla de propósito:
+  // esta dá mensagem decente e permite limpar o arquivo órfão; a de lá é a que
+  // vale, porque um POST direto pula esta função inteira.
+  const ownerId = await ownerOfMediaTarget(supabase, role, entityId);
+  if (!ownerId) {
+    await cleanup();
+    return { error: "Não foi possível identificar o dono deste registro." };
+  }
+
+  // O caminho tem de começar pelo id do DONO, não do admin. A policy de Storage
+  // já barra o upload fora de um prefixo válido, mas ela aceita QUALQUER perfil
+  // vivo quando quem escreve é admin — então é esta linha que amarra o arquivo
+  // ao dono certo.
+  if (!pathBelongsTo(storagePath, ownerId) || (thumbPath && !pathBelongsTo(thumbPath, ownerId))) {
+    await cleanup();
+    return { error: "Caminho de arquivo inválido." };
+  }
+
+  const full = await statStorageObject(BUCKET_PRIVATE, storagePath);
+  if (!full) return { error: "Arquivo não encontrado no armazenamento. Tente enviar de novo." };
+
+  const check = validateStoredFile({ mime: full.mime, size: full.size });
+  if (!check.ok) {
+    await cleanup();
+    return { error: check.reason };
+  }
+
+  const thumb = thumbPath ? await statStorageObject(BUCKET_PRIVATE, thumbPath) : null;
+
+  const used = await getUsedBytes(ownerId);
+  const quota = validateQuota(used, full.size + (thumb?.size ?? 0));
+  if (!quota.ok) {
+    await cleanup();
+    return { error: quota.reason };
+  }
+
+  if (role === "dog_gallery") {
+    const current = await countDogGallery(entityId);
+    if (current >= MAX_GALLERY_ITEMS) {
+      await cleanup();
+      return { error: `A galeria aceita no máximo ${MAX_GALLERY_ITEMS} imagens.` };
+    }
+  }
+
+  const { data, error } = await supabase.rpc("admin_register_media_for_user", {
+    p_role: role,
+    p_entity_id: entityId,
+    p_storage_path: storagePath,
+    p_reason: reason,
+    p_thumb_path: thumbPath ?? undefined,
+    p_width: width ?? undefined,
+    p_height: height ?? undefined,
+  });
+
+  if (error || !data) {
+    await cleanup();
+    return { error: error?.message ?? "Não foi possível registrar a imagem." };
+  }
+
+  // Mesma correção do bug relatado em `registerMedia`: foto adicionada depois de
+  // a entidade já estar publicada ficaria presa no bucket privado, invisível na
+  // página pública sem erro nenhum.
+  const parent = await parentPublishState(supabase, role, entityId);
+  if (targetBucketFor(parent.isPublished) === BUCKET_PUBLIC) {
+    const outcome = await reconcileMediaBucket(
+      supabase,
+      [{ id: data, bucket_id: BUCKET_PRIVATE, storage_path: storagePath, thumb_path: thumbPath }],
+      BUCKET_PUBLIC,
+    );
+    if (outcome.failed.length > 0) {
+      console.error(
+        `[admin:registerMediaForUser] falha ao mover ${data} para o bucket público:`,
+        outcome.failed.map((f) => f.reason).join("; "),
+      );
+    } else if (parent.publicPath) {
+      revalidatePath(parent.publicPath);
+    }
+  }
+
+  if (role === "kennel_logo") {
+    revalidatePath(`/admin/canis/${entityId}`);
+    revalidatePath(`/painel/canis/${entityId}`);
+    // O logo é a peça que costuma FECHAR a elegibilidade do selo Fundador
+    // (nome, cidade, estado, logo e ao menos um cão). Se queimou número, foi
+    // agora — e a tela do selo precisa refletir isso.
+    revalidatePath("/admin/selo-fundador");
+  } else {
+    revalidatePath(`/admin/caes/${entityId}`);
+    revalidatePath(`/painel/caes/${entityId}`);
+  }
+  revalidatePath("/admin/historico");
+
+  return { mediaId: data };
+}
+
+/** O dono do registro que vai receber a mídia. `null` quando não há um. */
+async function ownerOfMediaTarget(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  role: "kennel_logo" | "dog_gallery",
+  entityId: string,
+): Promise<string | null> {
+  if (role === "kennel_logo") {
+    const { data } = await supabase
+      .from("kennels")
+      .select("owner_id")
+      .eq("id", entityId)
+      .is("deleted_at", null)
+      .maybeSingle();
+    return data?.owner_id ?? null;
+  }
+
+  const { data } = await supabase
+    .from("dogs")
+    .select("owner_id")
+    .eq("id", entityId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  // `dogs.owner_id` é NULLABLE — ancestral fantasma não tem dono, e portanto não
+  // tem prefixo de Storage nem plano a que cobrar o arquivo.
+  return data?.owner_id ?? null;
+}
+
+/* ===========================================================================
+ * PUBLICAR PELO PAINEL ADMINISTRATIVO — a porta que faltava ter rastro
+ * ===========================================================================
+ *
+ * NÃO É PORTA NOVA. `dogs_update` e `kennels_update_own` sempre carregaram
+ * `or private.is_admin()`, e `publishDog`/`publishKennel` nunca filtraram
+ * posse — um admin já publicava qualquer registro, pelo caminho do dono, sem
+ * deixar rastro nenhum. O que muda é que agora existe uma porta que AUDITA, e o
+ * caminho do dono passou a recusar quem não é dono (ver `ehDonoDoCao` em
+ * `media/publish.ts`).
+ *
+ * A ORDEM DAS OPERAÇÕES É A MESMA de `media/publish.ts`, e pelo mesmo motivo:
+ * ao publicar, move o arquivo PRIMEIRO (entidade pública com mídia privada
+ * quebra a imagem de forma permanente, porque a página cacheada não pode usar
+ * URL assinada); ao despublicar, tira do ar PRIMEIRO (o passo que importa para
+ * privacidade não pode ficar refém de um soluço do Storage).
+ *
+ * SEM E-MAIL AO DONO, de propósito. O aditivo de e-mail define os quatro
+ * disparos como "ação DO USUÁRIO no nosso código", e um admin publicando não é
+ * ação dele. Publicar pelo painel do dono continua disparando normalmente.
+ */
+
+function readPublishInput(formData: FormData): { id: string; publicar: boolean; reason: string } {
+  return {
+    id: String(formData.get("id") ?? ""),
+    publicar: formData.get("published") === "true",
+    reason: String(formData.get("reason") ?? "").trim(),
+  };
+}
+
+export async function setDogPublishedByAdmin(formData: FormData): Promise<PublishState> {
+  await requireAdmin();
+
+  const { id, publicar, reason } = readPublishInput(formData);
+  if (!id) return { error: "Cão não identificado." };
+  if (reason.length < 3) return { error: "Descreva o motivo (mínimo 3 caracteres)." };
+
+  const supabase = await createClient();
+  const { data: dog } = await supabase
+    .from("dogs")
+    .select("id, public_id, kennels(slug)")
+    .eq("id", id)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (!dog) return { error: "Cão não encontrado." };
+
+  if (publicar) {
+    const sync = await reconcileMediaBucket(supabase, await dogMediaRows(supabase, id), BUCKET_PUBLIC);
+    if (sync.failed.length > 0) {
+      return {
+        error:
+          "Não foi possível preparar as imagens para o acesso público. O cão NÃO foi publicado — tente de novo.",
+      };
+    }
+  }
+
+  const { error } = await supabase.rpc("admin_set_dog_published", {
+    p_dog_id: id,
+    p_published: publicar,
+    p_reason: reason,
+  });
+  // A RPC levanta em português — mensagem vai direto para a tela.
+  if (error) return { error: error.message };
+
+  revalidateDogPaths(dog.public_id, id, kennelSlugOf(dog));
+  revalidatePath(`/admin/caes/${id}`);
+  revalidatePath("/admin/caes");
+  revalidatePath("/admin/historico");
+
+  if (!publicar) {
+    const sync = await reconcileMediaBucket(
+      supabase,
+      await dogMediaRows(supabase, id),
+      BUCKET_PRIVATE,
+    );
+    if (sync.failed.length > 0) {
+      return {
+        ok: true,
+        warning:
+          "O cão saiu do ar, mas não foi possível remover as fotos do endereço público. " +
+          "Quem tiver o link antigo da imagem ainda consegue abri-la. Rode a reconciliação ou tente de novo.",
+      };
+    }
+  }
+
+  return { ok: true };
+}
+
+export async function setKennelPublishedByAdmin(formData: FormData): Promise<PublishState> {
+  await requireAdmin();
+
+  const { id, publicar, reason } = readPublishInput(formData);
+  if (!id) return { error: "Canil não identificado." };
+  if (reason.length < 3) return { error: "Descreva o motivo (mínimo 3 caracteres)." };
+
+  const supabase = await createClient();
+  const { data: kennel } = await supabase
+    .from("kennels")
+    .select("id, slug")
+    .eq("id", id)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (!kennel) return { error: "Canil não encontrado." };
+
+  /**
+   * Ao PUBLICAR, só a ninhada e o depoimento JÁ publicados sobem — o que está em
+   * rascunho continua invisível pela regra dupla, então o arquivo dele fica no
+   * privado. Ao DESPUBLICAR, TUDO desce: a regra dupla esconde o canil inteiro,
+   * então nenhum arquivo pode continuar acessível no endereço público.
+   */
+  const arquivos = async () => {
+    const filtro = publicar ? { onlyPublished: true } : undefined;
+    const [doCanil, dasNinhadas, dosDepoimentos] = await Promise.all([
+      kennelMediaRows(supabase, id),
+      litterMediaRowsForKennel(supabase, id, filtro),
+      testimonialMediaRowsForKennel(supabase, id, filtro),
+    ]);
+    return [...doCanil, ...dasNinhadas, ...dosDepoimentos];
+  };
+
+  if (publicar) {
+    const sync = await reconcileMediaBucket(supabase, await arquivos(), BUCKET_PUBLIC);
+    if (sync.failed.length > 0) {
+      return {
+        error:
+          "Não foi possível preparar as imagens para o acesso público. O canil NÃO foi publicado — tente de novo.",
+      };
+    }
+  }
+
+  const { error } = await supabase.rpc("admin_set_kennel_published", {
+    p_kennel_id: id,
+    p_published: publicar,
+    p_reason: reason,
+  });
+  if (error) return { error: error.message };
+
+  revalidateKennelPaths(kennel.slug, id);
+  revalidatePath(`/admin/canis/${id}`);
+  revalidatePath("/admin/canis");
+  revalidatePath("/admin/historico");
+
+  // A REGRA DUPLA depende do canil: publicar reabre a ninhada que já estava
+  // publicada; despublicar fecha TODAS. Sem isto, `/n/[public_id]` fica preso na
+  // versão cacheada até os 300s do ISR vencerem sozinhos.
+  const ninhadas = await publishedLitterPublicIds(supabase, id, { onlyPublished: publicar });
+  for (const publicId of ninhadas) revalidatePath(`/n/${publicId}`);
+
+  if (!publicar) {
+    const sync = await reconcileMediaBucket(supabase, await arquivos(), BUCKET_PRIVATE);
+    if (sync.failed.length > 0) {
+      return {
+        ok: true,
+        warning:
+          "O canil saiu do ar, mas não foi possível remover as imagens do endereço público. " +
+          "Quem tiver o link antigo da imagem ainda consegue abri-la. Rode a reconciliação ou tente de novo.",
+      };
+    }
+  }
+
+  return { ok: true };
 }

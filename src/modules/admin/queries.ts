@@ -338,6 +338,32 @@ export async function getAdminKennelById(id: string): Promise<KennelDetail | nul
   return data as unknown as KennelDetail | null;
 }
 
+/**
+ * O canil VIVO de um usuário, para a tela dele. No singular, e o singular é a
+ * regra: `kennels_owner_uk` é único parcial em `(owner_id) where deleted_at is
+ * null`, então existe no máximo um. É isso que permite a tela do usuário
+ * oferecer "cadastrar cão" direto, sem perguntar em qual canil.
+ *
+ * COM `.is("deleted_at", null)`, ao contrário de `listKennels` e
+ * `getAdminKennelById` — e a divergência é deliberada. Aquelas telas existem
+ * para o admin AUDITAR, então mostram o excluído; esta resposta decide se ainda
+ * cabe um canil novo, e canil excluído libera a vaga. Tratar o excluído como
+ * "tem canil" bloquearia um cadastro que o banco aceitaria.
+ *
+ * `maybeSingle()` e não `single()`: não ter canil é o caso comum aqui — foi
+ * exatamente o usuário com "Canis 0" que motivou esta tela.
+ */
+export async function getKennelByOwner(ownerId: string): Promise<KennelListItem | null> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("kennels")
+    .select(KENNEL_LIST_COLUMNS)
+    .eq("owner_id", ownerId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  return data as unknown as KennelListItem | null;
+}
+
 const DOG_DETAIL_COLUMNS =
   "id, public_id, slug, name, sex, born_on, breed, color, coat, kennel_id, owner_id, sire_id, dam_id, published_at, hidden_at, deleted_at, created_at, kennel:kennels(name), owner:profiles!dogs_owner_id_fkey(full_name)";
 

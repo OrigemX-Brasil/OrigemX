@@ -3464,6 +3464,290 @@ async function main() {
   }
 
   // ---------------------------------------------------------------------------
+  // Cenário 22 — admin cadastra CANIL e MÍDIA, e PUBLICA, em nome do dono
+  //
+  // `supabase/tests/battery.sql` (Grupo 11) já prova a regra inteira, mas roda
+  // como POSTGRES na mesma sessão SQL — e há uma coisa que ele NÃO consegue
+  // alcançar de jeito nenhum: as policies de `storage.objects`. O upload não
+  // passa por Postgres, vai do navegador direto para a API do Storage. Só aqui,
+  // com chave publishable e sessão de verdade, dá para provar que a policy
+  // alargada faz o que deve:
+  //
+  //   * quem NÃO é admin continua sem escrever no prefixo alheio;
+  //   * o ADMIN escreve no prefixo do DONO — é o que a decisão de mídia exige;
+  //   * o ADMIN **não** escreve num prefixo que não é de ninguém, que é a
+  //     mitigação de `private.can_write_storage_prefix`. Sem ela, um caminho
+  //     inventado viraria arquivo que `media:reconcile` nunca encontra (ele
+  //     lista PELO PREFIXO DO DONO) e que consome plano até aparecer na fatura.
+  //
+  // E: usuário novo SEM canil, que é o caso que motivou a feature inteira — o
+  // painel mostrava "Canis 0" e não oferecia nenhum primeiro passo.
+  //
+  // Nem o canil de E nem o de D recebem cidade/estado, então nenhum fica
+  // elegível ao selo Fundador mesmo com o logo enviado abaixo — mesma escolha
+  // dos cenários anteriores, para não queimar número real da sequence.
+  // ---------------------------------------------------------------------------
+
+  const E = await createActor("e");
+  const CENARIO_22 = "22. Admin cadastra canil, mídia e publica";
+
+  // --- quem NÃO é admin continua recusado, nas quatro portas novas -----------
+
+  const bRpcKennel = await B.client.rpc("admin_create_kennel_for_user", {
+    p_owner_id: E.id,
+    p_name: "Canil Tentativa",
+    p_slug: `rls-${RUN}-tentativa-comum`,
+    p_reason: "tentativa de usuário comum via RPC",
+  });
+  record(
+    CENARIO_22,
+    "usuário comum chama admin_create_kennel_for_user",
+    "erro — insufficient_privilege",
+    bRpcKennel.error ? `erro: ${bRpcKennel.error.message}` : "EXECUTOU — CANIL CRIADO SEM ADMIN",
+    !!bRpcKennel.error,
+  );
+
+  const bRpcMedia = await B.client.rpc("admin_register_media_for_user", {
+    p_role: "kennel_logo",
+    p_entity_id: kennelD.id,
+    p_storage_path: `${D.id}/qualquer.png`,
+    p_reason: "tentativa de usuário comum via RPC",
+  });
+  record(
+    CENARIO_22,
+    "usuário comum chama admin_register_media_for_user",
+    "erro — insufficient_privilege",
+    bRpcMedia.error ? `erro: ${bRpcMedia.error.message}` : "EXECUTOU — MÍDIA REGISTRADA SEM ADMIN",
+    !!bRpcMedia.error,
+  );
+
+  const bRpcPubKennel = await B.client.rpc("admin_set_kennel_published", {
+    p_kennel_id: kennelD.id,
+    p_published: true,
+    p_reason: "tentativa de usuário comum via RPC",
+  });
+  record(
+    CENARIO_22,
+    "usuário comum chama admin_set_kennel_published",
+    "erro — insufficient_privilege",
+    bRpcPubKennel.error
+      ? `erro: ${bRpcPubKennel.error.message}`
+      : "EXECUTOU — CANIL DE TERCEIRO PUBLICADO SEM ADMIN",
+    !!bRpcPubKennel.error,
+  );
+
+  if (dogParaD) {
+    const bRpcPubDog = await B.client.rpc("admin_set_dog_published", {
+      p_dog_id: dogParaD,
+      p_published: true,
+      p_reason: "tentativa de usuário comum via RPC",
+    });
+    record(
+      CENARIO_22,
+      "usuário comum chama admin_set_dog_published",
+      "erro — insufficient_privilege",
+      bRpcPubDog.error
+        ? `erro: ${bRpcPubDog.error.message}`
+        : "EXECUTOU — CÃO DE TERCEIRO PUBLICADO SEM ADMIN",
+      !!bRpcPubDog.error,
+    );
+  }
+
+  // --- as policies de storage, que só existem nesta camada -------------------
+
+  const logoPath = `${D.id}/kennel_logo/${kennelD.id}/logo-${RUN}.png`;
+
+  const comumNoPrefixoAlheio = await B.client.storage
+    .from(BUCKET)
+    .upload(`${D.id}/kennel_logo/invasao-${RUN}.png`, PNG, { contentType: "image/png" });
+  record(
+    CENARIO_22,
+    "usuário comum grava no prefixo de D (a policy alargou só para admin)",
+    "erro de permissão",
+    comumNoPrefixoAlheio.error
+      ? `erro: ${comumNoPrefixoAlheio.error.message}`
+      : "SUCESSO — PREFIXO INVADIDO POR NÃO-ADMIN",
+    !!comumNoPrefixoAlheio.error,
+  );
+
+  const adminPrefixoInexistente = await ADMIN.client.storage
+    .from(BUCKET)
+    .upload(`00000000-0000-4000-8000-00000000dead/orfao-${RUN}.png`, PNG, {
+      contentType: "image/png",
+    });
+  record(
+    CENARIO_22,
+    "admin grava sob prefixo que não é de nenhum perfil",
+    "erro de permissão",
+    adminPrefixoInexistente.error
+      ? `erro: ${adminPrefixoInexistente.error.message}`
+      : "SUCESSO — ARQUIVO ÓRFÃO QUE A RECONCILIAÇÃO NUNCA ACHA",
+    !!adminPrefixoInexistente.error,
+  );
+
+  const adminNoPrefixoDoDono = await ADMIN.client.storage
+    .from(BUCKET)
+    .upload(logoPath, PNG, { contentType: "image/png" });
+  record(
+    CENARIO_22,
+    "admin grava no prefixo do DONO (controle: precisa funcionar)",
+    "sucesso",
+    adminNoPrefixoDoDono.error ? `erro: ${adminNoPrefixoDoDono.error.message}` : "sucesso",
+    !adminNoPrefixoDoDono.error,
+  );
+
+  // --- canil para quem ainda não tem nenhum ----------------------------------
+
+  const adminCriaCanil = await ADMIN.client.rpc("admin_create_kennel_for_user", {
+    p_owner_id: E.id,
+    p_name: "Canil de E",
+    p_slug: `rls-${RUN}-canil-de-e`,
+    p_reason: "criador sem canil pediu ajuda — caso de evidência",
+  });
+  const canilParaE = (adminCriaCanil.data as string | null) ?? null;
+
+  if (canilParaE) {
+    const { data: canilGravado } = await admin
+      .from("kennels")
+      .select("owner_id, created_by, published_at")
+      .eq("id", canilParaE)
+      .single();
+    record(
+      CENARIO_22,
+      "canil criado pelo admin pertence a E, com autoria do admin e em rascunho",
+      `owner=${E.id} created_by=${ADMIN.id} published_at=null`,
+      `owner=${canilGravado?.owner_id} created_by=${canilGravado?.created_by} ` +
+        `published_at=${canilGravado?.published_at}`,
+      canilGravado?.owner_id === E.id &&
+        canilGravado?.created_by === ADMIN.id &&
+        canilGravado?.published_at === null,
+    );
+
+    const segundoCanil = await ADMIN.client.rpc("admin_create_kennel_for_user", {
+      p_owner_id: E.id,
+      p_name: "Canil de E Bis",
+      p_slug: `rls-${RUN}-canil-de-e-bis`,
+      p_reason: "tentativa de segundo canil — caso de evidência",
+    });
+    record(
+      CENARIO_22,
+      "segundo canil para o mesmo dono (kennels_owner_uk)",
+      "erro — unique_violation",
+      segundoCanil.error
+        ? `erro: ${segundoCanil.error.message}`
+        : "EXECUTOU — DOIS CANIS VIVOS PARA O MESMO CRIADOR",
+      !!segundoCanil.error,
+    );
+
+    // O REQUISITO CENTRAL, na sessão de E de verdade — não pela chave secreta.
+    const eEditaCanil = await E.client
+      .from("kennels")
+      .update({ description: "Atualizado pelo dono" })
+      .eq("id", canilParaE)
+      .select("id");
+    record(
+      CENARIO_22,
+      "E (dono) EDITA o canil que o admin criou em nome dele",
+      "1 linha",
+      describe(eEditaCanil.error, eEditaCanil.data ?? undefined),
+      !eEditaCanil.error && (eEditaCanil.data ?? []).length === 1,
+    );
+
+    const adminPublica = await ADMIN.client.rpc("admin_set_kennel_published", {
+      p_kennel_id: canilParaE,
+      p_published: true,
+      p_reason: "dono pediu para colocar no ar — caso de evidência",
+    });
+    const { data: canilPublicado } = await admin
+      .from("kennels")
+      .select("published_at")
+      .eq("id", canilParaE)
+      .single();
+    record(
+      CENARIO_22,
+      "admin publica o canil de E, e a decisão fica na trilha",
+      "published_at preenchido",
+      adminPublica.error
+        ? `erro: ${adminPublica.error.message}`
+        : `published_at=${canilPublicado?.published_at}`,
+      !adminPublica.error && !!canilPublicado?.published_at,
+    );
+
+    const { data: trilhaPublicacao } = await admin
+      .from("audit_log")
+      .select("actor_id, reason")
+      .eq("action", "kennel.publish")
+      .eq("entity_id", canilParaE);
+    record(
+      CENARIO_22,
+      "publicação por admin gera 1 linha de auditoria identificando o admin",
+      `1 linha, ator=${ADMIN.id}`,
+      `${(trilhaPublicacao ?? []).length} linha(s), ator=${trilhaPublicacao?.[0]?.actor_id}`,
+      (trilhaPublicacao ?? []).length === 1 && trilhaPublicacao?.[0]?.actor_id === ADMIN.id,
+    );
+  } else {
+    record(
+      CENARIO_22,
+      "admin cria canil para usuário sem canil",
+      "sucesso — id devolvido",
+      adminCriaCanil.error ? `erro: ${adminCriaCanil.error.message}` : "sem id devolvido",
+      false,
+    );
+  }
+
+  // --- metadata da mídia: o dono sai da ENTIDADE ------------------------------
+
+  const midiaPrefixoErrado = await ADMIN.client.rpc("admin_register_media_for_user", {
+    p_role: "kennel_logo",
+    p_entity_id: kennelD.id,
+    p_storage_path: `${ADMIN.id}/kennel_logo/${kennelD.id}/logo-${RUN}.png`,
+    p_reason: "caminho no prefixo do admin — caso de evidência",
+  });
+  record(
+    CENARIO_22,
+    "mídia com caminho no prefixo do ADMIN, e não do dono",
+    "erro — check_violation",
+    midiaPrefixoErrado.error
+      ? `erro: ${midiaPrefixoErrado.error.message}`
+      : "EXECUTOU — METADATA APONTANDO PARA ARQUIVO DE OUTRA PESSOA",
+    !!midiaPrefixoErrado.error,
+  );
+
+  const adminRegistraMidia = await ADMIN.client.rpc("admin_register_media_for_user", {
+    p_role: "kennel_logo",
+    p_entity_id: kennelD.id,
+    p_storage_path: logoPath,
+    p_reason: "logo enviado pelo admin — caso de evidência",
+  });
+  const midiaParaD = (adminRegistraMidia.data as string | null) ?? null;
+
+  if (midiaParaD) {
+    const { data: midiaGravada } = await admin
+      .from("media")
+      .select("owner_id, created_by, mime, role")
+      .eq("id", midiaParaD)
+      .single();
+    record(
+      CENARIO_22,
+      "mídia registrada pelo admin pertence ao DONO, com mime lido do Storage",
+      `owner=${D.id} created_by=${ADMIN.id} mime=image/png`,
+      `owner=${midiaGravada?.owner_id} created_by=${midiaGravada?.created_by} ` +
+        `mime=${midiaGravada?.mime}`,
+      midiaGravada?.owner_id === D.id &&
+        midiaGravada?.created_by === ADMIN.id &&
+        midiaGravada?.mime === "image/png",
+    );
+  } else {
+    record(
+      CENARIO_22,
+      "admin registra logo em nome de D",
+      "sucesso — id devolvido",
+      adminRegistraMidia.error ? `erro: ${adminRegistraMidia.error.message}` : "sem id devolvido",
+      false,
+    );
+  }
+
+  // ---------------------------------------------------------------------------
   // Limpeza
   //
   // POR POSSE, não por padrão de slug — e esta distinção não é estilo.
@@ -3480,12 +3764,20 @@ async function main() {
   // que `e2e/support/admin.ts` já documenta.
   // ---------------------------------------------------------------------------
 
-  const atores = [A, B, C, S, U, ADMIN, D, ...founders];
+  const atores = [A, B, C, S, U, ADMIN, D, E, ...founders];
   const ids = atores.map((a) => a.id);
 
   await admin.storage
     .from(BUCKET)
-    .remove([`${A.id}/de-a-${RUN}.png`, `${B.id}/proprio-${RUN}.png`]);
+    .remove([
+      `${A.id}/de-a-${RUN}.png`,
+      `${B.id}/proprio-${RUN}.png`,
+      // Cenário 22: o logo que o ADMIN gravou sob o prefixo de D. Sem esta
+      // linha o arquivo sobrevive à execução, e como `media:reconcile` lista
+      // pelo prefixo do dono ele apareceria como resíduo de um dono que já foi
+      // apagado.
+      `${D.id}/kennel_logo/${kennelD.id}/logo-${RUN}.png`,
+    ]);
 
   /**
    * Roda um passo da limpeza e AVISA quando ele falha, em vez de engolir.
@@ -3524,12 +3816,51 @@ async function main() {
 
   // Zera o parentesco antes de apagar: cão que é pai de outro cão do lote
   // bloquearia o próprio DELETE.
+  // A NINHADA FICA NO MEIO DOS CÃES, e as duas metades são obrigatórias por FKs
+  // que apontam em sentidos OPOSTOS — as duas são ON DELETE RESTRICT:
+  //
+  //   dogs.litter_id         -> kennel_litters   o FILHOTE sai antes da ninhada
+  //   kennel_litters.sire_id -> dogs             a NINHADA sai antes do pai/mãe
+  //   kennel_litters.dam_id  -> dogs
+  //
+  // Apagar todos os cães de uma vez e só então as ninhadas trava nas duas
+  // pontas: o progenitor não sai porque a ninhada o referencia, e a ninhada não
+  // sai porque o filhote a referencia. Como um DELETE que falha não apaga NADA,
+  // a cadeia inteira desmorona a partir daí — `kennels` e `deleteUser` incluídos.
+  //
+  // Foi exatamente isso que aconteceu na primeira execução real do cenário 21:
+  // ele é o primeiro a criar ninhada COM progenitores E filhote no mesmo lote.
+  // `supabase/tests/battery.sql` já documenta esta mesma ordem em três etapas.
+  await limpar("dogs (filhotes)", () =>
+    admin
+      .from("dogs")
+      .delete()
+      .not("litter_id", "is", null)
+      .or(`owner_id.in.(${ids.join(",")}),created_by.in.(${ids.join(",")})`),
+  );
+
+  // `kennel_litters.kennel_id` também é ON DELETE RESTRICT — mesma classe de
+  // problema que `dog_videos` já documenta acima. `created_by`, não
+  // `owner_id`: a tabela não tem coluna de posse própria.
+  await limpar("kennel_litters", () =>
+    admin.from("kennel_litters").delete().in("created_by", ids),
+  );
+
+  // Zera o parentesco antes de apagar: cão que é pai de outro cão do lote
+  // bloquearia o próprio DELETE.
+  //
+  // DEPOIS dos filhotes, e com `litter_id is null`: `dogs_check_litter_parents`
+  // recusa um filhote cujo par divirja do par da ninhada, então zerar sire/dam
+  // de um filhote levanta 23514 — e como o UPDATE é tudo-ou-nada, um único
+  // filhote no lote fazia o passo inteiro falhar e nenhum parentesco era zerado.
   await limpar("dogs (parentesco)", () =>
     admin
       .from("dogs")
       .update({ sire_id: null, dam_id: null })
+      .is("litter_id", null)
       .or(`owner_id.in.(${ids.join(",")}),created_by.in.(${ids.join(",")})`),
   );
+
   await limpar("dogs", () =>
     admin
       .from("dogs")
@@ -3538,18 +3869,6 @@ async function main() {
   );
   // Cinto: cão de slug do lote que não tenha caído nos filtros acima.
   await limpar("dogs (slug)", () => admin.from("dogs").delete().like("slug", `rls-${RUN}-%`));
-
-  // `kennel_litters.kennel_id` também é ON DELETE RESTRICT — mesma classe de
-  // problema que `dog_videos` já documenta acima. `created_by`, não
-  // `owner_id`: a tabela não tem coluna de posse própria.
-  //
-  // DEPOIS DE `dogs`, obrigatoriamente: `dogs.litter_id` é FK ON DELETE
-  // RESTRICT desde a migration `ninhada_completa_estrutura`, então apagar a
-  // ninhada antes dos filhotes dela falha. A ordem atual já está certa —
-  // este comentário existe para ela não ser trocada por engano.
-  await limpar("kennel_litters", () =>
-    admin.from("kennel_litters").delete().in("created_by", ids),
-  );
 
   await limpar("kennels", () => admin.from("kennels").delete().in("owner_id", ids));
 
