@@ -69,6 +69,40 @@ function Control({
           onFormatError={onFormatError}
           onValueChange={onValueChange}
         />
+      ) : field.input === "select" ? (
+        <select
+          id={field.name}
+          name={field.name}
+          defaultValue={defaultValue}
+          aria-describedby={describedBy}
+          aria-invalid={error ? true : undefined}
+          className={cls}
+        >
+          {/*
+            Opção vazia PRIMEIRO, e sem `disabled`: o status entra no cadastro
+            mínimo, mas o aditivo é explícito em que o mínimo não bloqueia — o
+            criador precisa poder salvar sem escolher, e voltar depois.
+          */}
+          <option value="">Selecione…</option>
+          {(field.options ?? []).map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      ) : field.input === "text" ? (
+        <input
+          id={field.name}
+          name={field.name}
+          type="text"
+          defaultValue={defaultValue}
+          maxLength={field.maxLength}
+          placeholder={field.placeholder}
+          aria-describedby={describedBy}
+          aria-invalid={error ? true : undefined}
+          onChange={onChange ? (e) => onChange(e.target.value) : undefined}
+          className={cls}
+        />
       ) : (
         <textarea
           id={field.name}
@@ -124,6 +158,9 @@ export function LitterForm({
   ownerId: string;
   litter?: {
     id: string;
+    name: string | null;
+    breed: string | null;
+    status: string | null;
     description: string | null;
     mated_on: string | null;
     born_on: string | null;

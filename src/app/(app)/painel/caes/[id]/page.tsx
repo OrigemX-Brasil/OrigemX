@@ -97,7 +97,14 @@ export default async function EditarCaoPage({ params }: { params: Promise<{ id: 
   // A completude pergunta pela MÍDIA, não por uma coluna: o cão não tem coluna
   // de foto, e a galeria já foi carregada acima — mesmo raciocínio que a página
   // do canil aplica ao logo. Pai, mãe e canil saem das colunas do próprio cão.
-  const completeness = calculateDogCompleteness({ ...dog, photo: gallery[0] ?? null });
+  // `kennel_id` carrega o item "vínculo com canil OU dono" do aditivo: qualquer
+  // um dos dois satisfaz, e é aqui que os dois viram um. Só o ancestral
+  // FANTASMA fica sem — ele não tem nem canil nem dono, por definição.
+  const completeness = calculateDogCompleteness({
+    ...dog,
+    photo: gallery[0] ?? null,
+    kennel_id: dog.kennel_id ?? dog.owner_id,
+  });
 
   return (
     <div className="flex flex-col gap-8">

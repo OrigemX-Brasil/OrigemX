@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 
+import { agendarAutoPublicacao } from "@/modules/media/auto-publish";
 import { notificarEvento } from "@/lib/notify";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/modules/auth/queries";
@@ -225,6 +226,9 @@ export async function updateKennel(
   // Sem isto, instagram/RG salvos ficavam invisíveis na página pública por até
   // 5 minutos.
   if (values.slug) revalidatePath(`/c/${values.slug}`);
+  // Editar pode ter fechado o cadastro mínimo (cidade, estado, raças,
+  // WhatsApp). Quem decide é `devePublicarSozinho`; aqui só se avisa.
+  agendarAutoPublicacao("kennel", id);
   return { ok: true, values: input };
 }
 

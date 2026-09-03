@@ -132,6 +132,9 @@ export type ManageableLitter = {
   id: string;
   kennel_id: string;
   public_id: string;
+  name: string | null;
+  breed: string | null;
+  status: string | null;
   description: string | null;
   mated_on: string | null;
   born_on: string | null;
@@ -196,7 +199,7 @@ export async function getManageableLitterById(
   const { data } = await supabase
     .from("kennel_litters")
     .select(
-      `id, kennel_id, public_id, description, mated_on, born_on, sire_id, dam_id,
+      `id, kennel_id, public_id, name, breed, status, description, mated_on, born_on, sire_id, dam_id,
        published_at, created_at,
        kennels!inner(owner_id),
        sire:dogs!kennel_litters_sire_id_fkey(id, name, sex, public_id, breed, born_on, kennel_id, owner_id),
@@ -213,6 +216,9 @@ export async function getManageableLitterById(
     id: data.id,
     kennel_id: data.kennel_id,
     public_id: data.public_id,
+    name: data.name,
+    breed: data.breed,
+    status: data.status,
     description: data.description,
     mated_on: data.mated_on,
     born_on: data.born_on,

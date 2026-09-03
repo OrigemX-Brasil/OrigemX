@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { resolveOwnerId } from "@/lib/assist";
+import { agendarAutoPublicacao } from "@/modules/media/auto-publish";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/modules/auth/queries";
 import { parentPublishState, type MediaActionState } from "@/modules/media/actions";
@@ -245,6 +246,7 @@ export async function updateLitter(
   revalidatePath(`/painel/canis/${kennelId}`);
   revalidatePath(`/painel/canis/${kennelId}/ninhadas/${id}`);
   await revalidateKennelPublicPath(supabase, kennelId);
+  agendarAutoPublicacao("litter", id);
   await revalidateLitterPublicPath(supabase, id);
   return { ok: true, values: input };
 }
@@ -756,6 +758,9 @@ export async function registerLitterPhoto(
 
   revalidatePath(`/painel/canis/${litter.kennel_id}/ninhadas/${litterId}`);
   revalidatePath(`/painel/canis/${litter.kennel_id}`);
+
+  // A foto é, quase sempre, a última peça do mínimo da ninhada.
+  agendarAutoPublicacao("litter", litterId);
 
   return { mediaId };
 }

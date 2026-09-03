@@ -38,6 +38,15 @@ export type DogFieldInput = "text" | "select" | "date" | "slug" | "number" | "li
 export type DogSelectOption = { value: string; label: string };
 
 export type DogField = {
+  /**
+   * A COLUNA é NOT NULL — o formulário recusa vazio. Só `name` e `sex`.
+   *
+   * Separado de `weight` desde o aditivo de fluxo de 03/09/2026: estar no
+   * cadastro mínimo (peso `required`) não pode implicar em bloquear o salvar,
+   * senão reduzir atrito viraria aumentá-lo. Ver o mesmo par em
+   * `kennels/fields.ts`.
+   */
+  notNull?: boolean;
   name: DogFieldName;
   label: string;
   weight: FieldWeight;
@@ -67,6 +76,7 @@ export const DOG_FIELDS: readonly DogField[] = [
     name: "name",
     label: "Nome",
     weight: "required",
+    notNull: true,
     input: "text",
     publicProfile: true,
     maxLength: 120,
@@ -77,6 +87,7 @@ export const DOG_FIELDS: readonly DogField[] = [
     name: "sex",
     label: "Sexo",
     weight: "required",
+    notNull: true,
     input: "select",
     publicProfile: true,
     options: SEX_OPTIONS,
@@ -87,7 +98,7 @@ export const DOG_FIELDS: readonly DogField[] = [
   {
     name: "breed",
     label: "Raça",
-    weight: "recommended",
+    weight: "required",
     input: "text",
     publicProfile: true,
     maxLength: 120,
@@ -97,7 +108,7 @@ export const DOG_FIELDS: readonly DogField[] = [
   {
     name: "born_on",
     label: "Data de nascimento",
-    weight: "recommended",
+    weight: "required",
     input: "date",
     publicProfile: true,
     onGhostForm: true,
@@ -204,16 +215,28 @@ export type DogScoredField = {
 /**
  * Os pontuados que NÃO são campo de formulário.
  *
- * Todos `recommended`: nenhum é obrigatório para o cão existir — cão sem canil
- * é registro válido, cão sem progenitor conhecido é comum em animal adquirido,
- * e o CHECK do banco não pede foto. Marcá-los `required` faria o medidor
- * afirmar que o cadastro está quebrado quando ele só está incompleto.
+ * FOTO E VÍNCULO passaram a `required` no aditivo de fluxo de 03/09/2026: eles
+ * fazem parte do cadastro MÍNIMO, e fechar o mínimo é o que dispara "cadastro
+ * concluído" e a publicação automática.
+ *
+ * Isso NÃO os torna exigência de formulário — `required` aqui é peso, e
+ * bloquear é `notNull`. A foto, aliás, nunca poderia ser exigida no envio:
+ * `buildStoragePath` precisa do id do cão, então o registro tem de existir
+ * antes de qualquer upload.
+ *
+ * PAI E MÃE FICAM EM `recommended`, e é decisão explícita do aditivo: "não
+ * deixar pedigree obrigatório". Cão sem progenitor conhecido é comum em animal
+ * adquirido, e cobrar isso na entrada é exatamente a barreira que se quer tirar.
  */
 const DOG_EXTRA_SCORED: readonly DogScoredField[] = [
-  { name: "photo", label: "Foto", weight: "recommended" },
+  { name: "photo", label: "Foto", weight: "required" },
   { name: "sire_id", label: "Pai", weight: "recommended" },
   { name: "dam_id", label: "Mãe", weight: "recommended" },
-  { name: "kennel_id", label: "Canil", weight: "recommended" },
+  // "Vínculo com canil OU proprietário", do aditivo. Satisfeito por qualquer um
+  // dos dois, e quem resolve isso é a tela (passa `kennel_id ?? owner_id`). Na
+  // prática o dono sempre está preenchido — o item existe para o ancestral
+  // FANTASMA, que não tem nem um nem outro, não parecer cadastro pela metade.
+  { name: "kennel_id", label: "Vínculo com canil ou dono", weight: "required" },
 ] as const;
 
 /**

@@ -1,8 +1,8 @@
 import {
   KENNEL_SCORED_FIELDS,
   WEIGHT_VALUE,
-  type KennelField,
-  type KennelFieldName,
+  type KennelScoredField,
+  type KennelScoredName,
 } from "./fields";
 
 /**
@@ -17,14 +17,21 @@ import {
  * deveria exigir tocar nesta lógica.
  */
 
-export type KennelValues = Partial<Record<KennelFieldName, unknown>>;
+export type KennelValues = Partial<Record<KennelScoredName, unknown>>;
 
 export type Completeness = {
   /** Inteiro de 0 a 100. */
   percent: number;
-  /** Sem os obrigatórios, o perfil não deveria ir ao ar. */
-  missingRequired: readonly KennelField[];
-  missingRecommended: readonly KennelField[];
+  /**
+   * O que falta para o CADASTRO MÍNIMO fechar. Vazio = "cadastro concluído",
+   * e é o que dispara a publicação automática.
+   *
+   * NÃO é uma lista de pendências para cobrar do criador: o aditivo de fluxo é
+   * explícito em que a completude não pode transmitir a sensação de cadastro
+   * incompleto. Quem consome isto mostra como incentivo, nunca como erro.
+   */
+  missingRequired: readonly KennelScoredField[];
+  missingRecommended: readonly KennelScoredField[];
   filledCount: number;
   scoredCount: number;
 };
@@ -58,8 +65,8 @@ export function calculateCompleteness(values: KennelValues): Completeness {
   let totalWeight = 0;
   let filledWeight = 0;
   let filledCount = 0;
-  const missingRequired: KennelField[] = [];
-  const missingRecommended: KennelField[] = [];
+  const missingRequired: KennelScoredField[] = [];
+  const missingRecommended: KennelScoredField[] = [];
 
   for (const field of scored) {
     const weight = WEIGHT_VALUE[field.weight];
@@ -88,15 +95,3 @@ export function calculateCompleteness(values: KennelValues): Completeness {
   };
 }
 
-/**
- * Rótulo curto do estado. Serve para a UI não espalhar faixas numéricas por
- * vários componentes e elas divergirem.
- */
-export type CompletenessLevel = "vazio" | "inicial" | "parcial" | "completo";
-
-export function completenessLevel(percent: number): CompletenessLevel {
-  if (percent <= 0) return "vazio";
-  if (percent < 50) return "inicial";
-  if (percent < 100) return "parcial";
-  return "completo";
-}

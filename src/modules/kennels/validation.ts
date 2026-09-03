@@ -46,15 +46,34 @@ export function normalizeKennelInput(raw: KennelInput): KennelPatch {
     // assunto da tela; o banco guarda a forma canônica.
     if (field.input === "phone") normalized = normalized.replace(/\D/g, "");
 
+    // LISTA: o formulário entrega texto separado por vírgula; a coluna é
+    // `text[]`. Apara, descarta vazio e remove repetido — "Golden, golden"
+    // digitado por descuido não deve virar duas raças no perfil público.
+    // Lista vazia grava NULL, e não `{}`: `isFilled` trata array vazio como
+    // não preenchido, e as duas formas significando a mesma coisa acabariam
+    // divergindo em alguma consulta.
+    if (field.input === "tags") {
+      const itens = [
+        ...new Set(
+          normalized
+            .split(",")
+            .map((item) => item.trim())
+            .filter((item) => item.length > 0),
+        ),
+      ];
+      assign(out, field.name, itens.length > 0 ? itens : null);
+      continue;
+    }
+
     if (normalized.length > 0) {
       assign(out, field.name, normalized);
-    } else if (field.weight !== "required") {
+    } else if (!field.notNull) {
       // Vazio em campo não obrigatório vira null EXPLÍCITO: é assim que o dono
       // apaga uma cidade que preencheu antes. Guardar "" faria a completude
       // contar como preenchido e o perfil exibir rótulo sem conteúdo.
       assign(out, field.name, null);
     }
-    // Obrigatório vazio não entra no patch. A validação já barrou antes, e
+    // Coluna NOT NULL vazia não entra no patch. A validação já barrou antes, e
     // mandar null aqui violaria o NOT NULL da coluna.
   }
 
@@ -66,8 +85,12 @@ export function normalizeKennelInput(raw: KennelInput): KennelPatch {
  * vive em `fields.ts`, que é dado de runtime. Quem garante é o `if` acima —
  * este cast só admite isso em um lugar, em vez de espalhar `as` pelas actions.
  */
-function assign(target: KennelPatch, key: KennelFieldName, value: string | null): void {
-  (target as Record<string, string | null>)[key] = value;
+function assign(
+  target: KennelPatch,
+  key: KennelFieldName,
+  value: string | string[] | null,
+): void {
+  (target as Record<string, string | string[] | null>)[key] = value;
 }
 
 export function validateKennel(raw: KennelInput): FieldErrors {
@@ -77,12 +100,18 @@ export function validateKennel(raw: KennelInput): FieldErrors {
   for (const field of KENNEL_FORM_FIELDS) {
     const value = values[field.name];
 
-    if (field.weight === "required" && !value) {
+    if (field.notNull && !value) {
       errors[field.name] = `${field.label} é obrigatório.`;
       continue;
     }
 
     if (!value) continue;
+
+    // Lista não passa por comprimento, padrão nem URL: as três regras medem
+    // STRING, e `value.length` num array contaria itens — "no máximo 80
+    // caracteres" viraria "no máximo 80 raças". A normalização já aparou e
+    // descartou item vazio, que é tudo que uma lista precisa.
+    if (Array.isArray(value)) continue;
 
     if (field.maxLength && value.length > field.maxLength) {
       errors[field.name] = `${field.label} deve ter no máximo ${field.maxLength} caracteres.`;

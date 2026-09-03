@@ -81,14 +81,18 @@ describe("calculateDogCompleteness", () => {
   });
 
   describe("o que separa este medidor do de canil", () => {
+    // A foto entrou no cadastro MÍNIMO no aditivo de 03/09/2026 — antes era
+    // incentivo. Continua não sendo coluna de `dogs`, que é o ponto do teste.
     it("a FOTO conta, mesmo não sendo coluna de dogs", () => {
       const semFoto = calculateDogCompleteness({ ...tudo(), photo: null });
       expect(semFoto.percent).toBeLessThan(100);
-      expect(semFoto.missingRecommended.map((f) => f.name)).toContain("photo");
+      expect(semFoto.missingRequired.map((f) => f.name)).toContain("photo");
     });
 
-    it("pai, mãe e canil contam", () => {
-      for (const campo of ["sire_id", "dam_id", "kennel_id"] as const) {
+    // Pai e mãe seguem como INCENTIVO: "não deixar pedigree obrigatório" é
+    // palavra do aditivo. O vínculo, esse sim, entrou no mínimo.
+    it("pai e mãe contam como incentivo, nunca como exigência", () => {
+      for (const campo of ["sire_id", "dam_id"] as const) {
         const sem = calculateDogCompleteness({ ...tudo(), [campo]: null });
         expect(sem.percent, campo).toBeLessThan(100);
         expect(
@@ -98,22 +102,34 @@ describe("calculateDogCompleteness", () => {
       }
     });
 
-    it("cão recém-criado — só nome e sexo — fica em 40%", () => {
-      // O piso real do produto: `name` e `sex` são os únicos obrigatórios, e o
-      // formulário não deixa gravar sem eles. Se este número mudar, é porque
-      // alguém mexeu nos pesos — e a mudança tem de ser deliberada.
+    it("o VÍNCULO entrou no mínimo", () => {
+      const sem = calculateDogCompleteness({ ...tudo(), kennel_id: null });
+      expect(sem.percent).toBeLessThan(100);
+      expect(sem.missingRequired.map((f) => f.name)).toContain("kennel_id");
+    });
+
+    it("cão recém-criado — só nome e sexo — fica em 29%", () => {
+      // O piso real do produto: `name` e `sex` são as únicas colunas NOT NULL,
+      // e o formulário não deixa gravar sem elas.
+      //
+      // 29% e não 40% porque o aditivo promoveu raça, nascimento, foto e
+      // vínculo ao mínimo — o denominador cresceu de propósito, e a queda é a
+      // mensagem: há mais a ganhar preenchendo. Se este número mudar, é porque
+      // alguém mexeu nos pesos, e a mudança tem de ser deliberada.
+      //
+      // `missingRequired` com QUATRO itens é o outro lado da mesma moeda: o
+      // cadastro deste cão ainda NÃO está concluído, e é isso que segura a
+      // publicação automática.
       const r = calculateDogCompleteness({ name: "Rex", sex: "male" });
 
-      expect(r.percent).toBe(40);
-      expect(r.missingRequired).toHaveLength(0);
-      expect(r.missingRecommended.map((f) => f.name).sort()).toEqual([
+      expect(r.percent).toBe(29);
+      expect(r.missingRequired.map((f) => f.name).sort()).toEqual([
         "born_on",
         "breed",
-        "dam_id",
         "kennel_id",
         "photo",
-        "sire_id",
       ]);
+      expect(r.missingRecommended.map((f) => f.name).sort()).toEqual(["dam_id", "sire_id"]);
     });
   });
 

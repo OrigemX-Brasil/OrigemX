@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 
+import { agendarAutoPublicacao } from "@/modules/media/auto-publish";
 import { dispararPrimeiroCao } from "@/lib/notify/usuario/disparos";
 import { resolveOwnerId } from "@/lib/assist";
 import { createClient } from "@/lib/supabase/server";
@@ -130,6 +131,8 @@ export async function createDog(_prev: DogFormState, formData: FormData): Promis
   await avisarPrimeiroCao(user.id, data);
 
   revalidatePath("/painel/caes");
+  // O cão pode já nascer com o mínimo fechado — falta só a foto, quase sempre.
+  agendarAutoPublicacao("dog", data.id);
   // Para a TELA DE SUCESSO, não para o formulário de edição. Cair de volta no
   // mesmo formulário que acabou de ser preenchido — sem confirmação, e com o
   // cão em rascunho, portanto sem link público nenhum na tela — era a maior
@@ -217,6 +220,7 @@ export async function updateDog(_prev: DogFormState, formData: FormData): Promis
   }
 
   revalidatePath("/painel/caes");
+  agendarAutoPublicacao("dog", id);
   revalidatePath(`/painel/caes/${id}`);
   // Sem isto o perfil público ficava até 5min desatualizado depois de uma
   // edição — o mesmo padrão que `revalidateDog` já aplica em publish.ts.

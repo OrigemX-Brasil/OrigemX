@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import { agendarAutoPublicacao } from "@/modules/media/auto-publish";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/modules/auth/queries";
 import { getDescendantIds } from "@/modules/dogs/queries";
@@ -395,6 +396,12 @@ export async function registerMedia(
   } else {
     revalidatePath(`/painel/caes/${entityId}`);
   }
+
+  // Foto e logo costumam ser o ÚLTIMO item do mínimo a entrar — e por isso é
+  // aqui que a publicação automática mais dispara. `litter_gallery` não passa
+  // por aqui: quem registra foto de ninhada é `registerLitterPhoto`.
+  if (role === "kennel_logo") agendarAutoPublicacao("kennel", entityId);
+  else if (role === "dog_gallery") agendarAutoPublicacao("dog", entityId);
 
   return { mediaId: data.id };
 }

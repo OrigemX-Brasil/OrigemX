@@ -10,11 +10,10 @@ import { DOG_SCORED_FIELDS, WEIGHT_VALUE, type DogScoredField, type DogScoredNam
  * Função pura, mesmo contrato de `kennels/completeness.ts`: recebe valores,
  * devolve número e listas. Não fala com banco, não lê sessão, não tem data.
  *
- * `isFilled` e `completenessLevel` vêm de lá IMPORTADOS, não copiados: as duas
- * já são puras e exportadas, e "campo preenchido" tem de significar a mesma
- * coisa nos dois medidores — inclusive a parte que trata string de espaços
- * como vazia, que existe justamente para o indicador não premiar quem digita
- * " " para se livrar do aviso.
+ * `isFilled` vem de lá IMPORTADO, não copiado: "campo preenchido" tem de
+ * significar a mesma coisa nos três medidores — inclusive a parte que trata
+ * string de espaços como vazia, que existe justamente para o indicador não
+ * premiar quem digita " " para se livrar do aviso.
  *
  * O QUE É NOVO AQUI é só a lista: `DOG_SCORED_FIELDS` inclui foto, pai, mãe e
  * canil, que não são campos do formulário. Ver o comentário deles em

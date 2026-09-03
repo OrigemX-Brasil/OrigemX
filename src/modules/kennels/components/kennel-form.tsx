@@ -99,6 +99,18 @@ function Control({
   );
 }
 
+/**
+ * O valor gravado, como texto para o `<input>`.
+ *
+ * `text[]` volta com vírgula E ESPAÇO — `String(['a','b'])` daria "a,b", que o
+ * criador leria como erro de digitação dele. É o mesmo separador que
+ * `normalizeKennelInput` aceita na volta, então editar e salvar não altera nada.
+ */
+function valorSalvo(value: string | string[] | null | undefined): string {
+  if (Array.isArray(value)) return value.join(", ");
+  return String(value ?? "");
+}
+
 function Submit({ label, disabled }: { label: string; disabled?: boolean }) {
   const { pending } = useFormStatus();
   return (
@@ -124,7 +136,7 @@ export function KennelForm({
    * quebraria a chamada. Assim o componente aceita a linha inteira e ignora o
    * que não é campo dele.
    */
-  kennel?: Partial<Record<KennelFieldName, string | null>> & { id?: string };
+  kennel?: Partial<Record<KennelFieldName, string | string[] | null>> & { id?: string };
   /**
    * Ação alternativa, injetada por quem chama. Ausente = o fluxo do dono
    * (`createKennel`/`updateKennel`). É prop, e não uma tabela de modos aqui
@@ -253,7 +265,7 @@ export function KennelForm({
         <Control
           key={field.name}
           field={field}
-          defaultValue={state.values?.[field.name] ?? String(kennel?.[field.name] ?? "")}
+          defaultValue={state.values?.[field.name] ?? valorSalvo(kennel?.[field.name])}
           error={errors[field.name]}
           onNameBlur={field.name === "name" ? suggestSlug : undefined}
           slugValue={field.input === "slug" ? slug : undefined}

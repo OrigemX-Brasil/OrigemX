@@ -1,7 +1,7 @@
 import type { Database } from "@/lib/types/database";
 
 import { MAX_LITTER_DESCRIPTION_LENGTH } from "./constraints";
-import { LITTER_FIELDS, type LitterFieldName } from "./fields";
+import { LITTER_FIELDS, LITTER_STATUS_OPTIONS, type LitterFieldName } from "./fields";
 
 /**
  * Validação da ninhada. Roda no client (feedback imediato) e de novo na Server
@@ -89,6 +89,27 @@ export function validateLitter(raw: LitterInput, today: Date = new Date()): Fiel
   const description = values.description;
   if (description && description.length > MAX_LITTER_DESCRIPTION_LENGTH) {
     errors.description = `A descrição deve ter no máximo ${MAX_LITTER_DESCRIPTION_LENGTH} caracteres.`;
+  }
+
+  // Comprimento de `name` e `breed`, espelhando `kennel_litters_name_len` e
+  // `kennel_litters_breed_len`. Sem isto o excesso só apareceria como erro cru
+  // do Postgres — e o `maxLength` do `<input>` é do CLIENT, que um POST direto
+  // pula. Nenhum dos dois é exigido: fazem parte do mínimo, não do schema.
+  for (const field of LITTER_FIELDS) {
+    if (field.input !== "text" || !field.maxLength) continue;
+    const value = values[field.name];
+    if (typeof value === "string" && value.length > field.maxLength) {
+      errors[field.name] =
+        `${field.label} deve ter no máximo ${field.maxLength} caracteres.`;
+    }
+  }
+
+  // O status é lista fechada no banco (`kennel_litters_status_valid`). O
+  // `<select>` só oferece os três, mas quem manda POST direto não passa por ele
+  // — e 23514 na cara do criador não explica nada.
+  const status = values.status;
+  if (status && !LITTER_STATUS_OPTIONS.some((o) => o.value === status)) {
+    errors.status = "Status inválido.";
   }
 
   const matedOn = values.mated_on;

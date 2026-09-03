@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   calculateCompleteness,
-  completenessLevel,
   isFilled,
   type KennelValues,
 } from "./completeness";
@@ -159,13 +158,3 @@ describe("calculateCompleteness", () => {
   });
 });
 
-describe("completenessLevel", () => {
-  it("classifica as faixas", () => {
-    expect(completenessLevel(0)).toBe("vazio");
-    expect(completenessLevel(1)).toBe("inicial");
-    expect(completenessLevel(49)).toBe("inicial");
-    expect(completenessLevel(50)).toBe("parcial");
-    expect(completenessLevel(99)).toBe("parcial");
-    expect(completenessLevel(100)).toBe("completo");
-  });
-});

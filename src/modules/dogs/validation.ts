@@ -39,7 +39,7 @@ export function normalizeDogInput(
     if (field.input === "number") {
       if (normalized.length > 0) {
         assign(out, field.name, Number(normalized));
-      } else if (field.weight !== "required") {
+      } else if (!field.notNull) {
         assign(out, field.name, null);
       }
       continue;
@@ -55,7 +55,7 @@ export function normalizeDogInput(
 
       if (items.length > 0) {
         assign(out, field.name, items);
-      } else if (field.weight !== "required") {
+      } else if (!field.notNull) {
         assign(out, field.name, null);
       }
       continue;
@@ -65,7 +65,7 @@ export function normalizeDogInput(
 
     if (normalizedText.length > 0) {
       assign(out, field.name, normalizedText);
-    } else if (field.weight !== "required") {
+    } else if (!field.notNull) {
       // Vazio em campo não obrigatório vira null explícito: é assim que o dono
       // apaga uma cor que preencheu antes.
       assign(out, field.name, null);
@@ -87,7 +87,7 @@ export function validateDog(
       field.name
     ];
 
-    if (field.weight === "required" && !value) {
+    if (field.notNull && !value) {
       errors[field.name] = `${field.label} é obrigatório.`;
       continue;
     }

@@ -97,13 +97,32 @@ describe("validateKennel", () => {
     expect(validateKennel(validBase())).toEqual({});
   });
 
-  it("exige todos os campos obrigatórios da configuração", () => {
+  it("exige apenas o que a COLUNA exige (notNull), nunca o peso", () => {
     const errors = validateKennel({});
-    const obrigatorios = KENNEL_FORM_FIELDS.filter((f) => f.weight === "required").map(
-      (f) => f.name,
-    );
-    for (const nome of obrigatorios) {
+    const naoNulos = KENNEL_FORM_FIELDS.filter((f) => f.notNull).map((f) => f.name);
+    for (const nome of naoNulos) {
       expect(errors[nome], nome).toBeDefined();
+    }
+  });
+
+  /**
+   * O OUTRO LADO, e é o que sustenta o aditivo de fluxo de 03/09/2026: cidade,
+   * estado, raças, WhatsApp e logo entram no cadastro MÍNIMO (peso `required`,
+   * pesam 2 na completude) e mesmo assim NÃO podem travar o salvar.
+   *
+   * Antes do aditivo `weight === "required"` significava as duas coisas ao
+   * mesmo tempo, e promover "cidade" a obrigatória teria bloqueado a tela — o
+   * oposto do pedido. Se alguém reintroduzir esse acoplamento, é aqui que
+   * aparece.
+   */
+  it("campo do mínimo que NÃO é notNull não bloqueia o salvar", () => {
+    const errors = validateKennel({});
+    const minimoNulavel = KENNEL_FORM_FIELDS.filter((f) => f.weight === "required" && !f.notNull);
+
+    expect(minimoNulavel.length, "o mínimo precisa ter campo nulável para este teste valer").
+      toBeGreaterThan(0);
+    for (const field of minimoNulavel) {
+      expect(errors[field.name], field.name).toBeUndefined();
     }
   });
 

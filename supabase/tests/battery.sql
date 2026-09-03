@@ -3196,6 +3196,60 @@ exception when others then
                       '1 linha', 'ERRO: ' || sqlstate || ' ' || sqlerrm, false);
 end $$;
 
+-- =============================================================================
+-- Grupo 13 — cadastro mínimo: o único CHECK novo (casos 129 e 130)
+--
+-- O aditivo de fluxo de 03/09/2026 é quase todo de aplicação — pesos de campo,
+-- medidor e publicação automática são regra de TypeScript, testada por unidade
+-- sem banco. O que desceu para o schema foram colunas nulas e UMA lista
+-- fechada, e é ela que precisa de prova aqui.
+--
+-- `kennel_litters.status` NÃO reusa os valores de `dogs.litter_status`, que é
+-- do FILHOTE e tem `sold`. Aqui "encerrada" é sobre a ninhada inteira, que pode
+-- encerrar sem todos os filhotes terem saído — e é por isso que `sold` no lugar
+-- de `closed` tem de ser recusado.
+-- =============================================================================
+
+-- 129. Status fora da lista é recusado — inclusive `sold`, que é justamente o
+--      valor vizinho que alguém copiaria de `dogs.litter_status` por engano.
+do $$
+begin
+  update public.kennel_litters set status = 'sold'
+   where id = 'e1000000-0000-4000-8000-000000000002';
+  perform pg_temp.rec(129, 'status de ninhada fora da lista fechada',
+                      '23514 check_violation',
+                      'ACEITOU — LISTA DE STATUS NÃO PROTEGIDA', false);
+exception when others then
+  perform pg_temp.rec(129, 'status de ninhada fora da lista fechada',
+                      '23514 check_violation', sqlstate || ' ' || sqlerrm,
+                      sqlstate = '23514');
+end $$;
+
+-- 130. O contraste: os três valores da lista entram, e `null` também — o status
+--      faz parte do cadastro MÍNIMO, e mínimo não bloqueia gravação.
+do $$
+declare v_ok boolean := true; v_erro text;
+begin
+  begin
+    update public.kennel_litters set status = 'available'
+     where id = 'e1000000-0000-4000-8000-000000000002';
+    update public.kennel_litters set status = 'reserved'
+     where id = 'e1000000-0000-4000-8000-000000000002';
+    update public.kennel_litters set status = 'closed'
+     where id = 'e1000000-0000-4000-8000-000000000002';
+    update public.kennel_litters set status = null
+     where id = 'e1000000-0000-4000-8000-000000000002';
+  exception when others then
+    v_ok := false;
+    v_erro := sqlstate || ' ' || sqlerrm;
+  end;
+
+  perform pg_temp.rec(130, 'os três status válidos entram, e nulo também',
+                      'todos aceitos',
+                      coalesce(v_erro, 'todos aceitos'), v_ok);
+end $$;
+
+
 -- -----------------------------------------------------------------------------
 -- Limpeza. Vem ANTES do relatório de propósito: a Management API devolve o
 -- resultado do último statement, então o SELECT final tem de ser o último.

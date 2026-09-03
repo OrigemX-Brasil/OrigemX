@@ -6,6 +6,8 @@ import { getAuthUser } from "@/modules/auth/queries";
 import { LitterHealthForm } from "@/modules/health/components/litter-health-form";
 import { getManageableKennelById } from "@/modules/kennels/queries";
 import { registerLitterPhoto, softDeleteLitter } from "@/modules/litters/actions";
+import { CompletenessMeter } from "@/components/completeness-meter";
+import { calculateLitterCompleteness } from "@/modules/litters/completeness";
 import { LitterForm } from "@/modules/litters/components/litter-form";
 import { LitterPhotoGrid } from "@/modules/litters/components/litter-photo-grid";
 import { PuppyManager } from "@/modules/litters/components/puppy-manager";
@@ -60,6 +62,21 @@ export default async function EditarNinhadaPage({
         publicPath={`/n/${litter.public_id}`}
         isPublished={Boolean(litter.published_at)}
         kennelPublished={Boolean(kennel.published_at)}
+      />
+
+      {/*
+        `born_on ?? mated_on` carrega o item "nascimento OU previsão" do
+        aditivo: as duas datas valem por UMA no mínimo, e contá-las separadas
+        faria a ninhada que só tem previsão parecer duas vezes mais incompleta
+        do que está. A foto vem de `media`, como nos outros dois medidores.
+      */}
+      <CompletenessMeter
+        completeness={calculateLitterCompleteness({
+          ...litter,
+          photo: photos[0] ?? null,
+          born_on: litter.born_on ?? litter.mated_on,
+        })}
+        label="Completude do cadastro da ninhada"
       />
 
       <LitterForm kennelId={id} ownerId={user.id} litter={litter} />

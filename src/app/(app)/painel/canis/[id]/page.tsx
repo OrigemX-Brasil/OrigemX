@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 
 import { BackLink } from "@/components/back-link";
-import { getAuthUser } from "@/modules/auth/queries";
+import { getAuthUser, getCurrentProfile } from "@/modules/auth/queries";
 import { FaqSection } from "@/modules/faqs/components/faq-section";
 import { getKennelFaqs } from "@/modules/faqs/queries";
 import { softDeleteKennel } from "@/modules/kennels/actions";
@@ -63,7 +63,17 @@ export default async function EditarCanilPage({ params }: { params: Promise<{ id
 
   // A completude pergunta pela mídia, não pela coluna: o logo mora em `media`,
   // e `logo_url` seria uma segunda fonte de verdade para o mesmo fato.
-  const completeness = calculateCompleteness({ ...kennel, logo_url: logo?.storage_path ?? null });
+  //
+  // `owner_name` vem do PERFIL, não de coluna em `kennels`: o nome do
+  // responsável é o mesmo dado que já existe em `profiles.full_name`, e
+  // duplicá-lo criaria duas versões do nome da mesma pessoa — com a do canil
+  // envelhecendo em silêncio.
+  const perfil = await getCurrentProfile();
+  const completeness = calculateCompleteness({
+    ...kennel,
+    logo_url: logo?.storage_path ?? null,
+    owner_name: perfil?.full_name ?? null,
+  });
 
   return (
     <div className="flex flex-col gap-8">

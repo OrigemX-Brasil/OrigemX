@@ -186,6 +186,25 @@ Três condições fazem parte do aditivo, e não são detalhe de implementação
 7 dias após o cadastro. Ele exige execução agendada, e `agenda/lembretes` e `filas` seguem
 nesta lista — o projeto não tem `pg_cron` nem scheduler, e introduzir um é outra decisão.
 
+### Cadastro mínimo e publicação automática (aditivo de fluxo, 03/09/2026)
+
+O objetivo declarado é reduzir atrito: **primeiro o criador conclui rápido e enxerga valor;
+depois enriquecemos o perfil.** Três consequências que são invariantes agora:
+
+- **`required` em `fields.ts` significa "faz parte do MÍNIMO", não "o formulário recusa".** O que
+  bloqueia é `notNull`, e só existe onde a coluna é NOT NULL de verdade (`kennels.name`/`slug`,
+  `dogs.name`/`sex`). Antes as duas coisas eram a mesma, e promover "cidade" a obrigatória teria
+  travado a tela — o oposto do pedido.
+- **Fechar o mínimo publica o registro sozinho**, uma vez. Quem decide é `devePublicarSozinho`
+  (`modules/media/auto-publish.ts`), função pura com quatro guardas.
+- **A completude é incentivo, nunca pendência.** Nada de vermelho, nada de "falta o essencial".
+  O verde do medidor segue o MÍNIMO, não os 100%: um perfil concluído e 60% preenchido está no ar
+  e funcionando.
+
+Os conjuntos mínimos vivem em `fields.ts` de cada módulo — canil, cão e ninhada — e o medidor lê
+de lá. **Pedigree, título, exame, registro e documento continuam opcionais**, é explícito no
+aditivo.
+
 ### Ninhadas — DENTRO do escopo desde 18/08/2026 (aditivo contratual)
 
 Ninhada saiu desta lista. A versão básica (texto + até 4 fotos) entrou em 14/08/2026; a
@@ -275,6 +294,9 @@ Referência rápida — o banco é quem garante, não a aplicação.
 | Admin só escreve em registro de terceiro sob SESSÃO | `admin_assist_sessions` + `private.assisting_profile()`. As policies comparam `owner_id in ((select auth.uid()), (select private.assisting_profile()))` — os dois lados viram InitPlan, avaliados uma vez por consulta |
 | Toda escrita assistida deixa trilha | trigger `private.trg_audit_assist()` em 11 tabelas. A trilha é do BANCO: não existe caminho de aplicação que escreva sob sessão e não apareça no Histórico |
 | Mídia pertence ao dono do REGISTRO, não a quem subiu | `ownerOfMediaEntity` em `media/queries.ts`, usada por `registerMedia`. Antes era `user.id`, e isso gravou quatro fotos de um criador no nome do admin |
+| Cadastro mínimo não bloqueia o salvar | `notNull` em `fields.ts`, separado de `weight`. Só as colunas NOT NULL recusam vazio |
+| Publicar sozinho acontece no máximo UMA vez | `auto_published_at` — nunca é limpo. É o que impede a automação de republicar por cima de quem tirou do ar de propósito |
+| Publicação automática não atropela a trilha do admin | 4ª guarda de `devePublicarSozinho`: com cadastro assistido aberto, quem publica é `admin_set_*_published`, que audita |
 
 ### Schema
 

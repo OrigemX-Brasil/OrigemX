@@ -42,18 +42,27 @@ export type KennelFieldName = Extract<
   | "whatsapp"
   | "registration_number"
   | "logo_url"
+  | "breeds"
 >;
 
 /**
- * Peso na completude.
+ * Peso na completude — e, desde o aditivo de fluxo de 03/09/2026, TAMBÉM a
+ * definição do cadastro mínimo.
  *
- *   required     — sem isto o canil não existe direito. Peso 2.
+ *   required     — faz parte do MÍNIMO. Fechar todos eles é o que dispara
+ *                  "cadastro concluído" e a publicação automática. Peso 2.
  *   recommended  — o que faz o perfil público valer a visita. Peso 1.
  *   optional     — não entra na conta. Peso 0.
  *
+ * `required` NÃO SIGNIFICA MAIS "o formulário recusa". Isso agora é `notNull`,
+ * logo abaixo, e a separação é o ponto do aditivo: o criador salva com o que
+ * tiver, e o mínimo só decide quando o cadastro está concluído. Antes as duas
+ * coisas eram a mesma, e por isso promover "cidade" a obrigatória teria travado
+ * a tela — o oposto do que o aditivo pede.
+ *
  * Dois níveis de peso, e não uma escala fina, porque o número precisa ser
- * explicável ao criador: "faltam os obrigatórios" tem significado; "faltam
- * 0.35 pontos" não tem.
+ * explicável ao criador: "faltam duas coisas" tem significado; "faltam 0.35
+ * pontos" não tem.
  */
 export type FieldWeight = "required" | "recommended" | "optional";
 
@@ -71,13 +80,24 @@ export type KennelFieldInput =
   | "uf"
   | "upload"
   | "handle"
-  | "phone";
+  | "phone"
+  /** Lista digitada separada por vírgula, guardada como `text[]`. */
+  | "tags";
 
 export type KennelField = {
   name: KennelFieldName;
   label: string;
   weight: FieldWeight;
   input: KennelFieldInput;
+  /**
+   * A COLUNA é NOT NULL — o formulário recusa vazio e o normalizador nunca
+   * grava null. Só `name` e `slug`, que são o que o schema exige de verdade.
+   *
+   * Separado de `weight` de propósito: fazer parte do cadastro mínimo (peso
+   * `required`) não pode implicar em bloquear o salvar, senão o aditivo de
+   * fluxo viraria mais atrito em vez de menos.
+   */
+  notNull?: boolean;
   /** Aparece no perfil público, sem sessão. */
   publicProfile: boolean;
   help?: string;
@@ -95,6 +115,7 @@ export const KENNEL_FIELDS: readonly KennelField[] = [
     name: "name",
     label: "Nome do canil",
     weight: "required",
+    notNull: true,
     input: "text",
     publicProfile: true,
     maxLength: 120,
@@ -103,7 +124,8 @@ export const KENNEL_FIELDS: readonly KennelField[] = [
   {
     name: "slug",
     label: "URL",
-    weight: "required",
+    weight: "optional",
+    notNull: true,
     input: "slug",
     publicProfile: true,
     maxLength: 60,
@@ -124,7 +146,7 @@ export const KENNEL_FIELDS: readonly KennelField[] = [
   {
     name: "city",
     label: "Cidade",
-    weight: "recommended",
+    weight: "required",
     input: "text",
     publicProfile: true,
     maxLength: 80,
@@ -132,13 +154,22 @@ export const KENNEL_FIELDS: readonly KennelField[] = [
   {
     name: "state",
     label: "Estado",
-    weight: "recommended",
+    weight: "required",
     input: "uf",
     publicProfile: true,
     maxLength: 2,
     placeholder: "SP",
     pattern: /^[A-Z]{2}$/,
     patternError: "Use a sigla de duas letras, como SP.",
+  },
+  {
+    name: "breeds",
+    label: "Raças criadas",
+    weight: "required",
+    input: "tags",
+    publicProfile: true,
+    help: "Separe por vírgula. Ex.: Pastor Alemão, Golden Retriever.",
+    placeholder: "Pastor Alemão, Golden Retriever",
   },
   {
     name: "website_url",
@@ -164,7 +195,7 @@ export const KENNEL_FIELDS: readonly KennelField[] = [
   {
     name: "whatsapp",
     label: "WhatsApp",
-    weight: "optional",
+    weight: "required",
     input: "phone",
     publicProfile: true,
     help: "APARECE NA PÁGINA PÚBLICA. É o botão de contato das suas ninhadas. Com DDD e código do país; deixe em branco para não exibir.",
@@ -196,7 +227,7 @@ export const KENNEL_FIELDS: readonly KennelField[] = [
   {
     name: "logo_url",
     label: "Logo",
-    weight: "recommended",
+    weight: "required",
     input: "upload",
     publicProfile: true,
     // Entra no Prompt 7. Já pesa na completude porque o perfil público sem
@@ -211,8 +242,40 @@ export const KENNEL_FORM_FIELDS = KENNEL_FIELDS.filter((f) => !f.managedElsewher
 /** Campos que o perfil público exibe. */
 export const KENNEL_PUBLIC_FIELDS = KENNEL_FIELDS.filter((f) => f.publicProfile);
 
+/**
+ * O que entra na completude mas NÃO é coluna de `kennels`.
+ *
+ * "Nome do responsável" está no mínimo do aditivo, e vive em
+ * `profiles.full_name`. Não vira coluna aqui de propósito: seriam duas fontes
+ * de verdade para o nome da mesma pessoa, e a que ficasse desatualizada seria
+ * justamente a que aparece no perfil público.
+ *
+ * Mesmo mecanismo de `DOG_EXTRA_SCORED` em `dogs/fields.ts`, e pelo mesmo
+ * motivo: o medidor precisa cobrar coisas que o formulário não tem.
+ */
+export type KennelVirtualFieldName = "owner_name";
+
+export type KennelScoredName = KennelFieldName | KennelVirtualFieldName;
+
+export type KennelScoredField = {
+  name: KennelScoredName;
+  label: string;
+  weight: FieldWeight;
+};
+
+const KENNEL_EXTRA_SCORED: readonly KennelScoredField[] = [
+  { name: "owner_name", label: "Nome do responsável", weight: "required" },
+] as const;
+
 /** Campos que entram na conta de completude (peso > 0). */
-export const KENNEL_SCORED_FIELDS = KENNEL_FIELDS.filter((f) => WEIGHT_VALUE[f.weight] > 0);
+export const KENNEL_SCORED_FIELDS: readonly KennelScoredField[] = [
+  ...KENNEL_FIELDS.filter((f) => WEIGHT_VALUE[f.weight] > 0).map(({ name, label, weight }) => ({
+    name: name as KennelScoredName,
+    label,
+    weight,
+  })),
+  ...KENNEL_EXTRA_SCORED,
+];
 
 export function getKennelField(name: KennelFieldName): KennelField | undefined {
   return KENNEL_FIELDS.find((f) => f.name === name);
