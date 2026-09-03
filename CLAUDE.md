@@ -297,6 +297,24 @@ Referência rápida — o banco é quem garante, não a aplicação.
 | Cadastro mínimo não bloqueia o salvar | `notNull` em `fields.ts`, separado de `weight`. Só as colunas NOT NULL recusam vazio |
 | Publicar sozinho acontece no máximo UMA vez | `auto_published_at` — nunca é limpo. É o que impede a automação de republicar por cima de quem tirou do ar de propósito |
 | Publicação automática não atropela a trilha do admin | 4ª guarda de `devePublicarSozinho`: com cadastro assistido aberto, quem publica é `admin_set_*_published`, que audita |
+| Coluna nova nasce com GRANT | casos 131/132 da bateria. `kennels`, `dogs` e `profiles` concedem UPDATE **por COLUNA**: coluna sem `grant` faz o Postgres recusar o **UPDATE INTEIRO** com 42501, derrubando o formulário todo. Já aconteceu três vezes — comentário em migration não bastou, teste basta |
+
+### GRANT por coluna — a armadilha que já mordeu três vezes
+
+`kennels`, `dogs` e `profiles` **não** têm `grant update` no nível da tabela; têm por COLUNA.
+Toda migration que acrescenta coluna editável precisa do seu `grant update (coluna)`, senão o
+formulário inteiro para de salvar — não só o campo novo.
+
+Ocorrências: `instagram_handle`/`registration_number` (corrigido por
+`grant_kennel_instagram_registro`), e `breeds`/`auto_published_at` em `cadastro_minimo`, que
+travou o painel do canil em produção e ainda matou a publicação automática **em silêncio** (o
+42501 caía no `try/catch` do `after()`).
+
+A trava é dupla e mora nos testes, porque comentário em migration já falhou duas vezes: os casos
+131/132 comparam `pg_attribute` com uma lista declarada de exceções e falham **nomeando** a
+coluna — 131 pega a esquecida, 132 pega o oposto, que é `profiles.role` ganhar privilégio e virar
+escalada de admin. A bateria roda como superusuário, então é o Cenário 24 do `test:rls`, com
+sessão de usuário real, que exercita o GRANT como o navegador o exercita.
 
 ### Schema
 

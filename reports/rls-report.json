@@ -1,7 +1,7 @@
 {
-  "when": "2026-09-03T09:29:46.772Z",
+  "when": "2026-09-03T20:08:53.588Z",
   "project": "https://lcqhnfdsrioufwvnrqnt.supabase.co",
-  "run": "mtlboqvs",
+  "run": "mtlyip61",
   "fatal": null,
   "checks": [
     {
@@ -393,14 +393,14 @@
       "cenario": "11b. Selo Fundador (concorrência)",
       "verificacao": "nenhum número emitido abaixo de 100",
       "esperado": "todos >= 100",
-      "obtido": "min 555104, max 555108",
+      "obtido": "min 555124, max 555128",
       "status": "PASS"
     },
     {
       "cenario": "11b. Selo Fundador (concorrência)",
       "verificacao": "exclusão lógica não devolve o número ao pool",
       "esperado": "número permanece",
-      "obtido": "nº 555104",
+      "obtido": "nº 555125",
       "status": "PASS"
     },
     {
@@ -449,7 +449,7 @@
       "cenario": "12. Bucket público",
       "verificacao": "URL pública não carrega token nem expiração",
       "esperado": "sem ?token= e sem expires",
-      "obtido": "/storage/v1/object/public/kennel-media-public/3e83723f-d45e-4707-baa0-c99cb323ccc3/canis/publico-mtlboqvs.png",
+      "obtido": "/storage/v1/object/public/kennel-media-public/c78c5f2a-4214-42f0-8c64-b0cf4d55b2b7/canis/publico-mtlyip61.png",
       "status": "PASS"
     },
     {
@@ -560,8 +560,8 @@
     {
       "cenario": "14. Superfície admin_*",
       "verificacao": "admin chama admin_get_profile_email para B",
-      "esperado": "rls-mtlboqvs-b@origemx.test",
-      "obtido": "rls-mtlboqvs-b@origemx.test",
+      "esperado": "rls-mtlyip61-b@origemx.test",
+      "obtido": "rls-mtlyip61-b@origemx.test",
       "status": "PASS"
     },
     {
@@ -701,14 +701,14 @@
       "cenario": "17. Corrigir número do selo",
       "verificacao": "admin tenta atribuir a um canil o número que já pertence a outro",
       "esperado": "erro — número já pertence a outro canil",
-      "obtido": "erro: o número 555105 já pertence a outro canil",
+      "obtido": "erro: o número 555127 já pertence a outro canil",
       "status": "PASS"
     },
     {
       "cenario": "17. Corrigir número do selo",
       "verificacao": "número do canil-alvo não mudou depois da tentativa de duplicidade",
-      "esperado": "nº 555107",
-      "obtido": "nº 555107",
+      "esperado": "nº 555126",
+      "obtido": "nº 555126",
       "status": "PASS"
     },
     {
@@ -728,15 +728,15 @@
     {
       "cenario": "17. Corrigir número do selo",
       "verificacao": "audit_log grava as duas correções, de→para corretos",
-      "esperado": "2 linhas: {de:555106,para:null} e {de:null,para:555106}",
-      "obtido": "2 linha(s): [{\"de\":555106,\"para\":null},{\"de\":null,\"para\":555106}]",
+      "esperado": "2 linhas: {de:555128,para:null} e {de:null,para:555128}",
+      "obtido": "2 linha(s): [{\"de\":555128,\"para\":null},{\"de\":null,\"para\":555128}]",
       "status": "PASS"
     },
     {
       "cenario": "17. Corrigir número do selo",
       "verificacao": "canil termina com o número original — round-trip fechado",
-      "esperado": "nº 555106",
-      "obtido": "nº 555106",
+      "esperado": "nº 555128",
+      "obtido": "nº 555128",
       "status": "PASS"
     },
     {
@@ -1023,7 +1023,7 @@
       "cenario": "20. Exames genéticos",
       "verificacao": "listagem anônima sem filtro NÃO traz exame de cão em rascunho",
       "esperado": "nenhuma linha do cão em rascunho",
-      "obtido": "18 linha(s)",
+      "obtido": "20 linha(s)",
       "status": "PASS"
     },
     {
@@ -1142,14 +1142,14 @@
       "cenario": "21. Admin cadastra para outro usuário",
       "verificacao": "admin cadastra cão comum no canil de outro usuário",
       "esperado": "sucesso — id devolvido",
-      "obtido": "id c8cd456d-84cc-41ef-8119-931c7c172752",
+      "obtido": "id 5fb39c24-8a46-445e-9fa8-4c773c5f615d",
       "status": "PASS"
     },
     {
       "cenario": "21. Admin cadastra para outro usuário",
       "verificacao": "owner_id vem do canil de destino, created_by é o admin",
-      "esperado": "owner=f99436ca-8cfb-4f3a-a121-251cbdc40cb4 kennel=f99448cd-d66f-4d8a-9edf-6602c798694d created_by=4cd31599-d59a-492f-9631-d88fa8a41de9",
-      "obtido": "owner=f99436ca-8cfb-4f3a-a121-251cbdc40cb4 kennel=f99448cd-d66f-4d8a-9edf-6602c798694d created_by=4cd31599-d59a-492f-9631-d88fa8a41de9",
+      "esperado": "owner=c4109855-b6d7-4426-8557-77362c4ecc79 kennel=639d9663-ddae-40e9-8c4f-90f3b32be2e0 created_by=465c3632-c700-4a91-855a-e7e83e2efcac",
+      "obtido": "owner=c4109855-b6d7-4426-8557-77362c4ecc79 kennel=639d9663-ddae-40e9-8c4f-90f3b32be2e0 created_by=465c3632-c700-4a91-855a-e7e83e2efcac",
       "status": "PASS"
     },
     {
@@ -1163,14 +1163,14 @@
       "cenario": "21. Admin cadastra para outro usuário",
       "verificacao": "admin cadastra ninhada no canil de outro usuário",
       "esperado": "sucesso — id devolvido",
-      "obtido": "id 6d80dea1-962c-4173-880d-60cb09e4eade",
+      "obtido": "id 9aa28a84-2b53-4549-b510-7b3774c5d9ee",
       "status": "PASS"
     },
     {
       "cenario": "21. Admin cadastra para outro usuário",
       "verificacao": "ninhada nasce SEMPRE rascunho — publicar continua sendo do dono",
-      "esperado": "created_by=4cd31599-d59a-492f-9631-d88fa8a41de9 published_at=nulo",
-      "obtido": "created_by=4cd31599-d59a-492f-9631-d88fa8a41de9 published_at=nulo",
+      "esperado": "created_by=465c3632-c700-4a91-855a-e7e83e2efcac published_at=nulo",
+      "obtido": "created_by=465c3632-c700-4a91-855a-e7e83e2efcac published_at=nulo",
       "status": "PASS"
     },
     {
@@ -1183,8 +1183,8 @@
     {
       "cenario": "21. Admin cadastra para outro usuário",
       "verificacao": "filhote cadastrado pelo admin herda par e status da ninhada",
-      "esperado": "litter=6d80dea1-962c-4173-880d-60cb09e4eade status=available par=2ac1a8d3-f750-4994-8de2-5f61067c00cd/ca4e0d91-0769-49ec-bd24-635a55a5191b",
-      "obtido": "litter=6d80dea1-962c-4173-880d-60cb09e4eade status=available sire=2ac1a8d3-f750-4994-8de2-5f61067c00cd dam=ca4e0d91-0769-49ec-bd24-635a55a5191b",
+      "esperado": "litter=9aa28a84-2b53-4549-b510-7b3774c5d9ee status=available par=e9336c35-bb16-4264-bda3-af77a31da27f/eefcc517-a15c-464f-ad4a-941e8debbc24",
+      "obtido": "litter=9aa28a84-2b53-4549-b510-7b3774c5d9ee status=available sire=e9336c35-bb16-4264-bda3-af77a31da27f dam=eefcc517-a15c-464f-ad4a-941e8debbc24",
       "status": "PASS"
     },
     {
@@ -1302,8 +1302,8 @@
     {
       "cenario": "22. Admin cadastra canil, mídia e publica",
       "verificacao": "canil criado pelo admin pertence a E, com autoria do admin e em rascunho",
-      "esperado": "owner=6310fb2d-1eef-423f-9a11-741d08c1ed2e created_by=4cd31599-d59a-492f-9631-d88fa8a41de9 published_at=null",
-      "obtido": "owner=6310fb2d-1eef-423f-9a11-741d08c1ed2e created_by=4cd31599-d59a-492f-9631-d88fa8a41de9 published_at=null",
+      "esperado": "owner=7b2165ac-0e8f-4f76-a342-82c58e70e1a7 created_by=465c3632-c700-4a91-855a-e7e83e2efcac published_at=null",
+      "obtido": "owner=7b2165ac-0e8f-4f76-a342-82c58e70e1a7 created_by=465c3632-c700-4a91-855a-e7e83e2efcac published_at=null",
       "status": "PASS"
     },
     {
@@ -1324,28 +1324,28 @@
       "cenario": "22. Admin cadastra canil, mídia e publica",
       "verificacao": "admin publica o canil de E, e a decisão fica na trilha",
       "esperado": "published_at preenchido",
-      "obtido": "published_at=2026-09-03T09:29:37.807621+00:00",
+      "obtido": "published_at=2026-09-03T20:08:44.103746+00:00",
       "status": "PASS"
     },
     {
       "cenario": "22. Admin cadastra canil, mídia e publica",
       "verificacao": "publicação por admin gera 1 linha de auditoria identificando o admin",
-      "esperado": "1 linha, ator=4cd31599-d59a-492f-9631-d88fa8a41de9",
-      "obtido": "1 linha(s), ator=4cd31599-d59a-492f-9631-d88fa8a41de9",
+      "esperado": "1 linha, ator=465c3632-c700-4a91-855a-e7e83e2efcac",
+      "obtido": "1 linha(s), ator=465c3632-c700-4a91-855a-e7e83e2efcac",
       "status": "PASS"
     },
     {
       "cenario": "22. Admin cadastra canil, mídia e publica",
       "verificacao": "mídia com caminho no prefixo do ADMIN, e não do dono",
       "esperado": "erro — check_violation",
-      "obtido": "erro: o caminho precisa começar pelo id do dono (f99436ca-8cfb-4f3a-a121-251cbdc40cb4), e começa por \"4cd31599-d59a-492f-9631-d88fa8a41de9\"",
+      "obtido": "erro: o caminho precisa começar pelo id do dono (c4109855-b6d7-4426-8557-77362c4ecc79), e começa por \"465c3632-c700-4a91-855a-e7e83e2efcac\"",
       "status": "PASS"
     },
     {
       "cenario": "22. Admin cadastra canil, mídia e publica",
       "verificacao": "mídia registrada pelo admin pertence ao DONO, com mime lido do Storage",
-      "esperado": "owner=f99436ca-8cfb-4f3a-a121-251cbdc40cb4 created_by=4cd31599-d59a-492f-9631-d88fa8a41de9 mime=image/png",
-      "obtido": "owner=f99436ca-8cfb-4f3a-a121-251cbdc40cb4 created_by=4cd31599-d59a-492f-9631-d88fa8a41de9 mime=image/png",
+      "esperado": "owner=c4109855-b6d7-4426-8557-77362c4ecc79 created_by=465c3632-c700-4a91-855a-e7e83e2efcac mime=image/png",
+      "obtido": "owner=c4109855-b6d7-4426-8557-77362c4ecc79 created_by=465c3632-c700-4a91-855a-e7e83e2efcac mime=image/png",
       "status": "PASS"
     },
     {
@@ -1386,15 +1386,15 @@
     {
       "cenario": "23. Cadastro assistido",
       "verificacao": "escrita sob sessão vira trilha com o motivo da sessão",
-      "esperado": ">=1 linha, ator=4cd31599-d59a-492f-9631-d88fa8a41de9",
-      "obtido": "1 linha(s), ator=4cd31599-d59a-492f-9631-d88fa8a41de9, motivo=criador pediu ajud",
+      "esperado": ">=1 linha, ator=465c3632-c700-4a91-855a-e7e83e2efcac",
+      "obtido": "1 linha(s), ator=465c3632-c700-4a91-855a-e7e83e2efcac, motivo=criador pediu ajud",
       "status": "PASS"
     },
     {
       "cenario": "23. Cadastro assistido",
       "verificacao": "mídia gravada sob sessão nasce com owner_id do CRIADOR",
-      "esperado": "1 linha, owner=3e83723f-d45e-4707-baa0-c99cb323ccc3",
-      "obtido": "owner=3e83723f-d45e-4707-baa0-c99cb323ccc3",
+      "esperado": "1 linha, owner=c78c5f2a-4214-42f0-8c64-b0cf4d55b2b7",
+      "obtido": "owner=c78c5f2a-4214-42f0-8c64-b0cf4d55b2b7",
       "status": "PASS"
     },
     {
@@ -1416,6 +1416,27 @@
       "verificacao": "o DONO edita o próprio canil sem sessão (controle)",
       "esperado": "1 linha",
       "obtido": "1 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "24. GRANT das colunas novas",
+      "verificacao": "o DONO grava `breeds` no próprio canil",
+      "esperado": "1 linha",
+      "obtido": "1 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "24. GRANT das colunas novas",
+      "verificacao": "publicação automática grava `auto_published_at` no cão",
+      "esperado": "1 linha",
+      "obtido": "1 linha(s)",
+      "status": "PASS"
+    },
+    {
+      "cenario": "24. GRANT das colunas novas",
+      "verificacao": "o dono NÃO alcança `hidden_at`, que é moderação",
+      "esperado": "erro 42501 — barrado pelo GRANT de coluna",
+      "obtido": "erro 42501: permission denied for table dogs",
       "status": "PASS"
     }
   ]

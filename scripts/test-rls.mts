@@ -4038,6 +4038,114 @@ async function main() {
   );
 
   // ---------------------------------------------------------------------------
+  // Cenário 24 — GRANT das colunas novas
+  //
+  // `kennels`, `dogs` e `profiles` têm GRANT de UPDATE POR COLUNA. Coluna nova
+  // nasce sem privilégio, e o Postgres então recusa o UPDATE INTEIRO com 42501 —
+  // não só a coluna que falta. Foi o que travou o painel do canil em produção
+  // quando `breeds` chegou sem `grant`: nome, cidade, WhatsApp, nada salvava.
+  //
+  // A bateria SQL (Grupo 14) já compara o catálogo e falha nomeando a coluna
+  // esquecida. Este cenário existe porque ela roda como POSTGRES, que passa por
+  // cima de qualquer privilégio: nenhum caso que EXERCITA uma escrita lá enxerga
+  // GRANT. Aqui a sessão é de usuário comum, com chave publishable — é o mesmo
+  // caminho do navegador, e é a única camada onde 42501 aparece de verdade.
+  // ---------------------------------------------------------------------------
+
+  const CENARIO_24 = "24. GRANT das colunas novas";
+
+  // NÃO reusa o par `kennelA`/`dogADraft` do cenário 1: aquele canil foi
+  // EXCLUÍDO LOGICAMENTE pelo cenário 8, e o WITH CHECK de `dogs_update` exige
+  // `owns_kennel(kennel_id)`, falso para canil com `deleted_at`. A primeira
+  // versão deste cenário reusou o par antigo e falhou com 42501 — o MESMO
+  // código do defeito sob teste, por causa oposta: RLS recusando a linha nova,
+  // não privilégio faltando na coluna. Um cenário que confunde as duas coisas
+  // não prova nada sobre GRANT.
+  //
+  // PERGUNTA qual é o canil vivo de A em vez de criar um: `kennels_owner_uk`
+  // admite no máximo um vivo por dono, e A já tem o dos cenários de ninhada.
+  // Criar aqui esbarraria na única — foi o segundo erro desta mesma tentativa.
+  // Consultar em vez de fixar o nome também deixa o cenário imune à ordem: se
+  // amanhã outro canil de A for o vivo, este teste continua certo.
+  const { data: canilVivo, error: canilVivoErro } = await admin
+    .from("kennels")
+    .select("id")
+    .eq("owner_id", A.id)
+    .is("deleted_at", null)
+    .single();
+  if (!canilVivo) {
+    throw new Error(`fixture obrigatória falhou: canil vivo de A — ${canilVivoErro?.message}`);
+  }
+
+  const { data: caoRascunho, error: caoRascunhoErro } = await admin
+    .from("dogs")
+    .insert({
+      name: "Cão Publicação Automática",
+      sex: "male",
+      breed: "Teste",
+      kennel_id: canilVivo.id,
+      owner_id: A.id,
+      created_by: A.id,
+      slug: `rls-${RUN}-auto`,
+      published_at: null,
+    })
+    .select("id")
+    .single();
+  if (!caoRascunho) {
+    throw new Error(`fixture obrigatória falhou: cão rascunho de A — ${caoRascunhoErro?.message}`);
+  }
+
+  const donoGravaBreeds = await A.client
+    .from("kennels")
+    .update({ breeds: ["Pastor Alemão", "Golden Retriever"] })
+    .eq("id", canilVivo.id)
+    .select("id");
+  record(
+    CENARIO_24,
+    "o DONO grava `breeds` no próprio canil",
+    "1 linha",
+    describe(donoGravaBreeds.error, donoGravaBreeds.data ?? undefined),
+    !donoGravaBreeds.error && (donoGravaBreeds.data ?? []).length === 1,
+  );
+
+  // O UPDATE EXATO de `publicarSeConcluiu`: as duas colunas no mesmo comando,
+  // com as guardas de `is null`. É a metade silenciosa do defeito — aqui o 42501
+  // era engolido pelo try/catch do `after()`, de propósito, e a publicação
+  // automática simplesmente não acontecia sem deixar sinal nenhum.
+  const agora = new Date().toISOString();
+  const donoAutoPublicaCao = await A.client
+    .from("dogs")
+    .update({ published_at: agora, auto_published_at: agora })
+    .eq("id", caoRascunho.id)
+    .is("published_at", null)
+    .is("auto_published_at", null)
+    .select("id");
+  record(
+    CENARIO_24,
+    "publicação automática grava `auto_published_at` no cão",
+    "1 linha",
+    describe(donoAutoPublicaCao.error, donoAutoPublicaCao.data ?? undefined),
+    !donoAutoPublicaCao.error && (donoAutoPublicaCao.data ?? []).length === 1,
+  );
+
+  // E o contraste que prova que o GRANT largo não vazou: `hidden_at` é
+  // moderação de admin e continua fora do alcance do dono. Sem este caso, o
+  // Grupo 14 poderia ser satisfeito por um `grant update` na tabela inteira,
+  // que "faria os testes passarem" abrindo tudo.
+  const donoTentaEsconder = await A.client
+    .from("dogs")
+    .update({ hidden_at: agora })
+    .eq("id", caoRascunho.id)
+    .select("id");
+  record(
+    CENARIO_24,
+    "o dono NÃO alcança `hidden_at`, que é moderação",
+    "erro 42501 — barrado pelo GRANT de coluna",
+    describe(donoTentaEsconder.error, donoTentaEsconder.data ?? undefined),
+    donoTentaEsconder.error?.code === "42501",
+  );
+
+  // ---------------------------------------------------------------------------
   // Limpeza
   //
   // POR POSSE, não por padrão de slug — e esta distinção não é estilo.

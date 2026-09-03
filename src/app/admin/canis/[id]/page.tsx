@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 
 import { BackLink } from "@/components/back-link";
 import { AdminSharePanel } from "@/modules/admin/components/admin-share-panel";
+import { AssistStartDialog } from "@/modules/admin/components/assist-start-dialog";
 import { EmptyState } from "@/modules/admin/components/empty-state";
 import { FounderNumberDialog } from "@/modules/admin/components/founder-number-dialog";
 import { HideEntityDialog } from "@/modules/admin/components/hide-entity-dialog";
@@ -48,10 +49,17 @@ export const metadata: Metadata = { title: "Canil — Admin" };
  * canil pelo `/painel` do dono, SEM rastro. O que mudou é que agora existe um
  * caminho que audita — e o do dono passou a recusar quem não é dono.
  *
- * O QUE CONTINUA FORA DAQUI: editar os campos do canil. Isso é do dono, em
- * `/painel`. O que o admin cadastra nasce rascunho por construção — as RPCs de
- * criação não aceitam `published_at` —, e colocar no ar é sempre uma SEGUNDA
- * ação, com motivo próprio e linha própria no Histórico.
+ * CORREÇÃO DOS CAMPOS — continua não acontecendo NESTA tela: alterar o canil é
+ * do dono, em `/painel`. O que esta tela passou a oferecer é a PORTA para o
+ * cadastro assistido, onde o admin edita sob sessão declarada e cada escrita
+ * vira linha de `audit_log` pelo trigger. O poder é o mesmo de antes; o que
+ * mudou é a distância — antes era preciso sair daqui, achar o dono pela lista de
+ * usuários e voltar, e era esse desvio que fazia "corrigir o canil de um cliente"
+ * parecer impossível.
+ *
+ * O que o admin cadastra nasce rascunho por construção — as RPCs de criação não
+ * aceitam `published_at` —, e colocar no ar é sempre uma SEGUNDA ação, com
+ * motivo próprio e linha própria no Histórico.
  */
 export default async function AdminKennelDetailPage({
   params,
@@ -150,6 +158,37 @@ export default async function AdminKennelDetailPage({
         />
         <Row label="Cadastrado em" value={formatDateTime(kennel.created_at)} mono />
       </dl>
+
+      {/*
+        SEÇÃO PRÓPRIA, e não mais um botão no card de cadastro: são famílias
+        diferentes de ação. Os atalhos de lá CRIAM registros novos e nenhum
+        deles toca nos campos deste canil; corrigir o que já está gravado só
+        acontece sob sessão assistida. Misturar as duas coisas num card só
+        colocaria duas ações primárias disputando o mesmo olhar.
+
+        Era o desvio que fazia "corrigir o canil de um cliente" parecer
+        impossível: o botão existia, mas só na tela do DONO — daqui era preciso
+        sair, achar a pessoa na lista de usuários e voltar.
+
+        Some com dono excluído ou canil excluído: a RPC recusa abrir sessão para
+        perfil morto, e oferecer o botão seria oferecer um erro.
+      */}
+      {canCreate && owner && !owner.deleted_at ? (
+        <section className="border-border bg-surface rounded-card flex flex-col gap-4 border p-5">
+          <div className="flex flex-col gap-1">
+            <h2 className="font-display text-base font-semibold">Corrigir o cadastro</h2>
+            <p className="text-fg-muted text-sm">
+              Editar os campos do canil continua sendo do dono — o admin faz isso pelo painel dele,
+              sob cadastro assistido: você declara o motivo uma vez e cada alteração vira uma linha
+              no Histórico, no seu nome.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <AssistStartDialog profileId={kennel.owner_id} name={dono} hasKennel />
+            <span className="text-fg-muted text-sm">Abre direto neste canil.</span>
+          </div>
+        </section>
+      ) : null}
 
       {canCreate ? (
         <section className="border-warning-subtle bg-warning-subtle rounded-card flex flex-col gap-4 border p-5">

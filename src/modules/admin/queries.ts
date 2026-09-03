@@ -364,6 +364,41 @@ export async function getKennelByOwner(ownerId: string): Promise<KennelListItem 
   return data as unknown as KennelListItem | null;
 }
 
+/**
+ * O canil vivo de VÁRIOS usuários, numa consulta só.
+ *
+ * Molde de `getTestimonialAvatars` (media/queries.ts): a listagem já traz as
+ * linhas, então perguntar "e o canil de cada um?" uma vez por linha seria o
+ * N+1 que aquele padrão existe para evitar.
+ *
+ * `Map` por `owner_id`, e o singular é a mesma regra de `getKennelByOwner`:
+ * `kennels_owner_uk` garante no máximo um canil vivo por criador, então a
+ * chave nunca colide. Por isso também o `.is("deleted_at", null)` — canil
+ * excluído libera a vaga, e contá-lo como "tem canil" esconderia justamente
+ * quem ainda pode receber um.
+ *
+ * `owner_id` precisa entrar no SELECT à parte: `KENNEL_LIST_COLUMNS` não o
+ * traz (as telas que o usam já sabem de quem é o canil), e sem ele não há
+ * como montar a chave do mapa.
+ */
+export type KennelOfOwner = KennelListItem & { owner_id: string };
+
+export async function kennelsByOwners(
+  ownerIds: readonly string[],
+): Promise<Map<string, KennelOfOwner>> {
+  if (ownerIds.length === 0) return new Map();
+
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("kennels")
+    .select(`${KENNEL_LIST_COLUMNS}, owner_id`)
+    .in("owner_id", ownerIds)
+    .is("deleted_at", null);
+
+  const rows = (data ?? []) as unknown as KennelOfOwner[];
+  return new Map(rows.map((k) => [k.owner_id, k]));
+}
+
 const DOG_DETAIL_COLUMNS =
   "id, public_id, slug, name, sex, born_on, breed, color, coat, kennel_id, owner_id, sire_id, dam_id, published_at, hidden_at, deleted_at, created_at, kennel:kennels(name), owner:profiles!dogs_owner_id_fkey(full_name)";
 

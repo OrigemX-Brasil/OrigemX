@@ -38,9 +38,24 @@ export default async function AdminKennelsPage({
     <div className="flex flex-col gap-8">
       <BackLink href="/admin" label="Visão geral" />
 
-      <div className="flex flex-col gap-2">
-        <span className="text-fg-faint font-mono text-xs tracking-[0.2em] uppercase">Admin</span>
-        <h1 className="font-display text-2xl font-semibold tracking-tight">Canis</h1>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex flex-col gap-2">
+          <span className="text-fg-faint font-mono text-xs tracking-[0.2em] uppercase">Admin</span>
+          <h1 className="font-display text-2xl font-semibold tracking-tight">Canis</h1>
+        </div>
+
+        {/*
+          O ponto de entrada da criação mora AQUI, e não na tela de um canil.
+          Foi o que o PO não encontrou: a tela de cadastro sempre existiu, mas
+          só era alcançável pelo perfil do dono, e só quando ele ainda não
+          tinha canil. Quem procura "criar canil" procura na seção Canis.
+        */}
+        <Link
+          href="/admin/canis/novo"
+          className="bg-accent text-fg-on-accent hover:bg-accent-hover rounded-control px-4 py-2 text-sm font-semibold transition-colors"
+        >
+          Cadastrar canil
+        </Link>
       </div>
 
       <form method="get" className="flex flex-wrap items-end gap-3">

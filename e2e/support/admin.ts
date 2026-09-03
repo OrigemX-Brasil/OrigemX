@@ -147,6 +147,20 @@ export async function limparUsuario(userId: string): Promise<void> {
   // `owner_id` — a tabela não tem coluna de posse própria (ver a migration).
   await admin.from("kennel_litters").delete().eq("created_by", userId);
   await admin.from("kennels").delete().eq("owner_id", userId);
+  // `admin_assist_sessions` (admin_id e target_profile_id) e
+  // `audit_log` (actor_id) apontam para `profiles` com ON DELETE
+  // RESTRICT, e o RESTRICT é deliberado: trilha com ator apagado não é trilha, e
+  // sessão sem admin não diz em nome de quem se escreveu.
+  //
+  // Nenhum cenário e2e produzia essas linhas até os fluxos de cadastrar e
+  // corrigir canil pelo /admin. Sem esta limpeza o `deleteUser` abaixo
+  // falharia EM SILÊNCIO — o retorno não é checado —, deixando usuário de fixture
+  // vivo no banco. É exatamente como o projeto de dev acumulou resíduo antes.
+  await admin
+    .from("admin_assist_sessions")
+    .delete()
+    .or(`admin_id.eq.${userId},target_profile_id.eq.${userId}`);
+  await admin.from("audit_log").delete().eq("actor_id", userId);
   await admin.auth.admin.deleteUser(userId);
 }
 

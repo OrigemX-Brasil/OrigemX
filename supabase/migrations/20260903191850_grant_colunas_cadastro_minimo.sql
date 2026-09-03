@@ -1,0 +1,44 @@
+-- =============================================================================
+-- OrigemX — GRANT das colunas criadas por `cadastro_minimo`
+--
+-- CORREÇÃO DE DEFEITO EM PRODUÇÃO. O criador recebia "Você não tem permissão
+-- para esta operação." ao salvar QUALQUER campo do canil — nome, cidade,
+-- WhatsApp, descrição. Não era RLS: era privilégio de coluna.
+--
+-- `public.kennels` e `public.dogs` têm GRANT DE UPDATE POR COLUNA, não por
+-- tabela — `kennels` desde `founder_badge`, `dogs` desde `painel_admin`. Nesse
+-- regime, coluna nova nasce SEM privilégio, e o Postgres recusa o UPDATE
+-- INTEIRO com 42501, não apenas a coluna que falta. Foi o que aconteceu:
+-- `updateKennel` monta o payload a partir de `KENNEL_FORM_FIELDS`, que passou a
+-- incluir `breeds`, e o formulário todo parou de salvar.
+--
+-- O segundo efeito era silencioso e por isso pior: `publicarSeConcluiu` grava
+-- `published_at` e `auto_published_at` no mesmo UPDATE, levava 42501, e o
+-- `try/catch` do `after()` engolia — de propósito, porque cadastrar não pode
+-- falhar por causa da publicação automática. Resultado: o recurso que subiu
+-- ontem funcionava só para ninhada, e ninguém veria isso num log de usuário.
+--
+-- `kennel_litters` escapou das duas coisas porque o GRANT dela é DE TABELA
+-- (`ninhadas_do_canil`): ali coluna nova nasce coberta. É a mesma diferença que
+-- fez as sete colunas da migration anterior se dividirem em quatro que
+-- funcionaram e três que não.
+--
+-- TERCEIRA OCORRÊNCIA do mesmo esquecimento — a primeira foi
+-- `grant_kennel_instagram_registro`, e três migrations carregam comentários de
+-- alerta que não bastaram. Por isso esta correção vem acompanhada do caso 131
+-- da bateria, que compara as colunas das duas tabelas contra uma lista de
+-- exceções e falha NOMEANDO a coluna esquecida. Comentário em migration é aviso;
+-- teste é trava.
+-- =============================================================================
+
+-- `breeds` é o que trava o formulário hoje.
+--
+-- `auto_published_at` NÃO amplia poder: descreve o estado de publicação do
+-- próprio registro, exatamente como `published_at`, que já é concedida desde
+-- sempre. O pior que um criador faz escrevendo nela é deixar o PRÓPRIO perfil
+-- publicar sozinho outra vez — coisa que ele consegue com um clique em
+-- Publicar. Quem impede alcançar registro de TERCEIRO é a RLS, que filtra a
+-- linha; o GRANT só diz quais colunas o UPDATE pode tocar.
+grant update (breeds, auto_published_at) on public.kennels to authenticated;
+
+grant update (auto_published_at) on public.dogs to authenticated;

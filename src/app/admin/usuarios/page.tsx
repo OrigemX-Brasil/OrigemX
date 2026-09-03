@@ -5,7 +5,7 @@ import { BackLink } from "@/components/back-link";
 import { EmptyState } from "@/modules/admin/components/empty-state";
 import { StatusChip } from "@/modules/admin/components/status-chip";
 import { formatDateTime } from "@/modules/admin/format";
-import { listProfiles } from "@/modules/admin/queries";
+import { kennelsByOwners, listProfiles } from "@/modules/admin/queries";
 
 export const metadata: Metadata = { title: "Usuários — Admin" };
 
@@ -21,6 +21,11 @@ export default async function AdminUsersPage({
 }) {
   const { q, cursor } = await searchParams;
   const { items, nextCursor } = await listProfiles({ search: q ?? null }, { cursor });
+
+  // Uma consulta para a página inteira, não uma por linha. Sem isto o admin
+  // precisava abrir perfil por perfil só para descobrir quem ainda não tem
+  // canil — que é justamente a varredura de "muitos clientes" que o PO faz.
+  const canis = await kennelsByOwners(items.map((row) => row.id));
 
   const queryFor = (extra: Record<string, string | undefined>) => {
     const sp = new URLSearchParams();
@@ -90,6 +95,15 @@ export default async function AdminUsersPage({
                   <span className="text-accent-text font-mono text-[0.65rem] tracking-wider uppercase">
                     Admin
                   </span>
+                ) : null}
+                {/*
+                  NEUTRO, nunca de alerta: não ter canil não é falha do usuário
+                  nem pendência a cobrar — é só o que informa ao admin onde há
+                  trabalho a fazer. Some para quem está excluído, onde não há
+                  cadastro a criar.
+                */}
+                {!row.deleted_at && !canis.has(row.id) ? (
+                  <StatusChip tone="neutral">Sem canil</StatusChip>
                 ) : null}
                 {row.deleted_at ? <StatusChip tone="danger">Excluído</StatusChip> : null}
                 {!row.deleted_at && row.suspended_at ? (

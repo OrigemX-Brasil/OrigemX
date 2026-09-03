@@ -3250,6 +3250,101 @@ begin
 end $$;
 
 
+-- =============================================================================
+-- Grupo 14 — GRANT de coluna: a armadilha que já mordeu três vezes (131 e 132)
+--
+-- `kennels`, `dogs` e `profiles` não têm GRANT de UPDATE no nível da TABELA:
+-- têm POR COLUNA. Nesse regime, coluna nova nasce sem privilégio, e o Postgres
+-- recusa o UPDATE INTEIRO com 42501 — não só a coluna que falta. Um campo
+-- acrescentado sem o `grant` correspondente derruba o formulário todo.
+--
+-- Já aconteceu três vezes: `instagram_handle`/`registration_number` em
+-- `grant_kennel_instagram_registro`, e `breeds`/`auto_published_at` em
+-- `cadastro_minimo`, que travou o painel do canil em produção. Três migrations
+-- carregam comentários de alerta, e os comentários não bastaram — quem escreve
+-- a migration seguinte não lê a anterior.
+--
+-- Por que estes dois casos PEGAM o que a bateria toda deixou passar: eles leem
+-- METADADO (`pg_attribute` + `has_column_privilege`), não dados. A bateria roda
+-- como superusuário, então todo caso que EXERCITA uma escrita é cego a GRANT —
+-- o superusuário passa por cima de qualquer privilégio. Perguntar ao catálogo é
+-- o único jeito de enxergar daqui.
+--
+-- `pg_attribute`, e não `information_schema.columns`, de propósito: aquela view
+-- esconde colunas em que o usuário corrente não tem privilégio nenhum, o que
+-- num teste sobre privilégio seria justamente apagar a evidência.
+--
+-- A lista de exceções é DECLARADA aqui. Mudar o privilégio de uma coluna passa
+-- a exigir mexer nesta lista, num arquivo de teste, sob revisão — em vez de
+-- acontecer por esquecimento.
+-- =============================================================================
+
+create temp table battery_grant_esperado (tabela text, coluna text);
+
+insert into battery_grant_esperado values
+  -- kennels: identidade, autoria e carimbos são do banco; `founder_number` é
+  -- atribuído por função auditada e `hidden_at` é moderação de admin.
+  ('kennels', 'id'), ('kennels', 'owner_id'), ('kennels', 'created_at'),
+  ('kennels', 'created_by'), ('kennels', 'updated_at'),
+  ('kennels', 'founder_number'), ('kennels', 'hidden_at'),
+  -- dogs: só identidade e moderação.
+  ('dogs', 'id'), ('dogs', 'hidden_at'),
+  -- profiles: `role` é a mais importante da bateria inteira — concedê-la seria
+  -- escalada de privilégio direta, qualquer usuário se promovendo a admin.
+  -- `email_opt_out` e `unsubscribe_token` mudam pela rota de descadastro, que
+  -- funciona SEM login e por isso não pode depender de `authenticated`.
+  ('profiles', 'id'), ('profiles', 'role'), ('profiles', 'created_at'),
+  ('profiles', 'updated_at'), ('profiles', 'deleted_at'),
+  ('profiles', 'suspended_at'), ('profiles', 'email_opt_out'),
+  ('profiles', 'unsubscribe_token');
+
+-- 131. Coluna nova sem GRANT — o defeito que travou o painel do canil.
+do $$
+declare v_faltando text;
+begin
+  select string_agg(t.tabela || '.' || a.attname, ', ' order by t.tabela, a.attname)
+    into v_faltando
+    from (values ('kennels'), ('dogs'), ('profiles')) as t(tabela)
+    join pg_attribute a
+      on a.attrelid = ('public.' || t.tabela)::regclass
+     and a.attnum > 0 and not a.attisdropped
+   where not exists (
+           select 1 from battery_grant_esperado e
+            where e.tabela = t.tabela and e.coluna = a.attname)
+     and not has_column_privilege('authenticated',
+                                  ('public.' || t.tabela)::regclass,
+                                  a.attname, 'UPDATE');
+
+  perform pg_temp.rec(131, 'toda coluna editável tem GRANT de UPDATE para authenticated',
+                      'nenhuma coluna sem privilégio',
+                      coalesce('SEM GRANT — O FORMULÁRIO INTEIRO QUEBRA: ' || v_faltando,
+                               'nenhuma coluna sem privilégio'),
+                      v_faltando is null);
+end $$;
+
+-- 132. O sentido OPOSTO, e é o que protege de verdade: coluna da lista que
+--      GANHOU privilégio. Um `grant update` largo demais em `profiles.role`
+--      entrega admin a quem pedir, e nenhum outro caso desta bateria veria
+--      isso — todos escrevem como superusuário.
+do $$
+declare v_vazadas text;
+begin
+  select string_agg(e.tabela || '.' || e.coluna, ', ' order by e.tabela, e.coluna)
+    into v_vazadas
+    from battery_grant_esperado e
+   where has_column_privilege('authenticated',
+                              ('public.' || e.tabela)::regclass,
+                              e.coluna, 'UPDATE');
+
+  perform pg_temp.rec(132, 'coluna protegida NÃO ganhou GRANT de UPDATE',
+                      'nenhuma coluna protegida concedida',
+                      coalesce('CONCEDIDA INDEVIDAMENTE: ' || v_vazadas,
+                               'nenhuma coluna protegida concedida'),
+                      v_vazadas is null);
+end $$;
+
+drop table battery_grant_esperado;
+
 -- -----------------------------------------------------------------------------
 -- Limpeza. Vem ANTES do relatório de propósito: a Management API devolve o
 -- resultado do último statement, então o SELECT final tem de ser o último.
