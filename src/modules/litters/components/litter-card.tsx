@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { previewDescription } from "../constraints";
+import { kennelLitterStatusLabel } from "../fields";
 import type { LitterListItem } from "../queries";
 
 /**
@@ -12,6 +13,10 @@ import type { LitterListItem } from "../queries";
  */
 export function LitterCard({ kennelId, litter }: { kennelId: string; litter: LitterListItem }) {
   const preview = previewDescription(litter.description);
+  // Rótulo de `LITTER_STATUS_OPTIONS`, e não de `modules/admin/status.ts`:
+  // aquele é o vocabulário da tela de admin, este é o que o criador escolheu
+  // no próprio formulário. Duas listas dizendo a mesma coisa divergiriam.
+  const status = kennelLitterStatusLabel(litter.status);
 
   return (
     <Link
@@ -38,8 +43,13 @@ export function LitterCard({ kennelId, litter }: { kennelId: string; litter: Lit
             — sem cor distinguindo os dois, o rótulo já diz o que é. */}
         <span className="text-fg-faint text-xs">
           {litter.published_at ? "Publicada" : "Rascunho"}
+          {status ? ` · ${status}` : ""}
         </span>
-        <p className="text-fg text-sm">
+        {litter.name ? (
+          <p className="text-fg truncate text-sm font-medium">{litter.name}</p>
+        ) : null}
+        {litter.breed ? <p className="text-fg-muted text-xs">{litter.breed}</p> : null}
+        <p className="text-fg-muted text-sm">
           {preview ?? <span className="text-fg-faint italic">Sem descrição ainda</span>}
         </p>
       </div>

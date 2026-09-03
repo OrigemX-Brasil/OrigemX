@@ -298,6 +298,24 @@ Referência rápida — o banco é quem garante, não a aplicação.
 | Publicar sozinho acontece no máximo UMA vez | `auto_published_at` — nunca é limpo. É o que impede a automação de republicar por cima de quem tirou do ar de propósito |
 | Publicação automática não atropela a trilha do admin | 4ª guarda de `devePublicarSozinho`: com cadastro assistido aberto, quem publica é `admin_set_*_published`, que audita |
 | Coluna nova nasce com GRANT | casos 131/132 da bateria. `kennels`, `dogs` e `profiles` concedem UPDATE **por COLUNA**: coluna sem `grant` faz o Postgres recusar o **UPDATE INTEIRO** com 42501, derrubando o formulário todo. Já aconteceu três vezes — comentário em migration não bastou, teste basta |
+| Coluna nova é LIDA por quem a edita | `src/modules/columns.test.ts`. As listas de SELECT moram no `fields.ts` do módulo, ao lado dos campos; o teste compara as duas e falha **nomeando** o campo que ficou de fora. Sem isso o campo grava e a tela recarrega vazia — que é o que o criador lê como "não salvou" |
+
+### Campo que grava e não aparece
+
+Gêmeo do GRANT acima, e apareceu no mesmo dia: `kennels.breeds` entrou em `fields.ts`, o
+formulário passou a oferecer "Raças criadas", a validação a normalizar o `text[]` e o banco a
+gravar — mas ninguém acrescentou a coluna às **strings de SELECT**, escritas à mão em
+`kennels/queries.ts` e `public/queries.ts`. O criador preenchia, salvava, a tela voltava em branco.
+O valor estava lá o tempo todo.
+
+As duas listas precisavam andar juntas e nada as ligava. Agora as seis (`KENNEL_COLUMNS`,
+`KENNEL_PUBLIC_COLUMNS`, `DOG_*`, `LITTER_*`) moram no `fields.ts` de cada módulo e
+`columns.test.ts` garante a paridade. Exceção — campo público que a consulta pública
+deliberadamente não lê — vai em `KENNEL_PUBLIC_COLUMN_EXCEPTIONS`, declarada: hoje só `logo_url`,
+porque o logo vem de `media`.
+
+**`auto-publish.ts` usa `select("*")` e por isso escapou** — foi o que manteve a publicação
+automática correta enquanto o painel errava. Não trocar por lista de colunas.
 
 ### GRANT por coluna — a armadilha que já mordeu três vezes
 

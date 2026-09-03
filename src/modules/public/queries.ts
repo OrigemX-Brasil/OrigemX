@@ -8,6 +8,12 @@ import {
   type PageParams,
 } from "@/lib/pagination";
 import { createPublicClient } from "@/lib/supabase/public";
+// A lista de colunas do perfil público mora junto da definição dos campos.
+// Mantê-la aqui foi o que deixou `breeds` fora do perfil: ninguém liga uma
+// string neste arquivo a um campo acrescentado em outro.
+import { KENNEL_PUBLIC_COLUMNS } from "@/modules/kennels/fields";
+import { DOG_PUBLIC_COLUMNS } from "@/modules/dogs/fields";
+import { LITTER_PUBLIC_COLUMNS } from "@/modules/litters/fields";
 import { BUCKET_PUBLIC } from "@/modules/media/constraints";
 import {
   getDogCovers,
@@ -38,11 +44,7 @@ import {
  * outra coluna, em outra tabela.
  */
 
-const KENNEL_PUBLIC_COLUMNS =
-  "id, name, slug, city, state, description, website_url, instagram_handle, registration_number, founder_number, whatsapp, published_at";
 
-const DOG_PUBLIC_COLUMNS =
-  "id, public_id, slug, name, sex, born_on, breed, color, coat, titles, kennel_id, owner_id, sire_id, dam_id, litter_id, published_at";
 
 export type PublicKennel = {
   id: string;
@@ -54,6 +56,7 @@ export type PublicKennel = {
   website_url: string | null;
   instagram_handle: string | null;
   registration_number: string | null;
+  breeds: string[] | null;
   founder_number: number | null;
   whatsapp: string | null;
   published_at: string | null;
@@ -265,6 +268,12 @@ export const getPublicMedia = cache(
 
 export type PublicLitter = {
   id: string;
+  /** Nome, raça e status fazem parte do MÍNIMO da ninhada (aditivo de 03/09).
+   * Ficaram fora daqui até agora, então o criador preenchia e o visitante
+   * nunca via — mesma falha que o `breeds` do canil. */
+  name: string | null;
+  breed: string | null;
+  status: string | null;
   /** Endereço da página própria da ninhada — `/n/[public_id]`. */
   public_id: string;
   description: string | null;
@@ -295,7 +304,7 @@ export const getPublicLitters = cache(async (kennelId: string): Promise<PublicLi
     const supabase = createPublicClient();
     const { data } = await supabase
       .from("kennel_litters")
-      .select("id, public_id, description, born_on, mated_on")
+      .select(LITTER_PUBLIC_COLUMNS)
       .eq("kennel_id", kennelId)
       .is("deleted_at", null)
       .order("created_at", { ascending: false })
@@ -460,6 +469,12 @@ export type PublicPuppy = PublicDog & {
 export type PublicLitterPage = {
   id: string;
   public_id: string;
+  /** Nome, raça e status fazem parte do MÍNIMO da ninhada (aditivo de 03/09).
+   * Ficaram fora daqui até agora, então o criador preenchia e o visitante
+   * nunca via — mesma falha que o `breeds` do canil. */
+  name: string | null;
+  breed: string | null;
+  status: string | null;
   description: string | null;
   mated_on: string | null;
   born_on: string | null;
@@ -496,7 +511,7 @@ export const getPublicLitterByPublicId = cache(
       const supabase = createPublicClient();
       const { data } = await supabase
         .from("kennel_litters")
-        .select("id, kennel_id, public_id, description, mated_on, born_on, sire_id, dam_id")
+        .select(`${LITTER_PUBLIC_COLUMNS}, kennel_id, sire_id, dam_id`)
         .eq("public_id", publicId)
         .is("deleted_at", null)
         .maybeSingle();
@@ -528,6 +543,9 @@ export const getPublicLitterByPublicId = cache(
       return {
         id: data.id,
         public_id: data.public_id,
+        name: data.name,
+        breed: data.breed,
+        status: data.status,
         description: data.description,
         mated_on: data.mated_on,
         born_on: data.born_on,

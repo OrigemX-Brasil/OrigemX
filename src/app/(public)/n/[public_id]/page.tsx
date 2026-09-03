@@ -18,6 +18,7 @@ import { countAvailableBySex, describeAvailability } from "@/modules/litters/ava
 import { whatsappHref } from "@/modules/litters/contact";
 import { expectedWhelpingDate } from "@/modules/litters/gestation";
 import { litterStatusClass, litterStatusLabel } from "@/modules/litters/constraints";
+import { kennelLitterStatusLabel } from "@/modules/litters/fields";
 import { PedigreeTree } from "@/modules/pedigree/components/pedigree-tree";
 import { MAX_PHOTO_GENERATION } from "@/modules/pedigree/layout";
 import { getPedigree } from "@/modules/pedigree/queries";
@@ -246,7 +247,12 @@ export default async function NinhadaPublicaPage({
    * só então ao primeiro filhote é a ordem que mais frequentemente acha um
    * valor. Sem nenhum, a linha não é renderizada.
    */
-  const raca = dam?.breed ?? sire?.breed ?? puppies.find((p) => p.breed)?.breed ?? null;
+  // A raça DECLARADA da ninhada vem primeiro: o criador a escolheu no cadastro
+  // (faz parte do mínimo), e inferir dos progenitores quando ela existe seria
+  // preferir um palpite ao que ele disse. A inferência continua como reserva,
+  // para as ninhadas cadastradas antes da coluna existir.
+  const raca =
+    litter.breed ?? dam?.breed ?? sire?.breed ?? puppies.find((p) => p.breed)?.breed ?? null;
 
   /**
    * O selo de vacina só sai com cobertura COMPLETA.
@@ -329,19 +335,23 @@ export default async function NinhadaPublicaPage({
               </Link>
 
               {/*
-                O TÍTULO CARREGA A DATA, e não é enfeite: `kennel_litters` não
-                tem coluna de nome (ver `litters/contact.ts`), então "Ninhada"
+                O NOME É O TÍTULO quando existe — a coluna passou a existir no
+                aditivo de 03/09 e faz parte do mínimo da ninhada.
+
+                Sem nome, o título CARREGA A DATA, e não é enfeite: "Ninhada"
                 sozinho não distingue esta das outras três do mesmo canil para
                 quem recebeu o link no WhatsApp. A mesma escolha entre
                 nascimento e previsão que a mensagem do CTA já faz.
               */}
               <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                 <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">
-                  {litter.born_on
-                    ? `Ninhada de ${isoToBr(litter.born_on)}`
-                    : previsao
-                      ? `Ninhada prevista para ${isoToBr(previsao)}`
-                      : "Ninhada"}
+                  {litter.name
+                    ? litter.name
+                    : litter.born_on
+                      ? `Ninhada de ${isoToBr(litter.born_on)}`
+                      : previsao
+                        ? `Ninhada prevista para ${isoToBr(previsao)}`
+                        : "Ninhada"}
                 </h1>
 
                 {/* A pílula responde "tem algo pra mim aqui?" antes da dobra;
@@ -357,7 +367,27 @@ export default async function NinhadaPublicaPage({
                 ) : null}
               </div>
 
-              {raca ? <p className="text-fg-muted text-sm">{raca}</p> : null}
+              {/*
+                Linha de apoio: raça, quando a ninhada nasceu (ou é esperada) e o
+                status declarado. A data só aparece aqui se o NOME tomou o título —
+                senão ela já está lá em cima, e repetir seria ruído.
+              */}
+              {(() => {
+                const apoio = [
+                  raca,
+                  litter.name
+                    ? litter.born_on
+                      ? `Nascida em ${isoToBr(litter.born_on)}`
+                      : previsao
+                        ? `Prevista para ${isoToBr(previsao)}`
+                        : null
+                    : null,
+                  kennelLitterStatusLabel(litter.status),
+                ].filter(Boolean);
+                return apoio.length > 0 ? (
+                  <p className="text-fg-muted text-sm">{apoio.join(" · ")}</p>
+                ) : null;
+              })()}
 
               {/* Cada selo só existe se o DADO existir — ver o cabeçalho de
                   `trust-badges.tsx`, que também explica por que NÃO há

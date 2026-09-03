@@ -1,4 +1,4 @@
-import { alerta, expect, test } from "./support/fixtures";
+import { alerta, expect, publicar, test } from "./support/fixtures";
 
 /**
  * O formulário SUGERE o endereço público a partir do nome, e para de sugerir
@@ -233,4 +233,66 @@ test("editar o endereço de um canil já salvo exige confirmar antes de salvar",
     .eq("id", data!.id)
     .single();
   expect(atualizado?.slug).toBe(slugNovo);
+});
+
+/**
+ * O DEFEITO QUE ESTE TESTE GUARDA, relatado pelo PO em 03/09.
+ *
+ * "Preencho Raças criadas, salvo, e não atualiza." O valor IA para o banco — o
+ * `text[]` normalizado, corretamente. O que faltava era a LEITURA: a lista de
+ * colunas do painel não incluía `breeds`, então a consulta devolvia um canil sem
+ * o campo, o formulário caía no valor vazio e a tela recarregava em branco. Para
+ * quem usa, indistinguível de "não salvou".
+ *
+ * Por isso o `reload()` no meio: sem recarregar, o estado da Server Action ainda
+ * carrega o que foi digitado e o teste passaria com o defeito no lugar.
+ *
+ * A segunda metade cobre a consulta PÚBLICA, onde a mesma coluna faltava — as
+ * raças nunca chegariam ao visitante, mesmo com o painel consertado.
+ */
+test("raças criadas persistem ao recarregar e aparecem no perfil público", async ({
+  page,
+  criador,
+  admin,
+}) => {
+  const token = Date.now().toString(36);
+  const slug = `racas-${token}`;
+  const racas = "Pastor Alemão, Golden Retriever";
+
+  await page.goto("/painel/canis/novo");
+  await page.getByLabel("Nome do canil").fill(`Canil Raças ${token}`);
+  await definirSlug(page, slug);
+  await page.getByRole("button", { name: "Criar canil" }).click();
+  await page.waitForURL(/\/painel\/canis\/[0-9a-f-]{36}/);
+
+  await page.getByLabel("Raças criadas").fill(racas);
+  await page.getByRole("button", { name: "Salvar alterações" }).click();
+
+  await page.reload();
+  await expect(page.getByLabel("Raças criadas")).toHaveValue(racas);
+
+  // ARRAY no banco, não a string digitada: a coluna é `text[]`, e guardar o
+  // texto cru faria o perfil público exibir uma raça só, com vírgula dentro.
+  const { data: salvo } = await admin
+    .from("kennels")
+    .select("id, owner_id, breeds")
+    .eq("slug", slug)
+    .single();
+  expect(salvo?.breeds).toEqual(["Pastor Alemão", "Golden Retriever"]);
+  // Confirma que é o canil de quem está logado, e não outro que a busca por slug
+  // tenha alcançado.
+  expect(salvo?.owner_id).toBe(criador.id);
+
+  // O medidor para de cobrar o campo — era o outro sintoma: o painel listava
+  // "Raças criadas" como pendente com o banco já preenchido.
+  await expect(page.getByText(/Para concluir e colocar o perfil no ar/)).not.toContainText(
+    "Raças criadas",
+  );
+
+  await publicar(admin, { kennelId: salvo!.id });
+  await page.goto(`/c/${slug}`);
+
+  const lista = page.getByRole("list", { name: "Raças criadas" });
+  await expect(lista).toContainText("Pastor Alemão");
+  await expect(lista).toContainText("Golden Retriever");
 });

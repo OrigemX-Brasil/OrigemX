@@ -7,6 +7,7 @@ import {
   type PageParams,
 } from "@/lib/pagination";
 import { createClient } from "@/lib/supabase/server";
+import { DOG_COLUMNS } from "./fields";
 
 import {
   isSearchable,
@@ -22,8 +23,8 @@ import {
  * Filtro é para a consulta estar certa; quem protege é a RLS.
  */
 
-const LIST_COLUMNS =
-  "id, public_id, slug, name, sex, born_on, breed, color, coat, titles, kennel_id, owner_id, sire_id, dam_id, published_at, created_at, updated_at";
+// Ver `fields.ts`: a lista mora junto dos campos para não divergir deles.
+const LIST_COLUMNS = DOG_COLUMNS;
 
 export type DogListItem = {
   id: string;

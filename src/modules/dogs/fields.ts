@@ -251,3 +251,22 @@ export const DOG_SCORED_FIELDS: readonly DogScoredField[] = [
   })),
   ...DOG_EXTRA_SCORED,
 ];
+
+/**
+ * ============================================================================
+ * As colunas que cada consulta LÊ.
+ * ============================================================================
+ *
+ * Moram aqui, junto da definição dos campos, e não em `queries.ts`. O motivo é
+ * um defeito concreto: `kennels.breeds` entrou em `fields.ts` e ninguém
+ * acrescentou a coluna às strings de SELECT — o criador salvava e a tela
+ * recarregava vazia, o que para ele era "não salvou". Uma lista escrita à mão em
+ * outro arquivo não tem como acompanhar esta.
+ *
+ * `columns.test.ts` compara as duas e falha NOMEANDO o campo que ficou de fora.
+ */
+export const DOG_COLUMNS =
+  "id, public_id, slug, name, sex, born_on, breed, color, coat, titles, kennel_id, owner_id, sire_id, dam_id, published_at, created_at, updated_at";
+
+export const DOG_PUBLIC_COLUMNS =
+  "id, public_id, slug, name, sex, born_on, breed, color, coat, titles, kennel_id, owner_id, sire_id, dam_id, litter_id, published_at";

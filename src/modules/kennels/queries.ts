@@ -1,6 +1,8 @@
 import { assistingProfileId } from "@/lib/assist";
 import { createClient } from "@/lib/supabase/server";
 
+import { KENNEL_COLUMNS } from "./fields";
+
 /**
  * Acesso a dados de canil. Todo `.from("kennels")` do app passa por aqui.
  *
@@ -13,8 +15,10 @@ import { createClient } from "@/lib/supabase/server";
  * cabeça antes de reintroduzir no banco.
  */
 
-const LIST_COLUMNS =
-  "id, name, slug, city, state, description, logo_url, website_url, instagram_handle, whatsapp, registration_number, published_at, founder_number, created_at, updated_at";
+// As colunas vêm de `fields.ts`, junto da definição dos campos: foi manter as
+// duas listas em arquivos diferentes que deixou `breeds` de fora e fez o
+// criador ver o formulário recarregar vazio depois de salvar.
+const LIST_COLUMNS = KENNEL_COLUMNS;
 
 export type KennelListItem = {
   id: string;
@@ -28,6 +32,8 @@ export type KennelListItem = {
   instagram_handle: string | null;
   whatsapp: string | null;
   registration_number: string | null;
+  /** Raças criadas. `text[]` na coluna; o formulário entrega texto separado por vírgula. */
+  breeds: string[] | null;
   published_at: string | null;
   /** Selo Criador Fundador, 1 a 100. NULL quando não há selo. */
   founder_number: number | null;

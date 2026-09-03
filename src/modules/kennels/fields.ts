@@ -280,3 +280,40 @@ export const KENNEL_SCORED_FIELDS: readonly KennelScoredField[] = [
 export function getKennelField(name: KennelFieldName): KennelField | undefined {
   return KENNEL_FIELDS.find((f) => f.name === name);
 }
+/**
+ * ============================================================================
+ * As colunas que cada consulta LÊ.
+ * ============================================================================
+ *
+ * Moram aqui, e não em `queries.ts`, por causa do defeito que as trouxe:
+ * `breeds` entrou em `KENNEL_FIELDS` e ninguém acrescentou a coluna às duas
+ * strings de SELECT. O criador salvava a raça, a tela recarregava vazia, e para
+ * ele isso era "não salvou" — o valor estava no banco o tempo todo. Uma lista
+ * escrita à mão em outro arquivo não tem como acompanhar esta.
+ *
+ * O segundo motivo é testabilidade: `queries.ts` arrasta o client de servidor,
+ * e o teste de paridade não deveria depender disso para comparar duas listas.
+ *
+ * NÃO SÃO DERIVADAS de `KENNEL_FIELDS`, de propósito. O perfil público não lê
+ * `logo_url`: o logo mora em `media`, que é a fonte de verdade, e derivar
+ * acrescentaria uma coluna que ninguém consome. A paridade é garantida por
+ * TESTE, com a exceção declarada logo abaixo — derivar trocaria uma lista à mão
+ * por uma regra implícita, e regra implícita é o que já falhou aqui.
+ */
+export const KENNEL_COLUMNS =
+  "id, name, slug, city, state, breeds, description, logo_url, website_url, instagram_handle, whatsapp, registration_number, published_at, founder_number, created_at, updated_at";
+
+export const KENNEL_PUBLIC_COLUMNS =
+  "id, name, slug, city, state, breeds, description, website_url, instagram_handle, registration_number, founder_number, whatsapp, published_at";
+
+/**
+ * Campo público que a consulta pública NÃO lê, e por quê.
+ *
+ * Mudar esta lista é declarar que um campo deixou de ser lido — ato consciente,
+ * sob revisão, e não o esquecimento silencioso que o `breeds` foi.
+ */
+export const KENNEL_PUBLIC_COLUMN_EXCEPTIONS: readonly KennelFieldName[] = [
+  // O logo vem de `media` (`getKennelLogo`), com URL assinada e thumbnail. A
+  // coluna existe por histórico e não alimenta o perfil público.
+  "logo_url",
+];

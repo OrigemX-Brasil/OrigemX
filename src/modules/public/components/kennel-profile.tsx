@@ -8,6 +8,7 @@ import { isoToBr } from "@/modules/dogs/br-date";
 import { FaqAccordion } from "@/modules/faqs/components/faq-accordion";
 import { FounderBadge } from "@/modules/kennels/components/founder-badge";
 import { previewDescription } from "@/modules/litters/constraints";
+import { kennelLitterStatusLabel } from "@/modules/litters/fields";
 import { expectedWhelpingDate } from "@/modules/litters/gestation";
 import { PhotoTrigger, PublicGallery } from "@/modules/public/components/photo-lightbox";
 import { PublicImage } from "@/modules/public/components/public-image";
@@ -147,6 +148,25 @@ export async function KennelProfile({ slug, cursor }: { slug: string; cursor?: s
                     {kennel.name}
                   </h1>
                   {local ? <p className="text-fg-muted text-sm">{local}</p> : null}
+
+                  {/*
+                    Lista, e não texto corrido: a coluna é `text[]` e cada raça é um
+                    item — juntar tudo numa frase perderia a estrutura que o criador
+                    digitou e que o filtro do diretório vai querer um dia.
+                  */}
+                  {kennel.breeds && kennel.breeds.length > 0 ? (
+                    <ul className="flex flex-wrap gap-1.5" aria-label="Raças criadas">
+                      {kennel.breeds.map((raca) => (
+                        <li
+                          key={raca}
+                          className="border-border text-fg-muted rounded-control border px-2 py-0.5 text-xs"
+                        >
+                          {raca}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+
                   {kennel.registration_number ? (
                     <p className="text-fg-faint font-mono text-xs">
                       Registro: {kennel.registration_number}
@@ -295,8 +315,29 @@ export async function KennelProfile({ slug, cursor }: { slug: string; cursor?: s
                             )}
                           </div>
                           <div className="flex min-w-0 flex-col gap-1">
+                            {/* O NOME vira o título quando existe; a data desce a uma
+                                linha de apoio. Sem nome, a data continua sendo o título,
+                                que é o comportamento que esta lista sempre teve. */}
+                            {litter.name ? (
+                              <span className="text-fg text-sm font-medium">{litter.name}</span>
+                            ) : null}
                             {quando ? (
-                              <span className="text-fg text-sm font-medium">{quando}</span>
+                              <span
+                                className={
+                                  litter.name
+                                    ? "text-fg-muted text-xs"
+                                    : "text-fg text-sm font-medium"
+                                }
+                              >
+                                {quando}
+                              </span>
+                            ) : null}
+                            {litter.breed || kennelLitterStatusLabel(litter.status) ? (
+                              <span className="text-fg-faint text-xs">
+                                {[litter.breed, kennelLitterStatusLabel(litter.status)]
+                                  .filter(Boolean)
+                                  .join(" · ")}
+                              </span>
                             ) : null}
                             {resumo ? (
                               <p className="text-fg-muted min-w-0 text-sm whitespace-pre-line">

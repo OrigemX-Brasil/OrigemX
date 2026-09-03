@@ -61,6 +61,27 @@ export type LitterField = {
 };
 
 /** Os três status da ninhada. `closed` é "encerrada" — ver a migration. */
+/**
+ * Rótulo do status, ou `null` quando não há status.
+ *
+ * UMA função, e não um `find` repetido em cada tela: o card do painel e o
+ * perfil público mostram o mesmo status, e duas cópias divergiriam na primeira
+ * vez que um rótulo mudasse.
+ *
+ * O NOME CARREGA A TABELA de propósito. Existe um `litterStatusLabel` em
+ * `litters/constraints.ts` que é de OUTRA COISA: o status do FILHOTE
+ * (`dogs.litter_status`), cujo vocabulário inclui `sold`. Aqui é o status da
+ * NINHADA INTEIRA (`kennel_litters.status`), que encerra sem que todos os
+ * filhotes tenham saído. Dois nomes iguais para os dois seria a confusão que a
+ * migration se deu ao trabalho de evitar no schema.
+ *
+ * Também não é o `LITTER_STATUS_LABEL` de `modules/admin/status.ts` — aquele é
+ * o vocabulário da tela de admin.
+ */
+export function kennelLitterStatusLabel(status: string | null | undefined): string | null {
+  return LITTER_STATUS_OPTIONS.find((o) => o.value === status)?.label ?? null;
+}
+
 export const LITTER_STATUS_OPTIONS = [
   { value: "available", label: "Disponível" },
   { value: "reserved", label: "Reservada" },
@@ -155,3 +176,24 @@ export const LITTER_SCORED_FIELDS: readonly LitterScoredField[] = [
   })),
   ...LITTER_EXTRA_SCORED,
 ];
+
+/**
+ * ============================================================================
+ * As colunas que cada consulta LÊ.
+ * ============================================================================
+ *
+ * Moram aqui, junto da definição dos campos, e não em `queries.ts`. O motivo é
+ * um defeito concreto: `kennels.breeds` entrou em `fields.ts` e ninguém
+ * acrescentou a coluna às strings de SELECT — o criador salvava e a tela
+ * recarregava vazia, o que para ele era "não salvou". Uma lista escrita à mão em
+ * outro arquivo não tem como acompanhar esta.
+ *
+ * `columns.test.ts` compara as duas e falha NOMEANDO o campo que ficou de fora.
+ */
+/** Colunas PRÓPRIAS da ninhada. Progenitores e embeds ficam em `queries.ts`:
+ *  conhecimento de relação não pertence a um módulo de campos. */
+export const LITTER_COLUMNS =
+  "id, kennel_id, public_id, name, breed, status, description, mated_on, born_on, published_at, created_at";
+
+export const LITTER_PUBLIC_COLUMNS =
+  "id, public_id, name, breed, status, description, mated_on, born_on";

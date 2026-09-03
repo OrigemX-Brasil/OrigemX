@@ -1,5 +1,6 @@
 import { assistingProfileId } from "@/lib/assist";
 import { createClient } from "@/lib/supabase/server";
+import { LITTER_COLUMNS } from "./fields";
 import type { AncestorCandidate } from "@/modules/dogs/ancestors";
 import { countDogGalleries, getDogCovers, getLitterCovers } from "@/modules/media/queries";
 import type { ResolvedMedia } from "@/modules/media/queries";
@@ -30,6 +31,9 @@ export type LitterListItem = {
   id: string;
   kennel_id: string;
   public_id: string;
+  name: string | null;
+  breed: string | null;
+  status: string | null;
   description: string | null;
   mated_on: string | null;
   born_on: string | null;
@@ -99,7 +103,10 @@ export async function getKennelLitters(kennelId: string): Promise<LitterListItem
   const supabase = await createClient();
   const { data } = await supabase
     .from("kennel_litters")
-    .select("id, kennel_id, public_id, description, mated_on, born_on, published_at, created_at")
+    // `name`, `breed` e `status` entram aqui porque fazem parte do MÍNIMO da
+    // ninhada: cadastrá-los e não vê-los em lugar nenhum é a mesma frustração
+    // que `kennels.breeds` acabou de causar.
+    .select(LITTER_COLUMNS)
     .eq("kennel_id", kennelId)
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
@@ -199,8 +206,7 @@ export async function getManageableLitterById(
   const { data } = await supabase
     .from("kennel_litters")
     .select(
-      `id, kennel_id, public_id, name, breed, status, description, mated_on, born_on, sire_id, dam_id,
-       published_at, created_at,
+      `${LITTER_COLUMNS}, sire_id, dam_id,
        kennels!inner(owner_id),
        sire:dogs!kennel_litters_sire_id_fkey(id, name, sex, public_id, breed, born_on, kennel_id, owner_id),
        dam:dogs!kennel_litters_dam_id_fkey(id, name, sex, public_id, breed, born_on, kennel_id, owner_id)`,
